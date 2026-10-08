@@ -1,0 +1,46 @@
+C4Container
+title "Component Diagram - Delivery Management"
+
+Container_Boundary(web_portal, "Web Portal with React") {
+    Component(pg_delivery_schedule_mng, "Delivery Schedule Management Page", "React", "Manage delivery schedule")
+}
+
+Container_Boundary(mobile_app, "Mobile Application with Flutter") {
+    Component(pg_delivery_order_vw, "Delivery Order Viewing Page", "Flutter", "View delivery order")
+    Component(pg_personal_delivery_schedule_vw, "Delivery Schedule Viewing Page", "Flutter", "View personal delivery schedule for each delivery man")
+}
+
+Container_Boundary(presentation, "Presentation/API Layer") {
+    Component(ctr_delivery_order, "Delivery Order Controller", "C# .NET", "Manage delivery order")
+    Component(ctr_personal_delivery_schedule, "Personal Delivery Schedule Controller", "C# .NET", "Manage personal delivery schedule")
+    Component(pre_delivery_schedule_vw, "Delivery Schedule Presenter", "C# .NET", "Present delivery schedule")
+    Component(pre_delivery_order_vw, "Delivery Order Viewing Presenter", "C# .NET", "Present delivery order")
+    Component(pre_personal_delivery_schedule_mng, "Personal Delivery Schedule Viewing Presenter", "C# .NET", "Present personal delivery schedule")
+}
+
+Container_Boundary(application, "Use Case Layer") {
+    Component(uc_delivery_order, "Delivery Order Interface", "C# .NET")
+    Component(uc_personal_delivery_schedule, "Personal Delivery Schedule Interface", "C# .NET")
+}
+
+Container_Boundary(infrastructure, "External Data and Services Layer") {
+    Component(rep_delivery_order, "Delivery Order Repository", "C# EF Core")
+    Component(rep_personal_delivery_schedule, "Personal Delivery Schedule Repository", "C# EF Core")
+    ContainerDb(azure_sql_db, "Azure SQL", "SQL Database")
+}
+
+Rel(pg_delivery_schedule_mng, ctr_personal_delivery_schedule, "Uses", "RESTful API")
+Rel(pg_delivery_order_vw, ctr_delivery_order, "Uses", "WebSockets / SignalR")
+Rel(pg_personal_delivery_schedule_vw, ctr_personal_delivery_schedule, "Uses", "gRPC / WebSockets")
+Rel(ctr_delivery_order, uc_delivery_order, "Invokes", "In-process")
+Rel(ctr_personal_delivery_schedule, uc_personal_delivery_schedule, "Invokes", "In-process")
+Rel(uc_delivery_order, rep_delivery_order, "Invokes", "In-process")
+Rel(uc_personal_delivery_schedule, rep_personal_delivery_schedule, "Invokes", "In-process")
+Rel(rep_delivery_order, azure_sql_db, "Reads/Writes", "Entity Framework")
+Rel(rep_personal_delivery_schedule, azure_sql_db, "Reads/Writes", "Entity Framework")
+Rel(uc_delivery_order, pre_delivery_order_vw, "Invokes", "In-process")
+Rel(uc_personal_delivery_schedule, pre_delivery_schedule_vw, "Invokes", "In-process")
+Rel(uc_personal_delivery_schedule, pre_personal_delivery_schedule_mng, "Invokes", "In-process")
+Rel(pre_delivery_schedule_vw, pg_delivery_schedule_mng, "Returns data to", "RESTful API")
+Rel(pre_delivery_order_vw, pg_delivery_order_vw, "Returns data to", "WebSockets / SignalR")
+Rel(pre_personal_delivery_schedule_mng, pg_personal_delivery_schedule_vw, "Returns data to", "gRPC / WebSockets")

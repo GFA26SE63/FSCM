@@ -1,0 +1,12 @@
+	-- COMPONENT DIAGRAM --
+* This is for backend devs to implement different protocol for each API
+* Open with VS code extension MermaidJS for file .mmd
+	-- CONTAINER DIAGRAM --
+* Low level of component diagram, for overview purpose
+	-- SYSTEM CONTEXT DIAGRAM --
+* Link here:
+```
+https://drive.google.com/file/d/1I73aZWfPS-9vyeE8ZVm05VEL1GN-jvuh/view?usp=sharing
+```
+	-- USE CASE DIAGRAM --
+* ON-WORKING

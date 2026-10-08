@@ -1,0 +1,27 @@
+C4Container
+title "Component Diagram - Product Management"
+
+Container_Boundary(web_portal, "Web Portal with React") {
+    Component(pg_product_information_mng, "Product Information Management Page", "React", "Manage product information")
+}
+
+Container_Boundary(presentation, "Presentation/API Layer") {
+    Component(ctr_product_information, "Product Information Controller", "C# .NET", "Manage product")
+    Component(pre_product_information_mng, "Product Information Management Presenter", "C# .NET", "Present product information")
+}
+
+Container_Boundary(application, "Use Case Layer") {
+    Component(uc_product_information, "Product Information Interface", "C# .NET")
+}
+
+Container_Boundary(infrastructure, "External Data and Services Layer") {
+    Component(rep_product_information, "Product Information Repository", "C# EF Core")
+    ContainerDb(azure_sql_db, "Azure SQL", "SQL Database")
+}
+
+Rel(pg_product_information_mng, ctr_product_information, "Uses", "RESTful API")
+Rel(ctr_product_information, uc_product_information, "Invokes", "In-process")
+Rel(uc_product_information, rep_product_information, "Invokes", "In-process")
+Rel(rep_product_information, azure_sql_db, "Reads/Writes", "Entity Framework")
+Rel(uc_product_information, pre_product_information_mng, "Invokes", "In-process")
+Rel(pre_product_information_mng, pg_product_information_mng, "Returns data to", "RESTful API")

@@ -1,0 +1,32 @@
+C4Container
+title "Component Diagram - Goods Receipt Management"
+
+Container_Boundary(web_portal, "Web Portal with React") {
+    Component(pg_goods_receipt_pro, "Goods Receipt Processing Page", "React", "Process goods receipt")
+    Component(pg_goods_receipt_mng, "Goods Receipt Management Page", "React", "Manage goods receipt")
+}
+
+Container_Boundary(presentation, "Presentation/API Layer") {
+    Component(ctr_goods_receipt, "Goods Receipt Controller", "C# .NET", "Manage goods receipt")
+    Component(pre_goods_receipt_pro, "Goods Receipt Processing Presenter", "C# .NET", "Present goods receipt processing")
+    Component(pre_good_receipt_mng, "Goods Receipt Management Presenter", "C# .NET", "Present goods receipt management")
+}
+
+Container_Boundary(application, "Use Case Layer") {
+    Component(uc_goods_receipt, "Goods Receipt Interface", "C# .NET")
+}
+
+Container_Boundary(infrastructure, "External Data and Services Layer") {
+    Component(rep_goods_receipt, "Goods Receipt Repository", "C# EF Core")
+    ContainerDb(azure_sql_db, "Azure SQL", "SQL Database")
+}
+
+Rel(pg_goods_receipt_pro, ctr_goods_receipt, "Uses", "WebSockets / SignalR")
+Rel(pg_goods_receipt_mng, ctr_goods_receipt, "Uses", "RESTful API")
+Rel(ctr_goods_receipt, uc_goods_receipt, "Invokes", "In-process")
+Rel(uc_goods_receipt, rep_goods_receipt, "Invokes", "In-process")
+Rel(rep_goods_receipt, azure_sql_db, "Reads/Writes", "Entity Framework")
+Rel(uc_goods_receipt, pre_goods_receipt_pro, "Invokes", "In-process")
+Rel(uc_goods_receipt, pre_good_receipt_mng, "Invokes", "In-process")
+Rel(pre_goods_receipt_pro, pg_goods_receipt_pro, "Returns data to", "WebSockets / SignalR")
+Rel(pre_good_receipt_mng, pg_goods_receipt_mng, "Returns data to", "RESTful API")

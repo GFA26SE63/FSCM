@@ -1,0 +1,24 @@
+C4Container
+title "Container Diagram (Level 2)"
+
+Person(admin_manager, "Admin/Manager")
+Person(warehouse_staff, "Warehouse Staff")
+Person(delivery_man, "Delivery Man")
+Person(sale_man, "Sale Man")
+
+System_Boundary(management_system, "Core Management System") {
+    Container(web_app, "Web Application", "React", "Handles user input and display for web users")
+    Container(mobile_app, "Mobile Application", "Flutter - sqflite", "Handles user input and display for mobile users")
+    Container(backend_api, "Backend API Application", "C# .NET", "Handles business logic, API requests, and data access")
+    ContainerDb(database, "Database", "Azure SQL", "Stores system data")
+}
+
+Rel(admin_manager, web_app, "Uses", "HTTPS")
+Rel(warehouse_staff, web_app, "Uses", "HTTPS")
+Rel(delivery_man, mobile_app, "Uses", "HTTPS")
+Rel(sale_man, mobile_app, "Uses", "HTTPS")
+
+Rel(web_app, backend_api, "Makes API calls to", "JSON/HTTPS, SignalR")
+Rel(mobile_app, backend_api, "Makes API calls to", "JSON/HTTPS, gRPC")
+
+Rel(backend_api, database, "Reads from and writes to", "Entity Framework")

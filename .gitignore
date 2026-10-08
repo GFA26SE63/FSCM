@@ -1,0 +1,9 @@
+# Application repositories are maintained and versioned independently.
+FSCM-Backend/
+FSCM-Frontend/
+FSCM-Mobile/
+
+# Local operating-system files
+.DS_Store
+Thumbs.db
+desktop.ini

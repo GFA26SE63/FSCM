@@ -1,0 +1,35 @@
+C4Container
+title "Component Diagram - Buying Order Management"
+
+Container_Boundary(web_portal, "Web Portal with React") {
+    Component(pg_buying_order_pro, "Buying Order Processing Page", "React", "Process order")
+}
+
+Container_Boundary(mobile_app, "Mobile Application with Flutter") {
+    Component(pg_buying_order_mng, "Buying Orders Management Page", "Flutter", "Manage buying order")
+}
+
+Container_Boundary(presentation, "Presentation/API Layer") {
+    Component(ctr_buying_order, "Buying Order Controller", "C# .NET", "Manage buying orders")
+    Component(pre_buying_order_pro, "Buying Order Processing Presenter", "C# .NET", "Present buying order processing")
+    Component(pre_buying_order_mng, "Buying Order Management Presenter", "C# .NET", "Present buying order")
+}
+
+Container_Boundary(application, "Use Case Layer") {
+    Component(uc_buying_order, "Buying Order Interface", "C# .NET")
+}
+
+Container_Boundary(infrastructure, "External Data and Services Layer") {
+    Component(rep_buying_order, "Buying Order Repository", "C# EF Core")
+    ContainerDb(azure_sql_db, "Azure SQL", "SQL Database")
+}
+
+Rel(pg_buying_order_pro, ctr_buying_order, "Uses", "WebSockets / SignalR")
+Rel(pg_buying_order_mng, ctr_buying_order, "Uses", "RESTful API")
+Rel(ctr_buying_order, uc_buying_order, "Invokes", "In-process")
+Rel(uc_buying_order, rep_buying_order, "Invokes", "In-process")
+Rel(rep_buying_order, azure_sql_db, "Reads/Writes", "Entity Framework")
+Rel(uc_buying_order, pre_buying_order_pro, "Invokes", "In-process")
+Rel(uc_buying_order, pre_buying_order_mng, "Invokes", "In-process")
+Rel(pre_buying_order_pro, pg_buying_order_pro, "Returns data to", "WebSockets / SignalR")
+Rel(pre_buying_order_mng, pg_buying_order_mng, "Returns data to", "RESTful API")
