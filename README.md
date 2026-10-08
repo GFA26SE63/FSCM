@@ -44,7 +44,7 @@ FSCM/
 |-- FSCM-Frontend/ React 19 + TypeScript + Vite management portal
 |-- FSCM-Mobile/   Flutter clients for field and warehouse workflows
 |-- .docs/         Cross-system architecture and engineering documentation
-|-- diagram/       C4 and system-context diagrams
+|-- .diagram/      C4 and system-context diagrams
 `-- README.md
 ```
 
