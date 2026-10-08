@@ -17,7 +17,7 @@ FMCG/
 │       ├── application-delivery.yaml
 │       ├── templates/
 │       └── variables/
-├── .docs/                                       [skeleton]                                  
+├── .docs/                                       [skeleton]
 ├── .github/                                     [skeleton]
 ├── backend/                                     [skeleton]
 │   ├── FMCG.slnx
