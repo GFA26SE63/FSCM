@@ -6,5 +6,5 @@ FSCM DIAGRAM NOTES
 - PostgreSQL is authoritative; mobile SQLite is cache and an offline command queue.
 - Retailers do not self-order. Drivers do not have accounts or an application.
 - Route planning/optimization and regional-to-regional rebalancing are not approved coding scope.
-- The Draw.io XML/PNG system-context files are legacy pre-baseline exports; use
-  `system-context-diagram/context_diagram.mmd` for current reports.
+- Generated PNG/SVG/PDF exports are not committed. Generate report assets from the
+  reviewed Mermaid source, including `system-context-diagram/context_diagram.mmd`.
