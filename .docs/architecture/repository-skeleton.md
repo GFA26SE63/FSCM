@@ -1,268 +1,171 @@
-# FMCG repository skeleton assessment
+# FSCM architecture and repository boundaries
 
-## 1. Executive Skeleton Assessment
+## Purpose
 
-The FMCG monorepo is appropriate for a thesis-level full-stack system. Because it is in the design/skeleton phase, it should be assessed by architectural readiness, consistency, maintainability, SOLID readiness, test boundaries, and DevOps preparedness—not by feature completeness.
+This document defines the implementation boundaries for the approved [FSCM business baseline](../business/README.md). It describes ownership and consistency requirements, not feature-completion claims.
 
-The refined structure gives the .NET backend explicit architectural boundaries, keeps React and Flutter as independent API consumers, provides generic feature templates, and reserves named placeholders only for the finalized cross-cutting conventions: optimistic concurrency, immutable audit logging, database-driven RBAC, and base-unit UoM conversion. It is capable of hosting expiry-sensitive and concurrency-sensitive logic later without pre-committing to unapproved business modules.
+## Workspace topology
 
-## 2. Recommended Monorepo Work Tree
-
-`[skeleton]` means a committed source/documentation boundary. `[ignored]` means generated or local content that must not be committed.
+FSCM is a workspace of four Git repositories:
 
 ```text
-FMCG/
-├── .azure/                                      [skeleton]
-│   └── pipelines/
-│       ├── application-delivery.yaml
-│       ├── templates/
-│       └── variables/
-├── .docs/                                       [skeleton]
-├── .github/                                     [skeleton]
-├── backend/                                     [skeleton]
-│   ├── FMCG.slnx
-│   ├── src/
-│   ├── tests/
-│   ├── .vs/                                     [ignored]
-│   └── **/{bin,obj}/                            [ignored]
-├── frontend/                                    [skeleton]
-│   ├── public/
-│   ├── src/
-│   ├── node_modules/                            [ignored]
-│   └── dist/                                    [ignored]
-├── mobile/                                      [skeleton]
-│   ├── lib/
-│   ├── test/
-│   ├── platform folders/
-│   ├── .dart_tool/                              [ignored]
-│   ├── build/                                   [ignored]
-│   └── **/ephemeral/                            [ignored]
-├── README.md
-└── .gitignore
+FSCM integration repository
+|-- FSCM-Backend/   independent .NET repository
+|-- FSCM-Frontend/  independent React repository
+|-- FSCM-Mobile/    independent Flutter repository
+|-- .docs/          cross-system decisions and acceptance guidance
+`-- .diagram/       editable architecture sources
 ```
 
-Generated folders may exist locally after restore or build, but their presence is not part of the reviewed repository structure.
+The integration repository owns cross-system documentation. Each application repository owns its source, tests, lockfiles, pipeline, and application-specific README. Cross-repository work must use matching branches or referenced commits; the parent repository does not vendor or version application files.
 
-## 3. Backend .NET 10 Clean Architecture and SOLID Skeleton
+## Runtime containers
 
-Project responsibilities:
+| Container | Responsibility | Must not own |
+| --- | --- | --- |
+| React portal | Admin, Operator, Sales Manager, and operational Warehouse Keeper workflows | Authoritative authorization or business rules |
+| Flutter mobile client | Sales offline capture, Warehouse Keeper scanning, and Retailer receipt/loyalty/complaint workflows | Final prices, promotions, inventory, allocation, or points |
+| .NET API | Authorization, validation, orchestration, allocation, inventory state, payments, loyalty, audit, and contracts | Client-only presentation state |
+| PostgreSQL | Authoritative transactional state, history, idempotency, outbox, and configuration | Offline-only drafts that have not reached the server |
+| Object storage | Evidence and attachment payloads addressed by server-managed metadata | Business status or authorization decisions |
+| Background workers | Outbox delivery, expiry checks, discount/replenishment alerts, overdue evaluation, and notifications | Independent mutation that bypasses application use cases |
 
-- `FMCG.Domain`: enterprise rules and persistence-agnostic domain types; no outward project dependencies.
-- `FMCG.Application`: use-case orchestration, application contracts, feature DTOs, validators, and mappings.
-- `FMCG.Persistence`: Entity Framework database context, mappings, migrations, repositories, and persistence interceptors implementing Application ports.
-- `FMCG.Infrastructure`: adapters for external providers, authorization evaluation, audit writers, caching, files, and background services implementing Application ports.
-- `FMCG.API`: composition root and HTTP/transport boundary; configuration, middleware, controllers/endpoints, and transport contracts.
-- `FMCG.Shared`: a deliberately small set of stable, dependency-free technical primitives; never a miscellaneous dumping ground.
+Mobile SQLite is a cache and offline command queue. It is never a peer database and cannot settle conflicts in favor of a device value.
 
-Recommended backend tree:
+## Backend dependency direction
+
+The backend follows Clean Architecture:
 
 ```text
-backend/
-├── FMCG.slnx
-├── src/
-│   ├── FMCG.API/
-│   │   ├── Contracts/
-│   │   ├── Controllers/
-│   │   ├── Extensions/
-│   │   ├── Filters/
-│   │   ├── Middleware/
-│   │   ├── Options/
-│   │   └── Program.cs
-│   ├── FMCG.Application/
-│   │   ├── Abstractions/
-│   │   ├── Common/
-│   │   │   ├── Audit/
-│   │   │   ├── Concurrency/
-│   │   │   └── UnitOfMeasure/
-│   │   └── Features/
-│   │       └── _template/
-│   │           ├── Commands/
-│   │           ├── Queries/
-│   │           ├── DTOs/
-│   │           ├── Validators/
-│   │           └── Mappings/
-│   ├── FMCG.Domain/
-│   │   ├── Common/                 # GUID Id, RowVersion, soft-delete, timestamps
-│   │   ├── Enums/
-│   │   ├── Events/
-│   │   ├── Services/
-│   │   └── ValueObjects/
-│   ├── FMCG.Infrastructure/
-│   │   ├── Audit/                  # hash-chain writer placeholder
-│   │   ├── Rbac/                   # permission evaluator placeholder
-│   │   └── ExternalServices/
-│   │       └── _template/
-│   ├── FMCG.Persistence/
-│   │   ├── Configurations/
-│   │   │   └── _template/
-│   │   ├── DbContexts/
-│   │   ├── Interceptors/           # concurrency/audit placeholder
-│   │   └── Migrations/
-│   └── FMCG.Shared/
-└── tests/
-    ├── FMCG.UnitTests/
-    ├── FMCG.IntegrationTests/
-    └── FMCG.LoadTests/
+FSCM.Application    -> FSCM.Domain, FSCM.Shared
+FSCM.Persistence    -> FSCM.Domain, Application abstractions
+FSCM.Infrastructure -> Application abstractions
+FSCM.API            -> Application, Persistence, Infrastructure
+FSCM.Domain         -> no provider or transport project
+FSCM.Shared         -> stable dependency-free technical primitives only
 ```
 
-Dependency direction:
+- `FSCM.Domain` owns entities, value objects, state-transition rules, and domain services that do not depend on EF Core or HTTP.
+- `FSCM.Application` owns commands, queries, authorization requirements, orchestration, validators, DTOs, and ports.
+- `FSCM.Persistence` owns PostgreSQL mappings, migrations, repositories, transactions, and concurrency implementation.
+- `FSCM.Infrastructure` owns external identity, object storage, notification delivery, clocks, and background adapters.
+- `FSCM.API` is the composition and transport boundary. It authenticates requests, maps contracts, and never exposes persistence entities.
+- `FSCM.Shared` is not a miscellaneous common-code folder; code belongs there only when stable and domain-neutral.
+
+## Business capability boundaries
+
+Application features should be organized around these cohesive capabilities:
+
+| Capability | Primary ownership |
+| --- | --- |
+| Identity and access | Six roles; warehouse, sales-group, territory, and retailer scope |
+| Catalog | Category tree, product lifecycle, SKU versioning, and effective prices |
+| Territory and retailer | Regions, sales groups, assignment history, declaration, review, and potential assessment |
+| Warehouse inventory | Receipt, batch merging, QR lineage, inventory balance, and expiry state |
+| Promotions | Campaign targeting, batch shelf-life discount, stacking policy, and price snapshot |
+| Ordering and offline sync | Online/offline order intake, idempotency, FCFS server processing, and order snapshot |
+| Allocation | MLOR/ETA/radius hard filters, weighted scoring, greedy allocation, and holds |
+| Approval and fulfillment | Hold-to-reservation conversion, cancellation release, picking, and dispatch |
+| Transfer | Central-to-regional replenishment, FEFO issue, transit, receipt, and quantity conservation |
+| Delivery and receipt | Vehicle/person assignment, delivery state, retailer QR confirmation, and duplicate protection |
+| Payment | Prepaid, COD, deferred due date, full-payment confirmation, and overdue status |
+| Complaint | Complaint items, evidence, review, and response without automatic reverse logistics |
+| Loyalty | Program, pending/earned points ledger, gift inventory, redemption, refund, and expiry |
+| Reporting | Revenue after promotion, comparison periods, Sales/team KPI, ranking, and top products |
+| Platform support | Configuration versions, notifications, audit, immutable IDs, idempotency, and outbox |
+
+Regional-to-regional near-expiry rebalancing must not be placed in an approved module until its proposal is formally accepted.
+
+## Critical transactional boundaries
+
+### Order acceptance and allocation
+
+One server transaction must:
+
+1. Establish idempotency for the client command.
+2. Authorize the Sales-to-retailer territory relationship.
+3. Re-read current product, price, promotion, inventory, ETA, MLOR, and configuration data.
+4. Hard-filter candidates and calculate deterministic scores.
+5. Greedily allocate every order line, recalculating coverage against remaining demand.
+6. Reject and roll back all candidate allocations when any line is short.
+7. Create all holds, order snapshots, status history, and audit/outbox records when fully supplied.
+
+Concurrent commands use row/version checks, deterministic lock ordering, bounded retry, and full rollback. A retry must recompute from current state rather than reuse stale availability.
+
+### Approval and cancellation
+
+Approval atomically converts the order's active holds into reservations and creates picking work grouped by warehouse. Rejection or cancellation releases only live holds/reservations and records the reason. Repeated commands return the already-settled result or a conflict; they never adjust stock twice.
+
+### Picking and dispatch
+
+Picking validates the allocation, warehouse scope, source tag/batch lineage, and complete requested quantity. Dispatch atomically consumes reservations, decreases physical stock, updates picking/allocation state, and derives the aggregate order state across warehouses.
+
+### Transfer
+
+Central dispatch and regional receipt are separate controlled transitions. Transfer items preserve source/destination batch lineage and enforce:
 
 ```text
-Application    ──> Domain, Shared
-Persistence    ──> Domain, Application abstractions
-Infrastructure ──> Application abstractions
-API            ──> Application, Persistence, Infrastructure
-Domain         ──> no other project
-Shared         ──> no other project
+dispatched quantity <= approved/requested quantity
+received quantity <= dispatched quantity
+source decrease = quantity placed in transit
+destination increase = accepted received quantity
 ```
 
-More precisely, Persistence depends on Domain and Application abstractions; Infrastructure depends on Application abstractions and provider packages; API composes Application, Persistence, and Infrastructure. The compile-time project-reference graph should enforce this direction.
+Cancellation and exception rules may release only quantities that have not been dispatched.
 
-The structure supports Single Responsibility by isolating transport, use cases, domain policy, database mechanics, and provider mechanics. Small ports in Application support Interface Segregation and Dependency Inversion. Concurrency, audit, RBAC, and UoM each have a narrow generic home, so Application and Domain do not depend on Entity Framework, database schemas, or provider SDKs. Substitutability and extension are verified later through contract tests and alternative adapters, not claimed from folder names alone.
+### Receipt, payment, and loyalty
 
-## 4. Backend DTO and Contract Skeleton
+Retailer receipt confirmation validates order ownership and every expected QR tag. The confirmation, payment, loyalty earning, and redemption endpoints each require independent idempotency keys because mobile retries and duplicate scans are normal operating conditions.
 
-Feature-owned command/query DTOs, validators, and mappings belong together in `FMCG.Application/Features/<approved-feature>/`. Cross-feature application ports belong in `FMCG.Application/Abstractions/`. HTTP-only request/response shapes belong in `FMCG.API/Contracts/` when they are not the feature's application contract. Validation runs at the boundary and/or application use-case boundary without placing transport concerns in Domain.
+For deferred payment, receipt creates pending points and full payment converts them once. For prepaid/COD orders, points become earned only after the approved receipt/payment condition is satisfied. Ledger entries—not a mutable balance alone—are the accounting record.
 
-React and Flutter consume versioned API contracts, never Entity Framework entities or database models. Actual DTOs, routes, mappings, and workflows should wait for the approved API and business design.
-
-## 5. Frontend React/TypeScript Skeleton
-
-The React application should use a feature-oriented structure with a small shared UI/core surface:
+## Offline synchronization
 
 ```text
-frontend/src/
-├── app/
-├── assets/
-├── components/
-├── config/
-├── features/
-│   └── _template/
-│       ├── api/
-│       ├── components/
-│       ├── hooks/
-│       ├── pages/
-│       ├── schemas/
-│       └── types/
-├── hooks/
-├── layouts/
-├── lib/
-│   └── rbac/                     # permission UI placeholder
-├── pages/
-├── routes/
-├── services/
-│   └── api/                      # central API client
-├── store/
-├── types/
-├── utils/
-└── tests/
+device creates OFF code and stable client key
+  -> queue persists locally
+  -> API receives command and stores server_received_at
+  -> server authorizes and revalidates all mutable business inputs
+  -> server creates one DH order or returns a business rejection
+  -> device stores the authoritative result and snapshots
 ```
 
-All HTTP calls should flow through the central API client, whose base URL comes from `VITE_API_BASE_URL`. Once the backend RBAC contract is approved, `lib/rbac/` can host generic route guards and conditional-rendering helpers. Client-side permission checks improve the user experience but never replace server authorization.
+Processing order is based on server receipt time, not device time. The response must distinguish transport failure, retriable concurrency failure, and final business rejection. A changed price or promotion is an explicit server result, not silent acceptance of the offline estimate.
 
-## 6. Mobile Flutter Skeleton
+## State and snapshot policy
 
-Because Flutter is currently an API-consuming client, a lightweight feature-based structure is sufficient:
+- Master data is referenced for current validation but historical transactions retain display and calculation snapshots.
+- Orders snapshot product identity, prices, discounts, promotions, and applicable loyalty inputs.
+- Allocations snapshot candidate inputs, score components, configuration version, ETA, and result order when needed for explanation and evaluation.
+- Delivery assignments snapshot plate number and delivery-person contact details.
+- Status history and audit records are append-only from application behavior; corrections use compensating actions.
+- Server business codes are immutable and never reused.
 
-```text
-mobile/lib/
-├── app/
-├── core/
-│   ├── constants/
-│   ├── errors/
-│   ├── network/                  # central API service
-│   └── utils/
-├── config/
-├── shared/
-│   ├── widgets/
-│   ├── models/
-│   ├── services/
-│   └── rbac/                     # permission UI placeholder
-├── features/
-│   └── _template/
-│       ├── pages/
-│       ├── widgets/
-│       ├── models/
-│       ├── services/
-│       └── controllers/
-├── routes/
-└── main.dart
-```
+## API and client boundaries
 
-The centralized HTTP service reads its base URL from `--dart-define` configuration. Full data/domain/presentation layering should be introduced only if mobile later gains substantial local business rules, offline-first synchronization, local persistence complexity, or multiple data sources.
+REST/OpenAPI is the canonical command and operational-query contract. GraphQL may serve read-heavy dashboards only when it uses the same application authorization and query policies. SignalR may publish state-change notifications, but clients must re-read authoritative state after reconnecting.
 
-## 7. API Contract Alignment Skeleton
+React and Flutter consume versioned contracts and must not share database models. Client permission checks improve UX only; every API request is authorized independently. See [API contract rules](../api/README.md).
 
-The backend remains the integration center. Swagger/OpenAPI should publish the canonical REST contract; `.docs/api/` records versioning policy, examples, and review decisions. React and Flutter may use generated clients or manually maintained models, but generation should be deterministic and the generated outputs should have clear ownership. Contract changes should be versioned and checked in CI once the API design stabilizes.
+## Configuration ownership
 
-## 8. Azure DevOps CI/CD Skeleton Mainly for Backend
+Service radius, transit rules, MLOR overrides, allocation weights, replenishment thresholds, discount tiers, credit terms, loyalty rates, and KPI thresholds are versioned server configuration. Changes affect new processing; historical snapshots preserve the configuration used for an existing decision.
 
-The delivery boundary is:
+Secrets and environment endpoints are deployment configuration. They do not belong in business-configuration tables or committed settings files.
 
-```text
-.azure/pipelines/
-├── application-delivery.yaml
-├── templates/
-└── variables/
-scripts/backend/
-infra/
-```
+## Observability and asynchronous work
 
-`.azure/` is valid and already established; `.azuredevops/` is slightly more explicit but offers no technical advantage. Renaming now would add churn, so consistency with `.azure/` is preferable.
+Every request should carry a correlation identifier through API logs, database/audit records where appropriate, outbox messages, and worker logs. Metrics should cover allocation rejection reasons, concurrency retries, outbox lag, offline-sync outcomes, overdue jobs, and notification failures without exposing personal data.
 
-The backend pipeline performs restore/build, automated tests, API publish, ZIP packaging, and pipeline-artifact publication. A main-branch deployment stage exists only as a disabled placeholder until the Azure hosting target, environments, approvals, service connection, and secret strategy are approved. Frontend and mobile pipelines can be added independently later.
+The transactional outbox is required when a durable notification or job follows a committed state change. Workers must be idempotent and safe under at-least-once delivery.
 
-## 9. Backend Pipeline Trigger Skeleton
+## Deliberate exclusions
 
-Backend CI/PR triggers include:
+Architecture must not reserve active production components for retailer checkout, returns, reverse logistics, partial shipment, credit-limit engines, partial payment, debt aging, driver applications, routing/vehicle optimization, warehouse revenue, POS inventory, or payment gateways. Such components require a new approved scope decision.
 
-```yaml
-paths:
-  include:
-    - backend/**
-    - .azure/pipelines/**
-    - scripts/backend/**
-    - infra/**
-```
+## Repository hygiene
 
-Frontend-only and mobile-only changes therefore do not start backend delivery. If shared API contract files later live outside `backend/`, their exact path must be added to the include list.
-
-## 10. Git and Repository Hygiene
-
-Commit source skeletons, project/solution files, automated tests, pipeline YAML, scripts, documentation, infrastructure definitions, and deterministic lock files. Keep `frontend/package-lock.json` and `mobile/pubspec.lock`.
-
-Do not commit `.NET bin/obj/.vs`, `node_modules`, `dist`, `.dart_tool`, Flutter `build` or `ephemeral` outputs, test results, logs, secrets, certificates, local environment files, or real deployment settings. Commit only safe examples such as `.env.example` and `appsettings.example.json`. Store real values later in .NET user secrets for development and Azure DevOps variable groups, Key Vault, or secret pipeline variables for delivery.
-
-## 11. Documentation Skeleton
-
-```text
-docs/
-├── architecture/      # boundaries, decisions, dependency rules
-├── api/               # contract/versioning documentation
-├── database/          # approved model and migration guidance
-├── devops/            # pipeline, environments, release process
-├── diagrams/          # thesis diagrams and editable sources
-└── testing/           # strategy, test levels, quality evidence
-```
-
-Prefer short, version-controlled decision records and diagrams whose source files are committed alongside exported images.
-
-## 12. Academic and Enterprise Justification
-
-Before feature implementation, the repository already demonstrates separation of concerns, SOLID and Clean Architecture readiness, scalable monorepo organization, distinct backend/web/mobile ownership, a backend API integration center, delivery automation, three backend test scopes, and thesis-friendly documentation boundaries. The concurrency, audit, RBAC, and UoM placeholders show where finalized architectural conventions will be implemented without pretending that unapproved business modules exist.
-
-## 13. Pitfalls and Recommendations
-
-- Generated files: enforce `.gitignore` and review `git status` before every commit.
-- Duplicated API models: choose one OpenAPI-based alignment process when contracts stabilize.
-- Noisy history: keep commits scoped by stack or architectural concern.
-- Wasteful pipelines: retain path filters and add shared-contract paths deliberately.
-- Configuration drift: document variable names once and keep safe examples synchronized.
-- Shared-folder misuse: promote code to shared scope only after demonstrated reuse and stable semantics.
-- Circular backend dependencies: enforce references through solution/build checks and architecture tests later.
-- Premature client architecture: keep React and Flutter feature-based until complexity justifies more layers.
-- Premature cross-cutting implementation: keep concurrency, audit, RBAC, and UoM as contracts/placeholders until transaction, threat, performance, and domain requirements are confirmed.
-
-## 14. Final Verdict
-
-The refined skeleton is suitable for an FPT University graduation thesis and credible as the foundation of an enterprise-style system. It demonstrates architectural and delivery readiness without misrepresenting skeleton placeholders as completed business functionality. The next responsible milestone is approval of the domain and API design, followed by one thin vertical slice that proves the boundaries and cross-cutting conventions end to end.
+- Commit editable diagram sources, documentation, code, tests, safe configuration examples, migrations, pipelines, and deterministic lockfiles.
+- Ignore build outputs, package caches, IDE data, test results, secrets, certificates, real environment files, and the integration repository's `temp/` context directory.
+- Keep commits scoped to one repository and one reviewable concern.
+- Update the business baseline, affected contracts, diagrams, and acceptance scenarios together when an approved decision changes.
