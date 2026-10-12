@@ -28,6 +28,16 @@ Products follow `Draft -> Published -> Inactive`. Drafts may be edited or delete
 
 Retailers are declared by Sales, reviewed, assigned to a region and sales group, and classified for potential. Master data is inactivated instead of hard-deleted after it participates in business history.
 
+Retailer declaration records retailer type, store size, forecast monthly revenue, expected monthly purchasing capacity, purchase frequency, and credit term. Approved potential classification is:
+
+| Class | Qualification |
+| --- | --- |
+| A | Forecast revenue at least 60 million VND/month **or** purchasing capacity at least 120 cartons/month |
+| B | Forecast revenue at least 30 million VND/month **or** purchasing capacity at least 60 cartons/month |
+| C | All remaining approved retailers |
+
+Store-size bands are S below 30 m², M from 30-60 m², and L above 60 m².
+
 ## Warehouses, batches, and QR lineage
 
 - Central warehouses receive manufacturer stock and replenish regional warehouses.
@@ -58,6 +68,12 @@ PendingSync -> PendingApproval -> Approved -> Issued -> Delivering -> Delivered
 Order lines preserve immutable snapshots of the relevant SKU, product name, unit price, discounts, promotions, and applicable loyalty information. Later master-data changes do not rewrite order history.
 
 The order unit is the carton. Business quantities are whole, non-negative cartons and cannot exceed available stock. Partial order fulfillment and backorders are not allowed.
+
+Where a SKU uses configured buffer stock and order steps, the maximum selectable quantity is:
+
+```text
+floor((available - buffer_stock) / order_step) * order_step
+```
 
 ## Allocation policy
 
@@ -104,6 +120,19 @@ Retailers confirm receipt by scanning all required tags. Duplicate or cross-reta
 Supported payment methods are prepaid, COD, and deferred payment. Deferred terms are no credit, 7, 14, or 30 days; due date is delivery date plus the retailer term. Only full payment is recorded, with `Unpaid`, `Paid`, or `Overdue` status.
 
 Loyalty defaults to one point per 100,000 VND after promotion, with only one active program. Receipt confirmation earns points once. Credit-order points remain pending until full payment. Gift redemption holds/deducts points through approval and fulfillment; rejection refunds them. Ledger types are Earn, Pending Earn, Redeem, Refund, Adjustment, and Expired.
+
+## Sales KPI and reporting
+
+Sales performance uses revenue after promotion while retaining revenue before promotion and the promotion amount/rate. Default monthly KPI targets are:
+
+| KPI | Default |
+| --- | ---: |
+| Successful orders | 15 |
+| Retailers served | 5 |
+| New retailers | 1 |
+| Promotion/revenue ratio | At most 5% |
+
+Approved reporting includes individual/team ranking, period comparison, top-selling products, cartons sold, and product revenue after promotion. Warehouse revenue and retailer POS/sell-out revenue are excluded.
 
 ## Offline sales orders
 
