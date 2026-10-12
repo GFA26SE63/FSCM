@@ -3,6 +3,9 @@ FSCM-Backend/
 FSCM-Frontend/
 FSCM-Mobile/
 
+# Temporary working context; never commit its contents.
+temp/
+
 # Local operating-system files
 .DS_Store
 Thumbs.db
