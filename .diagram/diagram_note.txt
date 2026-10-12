@@ -1,12 +1,10 @@
-	-- COMPONENT DIAGRAM --
-* This is for backend devs to implement different protocol for each API
-* Open with VS code extension MermaidJS for file .mmd
-	-- CONTAINER DIAGRAM --
-* Low level of component diagram, for overview purpose
-	-- SYSTEM CONTEXT DIAGRAM --
-* Link here:
-```
-https://drive.google.com/file/d/1I73aZWfPS-9vyeE8ZVm05VEL1GN-jvuh/view?usp=sharing
-```
-	-- USE CASE DIAGRAM --
-* ON-WORKING
+FSCM DIAGRAM NOTES
+
+- Authoritative editable sources are the Mermaid `.mmd` files in this directory.
+- Render with a Mermaid tool that supports C4Context, C4Container, and C4Component.
+- Keep diagrams aligned with `.docs/business/README.md` and `.docs/architecture/repository-skeleton.md`.
+- PostgreSQL is authoritative; mobile SQLite is cache and an offline command queue.
+- Retailers do not self-order. Drivers do not have accounts or an application.
+- Route planning/optimization and regional-to-regional rebalancing are not approved coding scope.
+- The Draw.io XML/PNG system-context files are legacy pre-baseline exports; use
+  `system-context-diagram/context_diagram.mmd` for current reports.

@@ -1,27 +1,40 @@
-C4Container
-title "Component Diagram - Product Management"
+C4Component
+title FSCM Catalog, Price, MLOR, and Promotion Components
 
-Container_Boundary(web_portal, "Web Portal with React") {
-    Component(pg_product_information_mng, "Product Information Management Page", "React", "Manage product information")
+Container_Boundary(clients, "Clients") {
+    Component(admin_portal, "Admin Portal", "React", "Manages categories, products, prices, and promotions")
+    Component(sales_mobile, "Sales Mobile", "Flutter", "Reads sellable catalog and server price snapshots")
 }
 
-Container_Boundary(presentation, "Presentation/API Layer") {
-    Component(ctr_product_information, "Product Information Controller", "C# .NET", "Manage product")
-    Component(pre_product_information_mng, "Product Information Management Presenter", "C# .NET", "Present product information")
+Container_Boundary(api, "Backend API") {
+    Component(catalog_endpoint, "Catalog Endpoints", ".NET", "Commands and scoped catalog queries")
+    Component(promotion_endpoint, "Promotion Endpoints", ".NET", "Campaign and batch-discount commands")
 }
 
-Container_Boundary(application, "Use Case Layer") {
-    Component(uc_product_information, "Product Information Interface", "C# .NET")
+Container_Boundary(application, "Application") {
+    Component(category, "Category Service", ".NET", "Category hierarchy and lifecycle")
+    Component(product, "Product Lifecycle Service", ".NET", "Draft, Published, Inactive, and new-SKU versioning")
+    Component(price, "Effective Price Service", ".NET", "Effective-dated VND prices and order snapshots")
+    Component(mlor, "MLOR Policy", ".NET", "Retailer-product minimum life requirement")
+    Component(promotion, "Promotion Service", ".NET", "Targeting, effective periods, stacking, and batch discounts")
 }
 
-Container_Boundary(infrastructure, "External Data and Services Layer") {
-    Component(rep_product_information, "Product Information Repository", "C# EF Core")
-    ContainerDb(azure_sql_db, "Azure SQL", "SQL Database")
+Container_Boundary(data, "Data") {
+    Component(repository, "Catalog Persistence", "EF Core", "Master data, effective history, constraints, and audit")
+    ContainerDb(postgres, "PostgreSQL", "Database")
 }
 
-Rel(pg_product_information_mng, ctr_product_information, "Uses", "RESTful API")
-Rel(ctr_product_information, uc_product_information, "Invokes", "In-process")
-Rel(uc_product_information, rep_product_information, "Invokes", "In-process")
-Rel(rep_product_information, azure_sql_db, "Reads/Writes", "Entity Framework")
-Rel(uc_product_information, pre_product_information_mng, "Invokes", "In-process")
-Rel(pre_product_information_mng, pg_product_information_mng, "Returns data to", "RESTful API")
+Rel(admin_portal, catalog_endpoint, "Manages catalog", "JSON/HTTPS")
+Rel(admin_portal, promotion_endpoint, "Manages promotions", "JSON/HTTPS")
+Rel(sales_mobile, catalog_endpoint, "Reads cached/current catalog", "JSON/HTTPS")
+Rel(catalog_endpoint, category, "Invokes")
+Rel(catalog_endpoint, product, "Invokes")
+Rel(catalog_endpoint, price, "Invokes")
+Rel(catalog_endpoint, mlor, "Queries")
+Rel(promotion_endpoint, promotion, "Invokes")
+Rel(category, repository, "Persists")
+Rel(product, repository, "Persists")
+Rel(price, repository, "Persists/reads")
+Rel(mlor, repository, "Reads effective policy")
+Rel(promotion, repository, "Persists/reads")
+Rel(repository, postgres, "Reads/writes")

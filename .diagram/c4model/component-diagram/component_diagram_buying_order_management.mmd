@@ -1,35 +1,42 @@
-C4Container
-title "Component Diagram - Buying Order Management"
+C4Component
+title FSCM Sales Order and Allocation Components
 
-Container_Boundary(web_portal, "Web Portal with React") {
-    Component(pg_buying_order_pro, "Buying Order Processing Page", "React", "Process order")
+Container_Boundary(clients, "Clients") {
+    Component(sales_mobile, "Sales Mobile", "Flutter + SQLite", "Captures online/offline territory-scoped orders")
+    Component(operations_portal, "Operations Portal", "React", "Reviews, approves, rejects, or cancels orders")
 }
 
-Container_Boundary(mobile_app, "Mobile Application with Flutter") {
-    Component(pg_buying_order_mng, "Buying Orders Management Page", "Flutter", "Manage buying order")
+Container_Boundary(api, "Backend API") {
+    Component(order_endpoint, "Order and Sync Endpoints", ".NET", "Validates contracts, identity, idempotency, and version")
+    Component(order_query, "Order Queries", ".NET", "Returns scoped orders, snapshots, and sync outcomes")
 }
 
-Container_Boundary(presentation, "Presentation/API Layer") {
-    Component(ctr_buying_order, "Buying Order Controller", "C# .NET", "Manage buying orders")
-    Component(pre_buying_order_pro, "Buying Order Processing Presenter", "C# .NET", "Present buying order processing")
-    Component(pre_buying_order_mng, "Buying Order Management Presenter", "C# .NET", "Present buying order")
+Container_Boundary(application, "Application") {
+    Component(scope_policy, "Territory Authorization", ".NET", "Validates Sales-to-retailer assignment")
+    Component(sync_service, "Offline Sync Service", ".NET", "Orders commands by server receipt time and deduplicates retries")
+    Component(pricing, "Pricing and Promotion", ".NET", "Revalidates server price/discount and creates snapshots")
+    Component(allocation, "Allocation Engine", ".NET", "Hard filters, weighted scoring, greedy selection, and full-order decision")
+    Component(inventory_hold, "Inventory Hold Service", ".NET", "Atomically creates/releases holds with optimistic concurrency")
+    Component(approval, "Order Approval Service", ".NET", "Converts holds to reservations and creates picking work")
 }
 
-Container_Boundary(application, "Use Case Layer") {
-    Component(uc_buying_order, "Buying Order Interface", "C# .NET")
+Container_Boundary(data, "Data") {
+    Component(repository, "Order/Inventory Persistence", "EF Core", "Transactions, versions, history, idempotency, and outbox")
+    ContainerDb(postgres, "PostgreSQL", "Database")
 }
 
-Container_Boundary(infrastructure, "External Data and Services Layer") {
-    Component(rep_buying_order, "Buying Order Repository", "C# EF Core")
-    ContainerDb(azure_sql_db, "Azure SQL", "SQL Database")
-}
-
-Rel(pg_buying_order_pro, ctr_buying_order, "Uses", "WebSockets / SignalR")
-Rel(pg_buying_order_mng, ctr_buying_order, "Uses", "RESTful API")
-Rel(ctr_buying_order, uc_buying_order, "Invokes", "In-process")
-Rel(uc_buying_order, rep_buying_order, "Invokes", "In-process")
-Rel(rep_buying_order, azure_sql_db, "Reads/Writes", "Entity Framework")
-Rel(uc_buying_order, pre_buying_order_pro, "Invokes", "In-process")
-Rel(uc_buying_order, pre_buying_order_mng, "Invokes", "In-process")
-Rel(pre_buying_order_pro, pg_buying_order_pro, "Returns data to", "WebSockets / SignalR")
-Rel(pre_buying_order_mng, pg_buying_order_mng, "Returns data to", "RESTful API")
+Rel(sales_mobile, order_endpoint, "Submits/retries orders", "JSON/HTTPS")
+Rel(operations_portal, order_endpoint, "Sends review commands", "JSON/HTTPS")
+Rel(operations_portal, order_query, "Reads order decisions", "JSON/HTTPS")
+Rel(order_endpoint, scope_policy, "Authorizes")
+Rel(order_endpoint, sync_service, "Invokes")
+Rel(sync_service, pricing, "Revalidates")
+Rel(sync_service, allocation, "Requests allocation")
+Rel(allocation, inventory_hold, "Commits only complete supply")
+Rel(order_endpoint, approval, "Invokes approval/rejection/cancellation")
+Rel(sync_service, repository, "Persists command/result")
+Rel(pricing, repository, "Reads effective data")
+Rel(allocation, repository, "Reads candidates/configuration")
+Rel(inventory_hold, repository, "Mutates balances atomically")
+Rel(approval, repository, "Mutates status/reservations/picking")
+Rel(repository, postgres, "Reads/writes")

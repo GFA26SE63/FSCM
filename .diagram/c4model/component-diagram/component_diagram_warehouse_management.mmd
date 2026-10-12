@@ -1,49 +1,39 @@
-C4Container
-title "Component Diagram - Warehouse Management"
+C4Component
+title FSCM Warehouse Inventory and Transfer Components
 
-Container_Boundary(web_portal, "Web Portal with React") {
-    Component(pg_enterprise_warehouse_mng, "Enterprise Warehouses Management Page", "React", "Manage warehouses of the enterprise")
-    Component(pg_warehouse_goods_mng, "Warehouse Goods Management Page", "React", "View detail of warehouse's goods")
-    Component(pg_warehouse_facility_mng, "Warehouse Facility Management Page", "React", "Manage each warehouse information")
+Container_Boundary(clients, "Clients") {
+    Component(admin_portal, "Admin Portal", "React", "Manages warehouse master data and configuration")
+    Component(warehouse_client, "Warehouse Client", "Flutter/React", "Views stock and scans transfer dispatch/receipt")
 }
 
-Container_Boundary(presentation, "Presentation/API Layer") {
-    Component(ctr_enterprise_warehouse, "Enterprise Warehouses Controller", "C# .NET", "Manage warehouse")
-    Component(ctr_goods, "Goods Management Controller", "C# .NET", "Manage warehouse goods")
-    Component(ctr_warehouse_facility, "Warehouse Facility Controller", "C# .NET", "Manage warehouse facility")
-    Component(pre_warehouse_enterprise_mng, "Enterprise Warehouse Management Presenter", "C# .NET", "Present enterprise's warehouses")
-    Component(pre_warehouse_goods_mng, "Warehouse Goods Management Presenter", "C# .NET", "Present goods in warehouse")
-    Component(pre_warehouse_facility_mng, "Warehouse Facility Management Presenter", "C# .NET", "Present warehouse facility")
+Container_Boundary(api, "Backend API") {
+    Component(warehouse_endpoint, "Warehouse Endpoints", ".NET", "Enforces role and assigned-warehouse scope")
+    Component(transfer_endpoint, "Transfer Endpoints", ".NET", "Controls request, approval, dispatch, and receipt")
 }
 
-Container_Boundary(application, "Use Case Layer") {
-    Component(uc_warehouse, "Enterprise Warehouse Interface", "C# .NET")
-    Component(uc_goods, "Goods Management Interface", "C# .NET")
-    Component(uc_warehouse_facility, "Warehouse Facility Interface", "C# .NET")
+Container_Boundary(application, "Application") {
+    Component(warehouse_master, "Warehouse Master Service", ".NET", "Central/regional warehouses, location, status, and assignments")
+    Component(inventory, "Inventory Service", ".NET", "Batch balances, FEFO views, and expiry eligibility")
+    Component(replenishment, "Replenishment Service", ".NET", "Suggests central-to-regional transfer below configured threshold")
+    Component(transfer, "Transfer Service", ".NET", "FEFO source selection, in-transit state, receipt, and lineage conservation")
 }
 
-Container_Boundary(infrastructure, "External Data and Services Layer") {
-    Component(rep_warehouse, "Enterprise Warehouse Repository", "C# EF Core")
-    Component(rep_goods, "Goods Management Repository", "C# EF Core")
-    Component(rep_warehouse_facility, "Warehouse Facility Repository", "C# EF Core")
-    ContainerDb(azure_sql_db, "Azure SQL", "SQL Database")
+Container_Boundary(data, "Data") {
+    Component(repository, "Warehouse Persistence", "EF Core", "Versioned balances, transfer state, history, and outbox")
+    ContainerDb(postgres, "PostgreSQL", "Database")
 }
 
-Rel(pg_enterprise_warehouse_mng, ctr_enterprise_warehouse, "Uses", "RESTful API")
-Rel(pg_warehouse_goods_mng, ctr_goods, "Uses", "gRPC-Web")
-Rel(pg_warehouse_facility_mng, ctr_warehouse_facility, "Uses", "RESTful API")
-Rel(ctr_enterprise_warehouse, uc_warehouse, "Invokes", "In-process")
-Rel(ctr_goods, uc_goods, "Invokes", "In-process")
-Rel(ctr_warehouse_facility, uc_warehouse_facility, "Invokes", "In-process")
-Rel(uc_warehouse, rep_warehouse, "Invokes", "In-process")
-Rel(uc_goods, rep_goods, "Invokes", "In-process")
-Rel(uc_warehouse_facility, rep_warehouse_facility, "Invokes", "In-process")
-Rel(rep_warehouse, azure_sql_db, "Reads/Writes", "Entity Framework")
-Rel(rep_goods, azure_sql_db, "Reads/Writes", "Entity Framework")
-Rel(rep_warehouse_facility, azure_sql_db, "Reads/Writes", "Entity Framework")
-Rel(uc_warehouse, pre_warehouse_enterprise_mng, "Invokes", "In-process")
-Rel(uc_goods, pre_warehouse_goods_mng, "Invokes", "In-process")
-Rel(uc_warehouse_facility, pre_warehouse_facility_mng, "Invokes", "In-process")
-Rel(pre_warehouse_enterprise_mng, pg_enterprise_warehouse_mng, "Returns data to", "RESTful API")
-Rel(pre_warehouse_goods_mng, pg_warehouse_goods_mng, "Returns data to", "gRPC-Web")
-Rel(pre_warehouse_facility_mng, pg_warehouse_facility_mng, "Returns data to", "RESTful API")
+Rel(admin_portal, warehouse_endpoint, "Manages warehouse data", "JSON/HTTPS")
+Rel(warehouse_client, warehouse_endpoint, "Reads scoped inventory", "JSON/HTTPS")
+Rel(warehouse_client, transfer_endpoint, "Scans dispatch/receipt", "JSON/HTTPS")
+Rel(warehouse_endpoint, warehouse_master, "Invokes")
+Rel(warehouse_endpoint, inventory, "Queries")
+Rel(transfer_endpoint, transfer, "Invokes")
+Rel(replenishment, inventory, "Checks regional threshold")
+Rel(replenishment, transfer, "Suggests approved direction")
+Rel(transfer, inventory, "Selects FEFO and moves quantity")
+Rel(warehouse_master, repository, "Persists")
+Rel(inventory, repository, "Reads/writes")
+Rel(replenishment, repository, "Reads configuration/demand")
+Rel(transfer, repository, "Persists atomically")
+Rel(repository, postgres, "Reads/writes")

@@ -1,32 +1,37 @@
-C4Container
-title "Component Diagram - Goods Receipt Management"
+C4Component
+title FSCM Goods Receipt, Batch, and QR Components
 
-Container_Boundary(web_portal, "Web Portal with React") {
-    Component(pg_goods_receipt_pro, "Goods Receipt Processing Page", "React", "Process goods receipt")
-    Component(pg_goods_receipt_mng, "Goods Receipt Management Page", "React", "Manage goods receipt")
+Container_Boundary(clients, "Warehouse Clients") {
+    Component(warehouse_mobile, "Warehouse Mobile", "Flutter", "Scans receipts, batches, and QR tags")
+    Component(warehouse_portal, "Warehouse Operations Portal", "React", "Reviews scoped receipt and inventory data")
 }
 
-Container_Boundary(presentation, "Presentation/API Layer") {
-    Component(ctr_goods_receipt, "Goods Receipt Controller", "C# .NET", "Manage goods receipt")
-    Component(pre_goods_receipt_pro, "Goods Receipt Processing Presenter", "C# .NET", "Present goods receipt processing")
-    Component(pre_good_receipt_mng, "Goods Receipt Management Presenter", "C# .NET", "Present goods receipt management")
+Container_Boundary(api, "Backend API") {
+    Component(receipt_endpoint, "Goods Receipt Endpoints", ".NET", "Authorizes assigned warehouse and validates commands")
+    Component(inventory_query, "Inventory Queries", ".NET", "Returns scoped batch, tag, and balance views")
 }
 
-Container_Boundary(application, "Use Case Layer") {
-    Component(uc_goods_receipt, "Goods Receipt Interface", "C# .NET")
+Container_Boundary(application, "Application") {
+    Component(receipt_service, "Receipt Service", ".NET", "Records inbound SKU, quantity, source lot, and expiry")
+    Component(batch_service, "Batch Service", ".NET", "Merges warehouse + SKU + expiry and preserves lineage")
+    Component(qr_service, "QR Lineage Service", ".NET", "Generates, resolves, splits, and prevents duplicate tag use")
+    Component(balance_service, "Inventory Balance Service", ".NET", "Maintains on-hand, held, reserved, and available invariants")
 }
 
-Container_Boundary(infrastructure, "External Data and Services Layer") {
-    Component(rep_goods_receipt, "Goods Receipt Repository", "C# EF Core")
-    ContainerDb(azure_sql_db, "Azure SQL", "SQL Database")
+Container_Boundary(data, "Data") {
+    Component(repository, "Inventory Persistence", "EF Core", "Transactions, constraints, versions, history, and audit")
+    ContainerDb(postgres, "PostgreSQL", "Database")
 }
 
-Rel(pg_goods_receipt_pro, ctr_goods_receipt, "Uses", "WebSockets / SignalR")
-Rel(pg_goods_receipt_mng, ctr_goods_receipt, "Uses", "RESTful API")
-Rel(ctr_goods_receipt, uc_goods_receipt, "Invokes", "In-process")
-Rel(uc_goods_receipt, rep_goods_receipt, "Invokes", "In-process")
-Rel(rep_goods_receipt, azure_sql_db, "Reads/Writes", "Entity Framework")
-Rel(uc_goods_receipt, pre_goods_receipt_pro, "Invokes", "In-process")
-Rel(uc_goods_receipt, pre_good_receipt_mng, "Invokes", "In-process")
-Rel(pre_goods_receipt_pro, pg_goods_receipt_pro, "Returns data to", "WebSockets / SignalR")
-Rel(pre_good_receipt_mng, pg_goods_receipt_mng, "Returns data to", "RESTful API")
+Rel(warehouse_mobile, receipt_endpoint, "Submits scans/receipts", "JSON/HTTPS")
+Rel(warehouse_portal, inventory_query, "Reads inventory", "JSON/HTTPS")
+Rel(receipt_endpoint, receipt_service, "Invokes")
+Rel(receipt_service, batch_service, "Creates or merges batch")
+Rel(batch_service, qr_service, "Maintains label lineage")
+Rel(batch_service, balance_service, "Adds physical quantity")
+Rel(receipt_service, repository, "Persists atomically")
+Rel(batch_service, repository, "Persists atomically")
+Rel(qr_service, repository, "Persists atomically")
+Rel(balance_service, repository, "Persists versioned balance")
+Rel(inventory_query, repository, "Reads scoped projections")
+Rel(repository, postgres, "Reads/writes")

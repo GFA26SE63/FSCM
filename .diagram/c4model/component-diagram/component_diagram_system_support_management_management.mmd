@@ -1,63 +1,46 @@
-C4Container
-title "Component Diagram - System Support Management"
+C4Component
+title FSCM Configuration, Reporting, Audit, and Jobs Components
 
-Container_Boundary(web_portal, "Web Portal with React") {
-    Component(pg_dashboard_vw, "Dashboard Viewing Page", "React", "Displays system operation data")
-    Component(pg_report_vw, "Report Viewing Page", "React", "Displays analytical business data")
-    Component(pg_batch_location_vw, "Batch Location Viewing Page", "React", "Display batch location map")
+Container_Boundary(clients, "Clients") {
+    Component(admin_portal, "Admin Portal", "React", "Manages configuration and audits operational changes")
+    Component(manager_portal, "Manager Dashboard", "React", "Views Sales/team KPI, ranking, and product performance")
+    Component(user_clients, "Authorized Clients", "React/Flutter", "Receive notifications and read scoped history")
 }
 
-Container_Boundary(mobile_app, "Mobile Application with Flutter") {
-    Component(pg_sale_path_mng, "Sale Path Management Page", "Flutter", "Manage sale path planning")
+Container_Boundary(api_worker, "API and Worker") {
+    Component(config_endpoint, "Configuration Endpoints", ".NET", "Versions approved business parameters")
+    Component(report_endpoint, "Reporting Endpoints", ".NET", "Returns scoped post-promotion KPI projections")
+    Component(audit_endpoint, "Audit Queries", ".NET", "Returns authorized immutable history")
+    Component(job_worker, "Background Worker", ".NET", "Expiry, replenishment, discount, overdue, and notification jobs")
 }
 
-Container_Boundary(presentation, "Presentation/API Layer") {
-    Component(ctr_dashboard, "Dashboard Controller", "C# .NET", "Display dashboard")
-    Component(ctr_report, "Report Controller", "C# .NET", "Display report")
-    Component(ctr_batch_location, "Batch Location Controller", "C# .NET", "View batch location")
-    Component(ctr_sale_path, "Sale Path Controller", "C# .NET", "Manage sale path")
-    Component(pre_dashboard_vw, "Dashboard Viewing Presenter", "C# .NET", "Present dashboard")
-    Component(pre_report_vw, "Report Viewing Presenter", "C# .NET", "Present report")
-    Component(pre_batch_location_vw, "Batch Location Viewing Presenter", "C# .NET", "Present batch location map")
-    Component(pre_sale_path_mng, "Sale Path Management Presenter", "C# .NET", "Present sale path")
+Container_Boundary(application, "Application") {
+    Component(configuration, "Configuration Service", ".NET", "Weights, radius, transit, thresholds, terms, loyalty, and KPI settings")
+    Component(reporting, "KPI and Reporting Service", ".NET", "Revenue after promotion, comparisons, ranking, and top products")
+    Component(audit, "Audit Service", ".NET", "Material command history with actor/reason/correlation")
+    Component(notification, "Notification Service", ".NET", "Creates and delivers scoped user notifications")
+    Component(outbox, "Outbox Processor", ".NET", "Provides idempotent at-least-once asynchronous delivery")
 }
 
-Container_Boundary(application, "Use Case Layer") {
-    Component(uc_dashboard, "Dashboard Interface", "C# .NET")
-    Component(uc_report, "Report Interface", "C# .NET")
-    Component(uc_batch_location, "Batch Location Interface", "C# .NET")
-    Component(uc_sale_path, "Sale Path Interface", "C# .NET")
+Container_Boundary(data, "Data and Providers") {
+    Component(repository, "Platform Persistence", "EF Core", "Configuration versions, projections, audit, notifications, jobs, and outbox")
+    ContainerDb(postgres, "PostgreSQL", "Database")
+    Component(provider, "Notification Provider", "External API", "Push/email transport")
 }
 
-Container_Boundary(infrastructure, "External Data and Services Layer") {
-    Component(rep_dashboard, "Dashboard Repository", "C# EF Core")
-    Component(rep_report, "Report Repository", "C# EF Core")
-    Component(rep_batch_location, "Batch Location Repository", "C# EF Core")
-    Component(rep_sale_path, "Sale Path Repository", "C# EF Core")
-    ContainerDb(azure_sql_db, "Azure SQL", "SQL Database")
-}
-
-Rel(pg_dashboard_vw, ctr_dashboard, "Uses", "GraphQL")
-Rel(pg_report_vw, ctr_report, "Uses", "GraphQL")
-Rel(pg_batch_location_vw, ctr_batch_location, "Uses", "GraphQL")
-Rel(pg_sale_path_mng, ctr_sale_path, "Uses", "gRPC")
-Rel(ctr_dashboard, uc_dashboard, "Invokes", "In-process")
-Rel(ctr_report, uc_report, "Invokes", "In-process")
-Rel(ctr_batch_location, uc_batch_location, "Invokes", "In-process")
-Rel(ctr_sale_path, uc_sale_path, "Invokes", "In-process")
-Rel(uc_dashboard, rep_dashboard, "Invokes", "In-process")
-Rel(uc_report, rep_report, "Invokes", "In-process")
-Rel(uc_batch_location, rep_batch_location, "Invokes", "In-process")
-Rel(uc_sale_path, rep_sale_path, "Invokes", "In-process")
-Rel(rep_dashboard, azure_sql_db, "Reads", "Entity Framework")
-Rel(rep_report, azure_sql_db, "Reads", "Entity Framework")
-Rel(rep_batch_location, azure_sql_db, "Reads/Writes", "Entity Framework")
-Rel(rep_sale_path, azure_sql_db, "Reads/Writes", "Entity Framework")
-Rel(uc_dashboard, pre_dashboard_vw, "Invokes", "In-process")
-Rel(uc_report, pre_report_vw, "Invokes", "In-process")
-Rel(uc_batch_location, pre_batch_location_vw, "Invokes", "In-process")
-Rel(uc_sale_path, pre_sale_path_mng, "Invokes", "In-process")
-Rel(pre_dashboard_vw, pg_dashboard_vw, "Returns data to", "GraphQL")
-Rel(pre_report_vw, pg_report_vw, "Returns data to", "GraphQL")
-Rel(pre_batch_location_vw, pg_batch_location_vw, "Returns data to", "GraphQL")
-Rel(pre_sale_path_mng, pg_sale_path_mng, "Returns data to", "gRPC")
+Rel(admin_portal, config_endpoint, "Updates configuration", "JSON/HTTPS")
+Rel(admin_portal, audit_endpoint, "Reviews audit", "JSON/HTTPS")
+Rel(manager_portal, report_endpoint, "Reads KPI", "JSON/HTTPS")
+Rel(user_clients, notification, "Reads notifications", "JSON/HTTPS")
+Rel(config_endpoint, configuration, "Invokes")
+Rel(report_endpoint, reporting, "Invokes")
+Rel(audit_endpoint, audit, "Queries")
+Rel(job_worker, outbox, "Claims work")
+Rel(job_worker, notification, "Runs scheduled delivery")
+Rel(configuration, repository, "Persists versions")
+Rel(reporting, repository, "Reads projections")
+Rel(audit, repository, "Appends/reads")
+Rel(notification, repository, "Persists status")
+Rel(outbox, repository, "Claims/settles messages")
+Rel(notification, provider, "Delivers")
+Rel(repository, postgres, "Reads/writes")

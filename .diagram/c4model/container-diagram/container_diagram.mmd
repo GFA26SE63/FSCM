@@ -1,24 +1,37 @@
 C4Container
-title "Container Diagram (Level 2)"
+title FSCM Container Diagram - Approved Business Scope
 
-Person(admin_manager, "Admin/Manager")
-Person(warehouse_staff, "Warehouse Staff")
-Person(delivery_man, "Delivery Man")
-Person(sale_man, "Sale Man")
+Person(admin, "Admin")
+Person(operator, "Operator")
+Person(sales_manager, "Sales Manager")
+Person(sales, "Sales")
+Person(warehouse_keeper, "Warehouse Keeper")
+Person(retailer, "Retailer")
 
-System_Boundary(management_system, "Core Management System") {
-    Container(web_app, "Web Application", "React", "Handles user input and display for web users")
-    Container(mobile_app, "Mobile Application", "Flutter - sqflite", "Handles user input and display for mobile users")
-    Container(backend_api, "Backend API Application", "C# .NET", "Handles business logic, API requests, and data access")
-    ContainerDb(database, "Database", "Azure SQL", "Stores system data")
+System_Ext(identity, "Enterprise Identity Provider", "OIDC/OAuth 2.0")
+System_Ext(notification_provider, "Notification Provider", "Push/email delivery")
+
+System_Boundary(fscm, "FSCM") {
+    Container(web_portal, "Operations Portal", "React + TypeScript", "Admin, Operator, Sales Manager, and authorized warehouse workflows")
+    Container(mobile_app, "Mobile Application", "Flutter + SQLite", "Sales offline capture, warehouse scanning, and retailer receipt/loyalty workflows; SQLite is cache/queue")
+    Container(api, "Backend API", ".NET", "Authoritative authorization, validation, transactions, allocation, and contracts")
+    Container(worker, "Background Worker", ".NET", "Outbox, expiry checks, replenishment/discount alerts, overdue evaluation, and notifications")
+    ContainerDb(database, "Operational Database", "PostgreSQL", "Authoritative state, history, configuration, idempotency, audit, and outbox")
+    ContainerDb(object_storage, "Evidence Storage", "Object storage", "Complaint, order, and operational attachment payloads")
 }
 
-Rel(admin_manager, web_app, "Uses", "HTTPS")
-Rel(warehouse_staff, web_app, "Uses", "HTTPS")
-Rel(delivery_man, mobile_app, "Uses", "HTTPS")
-Rel(sale_man, mobile_app, "Uses", "HTTPS")
+Rel(admin, web_portal, "Uses", "HTTPS")
+Rel(operator, web_portal, "Uses", "HTTPS")
+Rel(sales_manager, web_portal, "Uses", "HTTPS")
+Rel(sales, mobile_app, "Creates and synchronizes orders", "HTTPS / offline queue")
+Rel(warehouse_keeper, mobile_app, "Scans and processes stock", "HTTPS")
+Rel(warehouse_keeper, web_portal, "Uses authorized operational views", "HTTPS")
+Rel(retailer, mobile_app, "Confirms receipt and uses loyalty/complaints", "HTTPS")
 
-Rel(web_app, backend_api, "Makes API calls to", "JSON/HTTPS, SignalR")
-Rel(mobile_app, backend_api, "Makes API calls to", "JSON/HTTPS, gRPC")
-
-Rel(backend_api, database, "Reads from and writes to", "Entity Framework")
+Rel(web_portal, api, "Calls authoritative APIs", "JSON/HTTPS")
+Rel(mobile_app, api, "Synchronizes commands and queries", "JSON/HTTPS")
+Rel(api, identity, "Authenticates", "OIDC/OAuth 2.0")
+Rel(api, database, "Reads/writes transactions", "EF Core")
+Rel(api, object_storage, "Authorizes evidence access", "HTTPS")
+Rel(worker, database, "Claims jobs/outbox and records results", "EF Core")
+Rel(worker, notification_provider, "Delivers notifications", "Provider API")
