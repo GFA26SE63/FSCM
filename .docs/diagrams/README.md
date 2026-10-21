@@ -1,6 +1,6 @@
 # Diagram catalog
 
-Editable Mermaid C4 sources live under `.diagram/`. They describe the approved [business baseline](../business/README.md) and must change with the corresponding architecture or scope decision.
+Editable Mermaid diagram sources live under `.diagram/`. The C4 views describe the approved [business baseline](../business/README.md); the package views document the current source organization, including any legacy or prototype-only package identified in their explanation file. Update the relevant view with every architecture or scope decision.
 
 ## Authoritative sources
 
@@ -15,10 +15,14 @@ Editable Mermaid C4 sources live under `.diagram/`. They describe the approved [
 | Product | `component_diagram_product_management.mmd` | Category, SKU lifecycle, price, MLOR, and promotion data |
 | Delivery and receipt | `component_diagram_delivery_management.mmd` | Picking/dispatch handoff, assignment, retailer receipt, and complaints |
 | Platform support | `component_diagram_platform_support.mmd` | Configuration, KPI, audit, notifications, jobs, and outbox |
+| Backend packages | `.diagram/package-diagram/backend-package-diagram.mmd` | Clean Architecture projects, source packages, and inward dependencies |
+| Web portal packages | `.diagram/package-diagram/frontend-package-diagram.mmd` | React app, lazy feature modules, and shared client packages |
+| Mobile packages | `.diagram/package-diagram/mobile-package-diagram.mmd` | Flutter app, role features, data/core layers, and offline synchronization |
+| Package explanations | `.diagram/package-diagram/package-diagram-explanation.md` | Three-column package catalog for all three applications |
 
 ## Rendering and review
 
-Open `.mmd` sources with Mermaid Live Editor or a Mermaid-capable editor that supports C4 diagrams. Exports used in reports should be generated from the committed source and named with the same viewpoint.
+Open `.mmd` sources with Mermaid Live Editor or a Mermaid-capable editor. In draw.io, use **Arrange → Insert → Advanced → Mermaid**, paste the source, and choose **Diagram** when editable shapes are required. Exports used in reports should be generated from the committed source and named with the same viewpoint.
 
 Before approval, verify that diagrams:
 

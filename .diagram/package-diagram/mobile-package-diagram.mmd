@@ -1,0 +1,141 @@
+flowchart TB
+  MO_MAIN["main.dart / bootstrap"]
+
+  subgraph MO_APP["app"]
+    direction LR
+    MO_APP_SHELL["shell"]
+    MO_APP_CORE["router and theme"]
+  end
+
+  subgraph MO_FEATURES["features"]
+    direction TB
+    subgraph MO_F_COMMON["common"]
+      direction LR
+      MO_F_COMMON_AUTH["auth"]
+      MO_F_COMMON_NOTIFICATIONS["notifications"]
+      MO_F_COMMON_PROFILE["profile"]
+    end
+    subgraph MO_F_SALES["sales"]
+      direction LR
+      MO_F_SALES_HOME["home"]
+      MO_F_SALES_ORDERS["orders"]
+      MO_F_SALES_PRODUCTS["products"]
+      MO_F_SALES_RETAILERS["retailers"]
+      MO_F_SALES_DEBTS["debts"]
+      MO_F_SALES_DECLARE["declare"]
+      MO_F_SALES_KPI["kpi"]
+      MO_F_SALES_SCAN["scan"]
+      MO_F_SALES_SYNC["sync"]
+    end
+    subgraph MO_F_WAREHOUSE["warehouse"]
+      direction LR
+      MO_F_WH_HOME["home"]
+      MO_F_WH_PICKING["picking"]
+      MO_F_WH_LABELS["labels"]
+      MO_F_WH_SCAN["scan"]
+      MO_F_WH_TRANSFERS["transfers"]
+    end
+    subgraph MO_F_RETAILER["retailer"]
+      direction LR
+      MO_F_RT_ORDERS["orders"]
+      MO_F_RT_RECEIVE["receive"]
+      MO_F_RT_PAYMENTS["payments"]
+      MO_F_RT_LOYALTY["loyalty"]
+      MO_F_RT_COMPLAINTS["complaints"]
+      MO_F_RT_SCAN["scan"]
+    end
+  end
+
+  subgraph MO_DATA["data"]
+    direction LR
+    MO_DATA_MODELS["models"]
+    MO_DATA_REPOSITORIES["repositories"]
+    MO_DATA_REMOTE["remote"]
+    subgraph MO_DATA_LOCAL["local"]
+      direction TB
+      MO_DATA_LOCAL_CORE["database and providers"]
+      MO_DATA_DAOS["daos"]
+    end
+    MO_DATA_PRICING["pricing"]
+    MO_DATA_MOCK["mock"]
+  end
+
+  subgraph MO_CORE["core"]
+    direction LR
+    MO_CORE_AUTH["auth"]
+    MO_CORE_CONFIG["config"]
+    MO_CORE_NETWORK["network"]
+    MO_CORE_STORAGE["storage"]
+    MO_CORE_UTILS["utils"]
+  end
+
+  MO_SYNC["sync"]
+
+  subgraph MO_SHARED["shared"]
+    direction LR
+    MO_SHARED_ROUTES["routes"]
+    MO_SHARED_THEME["theme"]
+    MO_SHARED_WIDGETS["widgets"]
+  end
+
+  MO_MAIN -.->|starts application| MO_APP
+  MO_MAIN -.->|environment and device identity| MO_CORE_CONFIG
+  MO_MAIN -.->|overrides transport| MO_CORE_NETWORK
+  MO_MAIN -.->|mock mode| MO_DATA_MOCK
+
+  MO_APP_CORE -.->|role shells| MO_APP_SHELL
+  MO_APP_CORE -.->|screens and redirects| MO_FEATURES
+  MO_APP_CORE -.->|role-aware routing| MO_CORE_AUTH
+  MO_APP_CORE -.->|session state| MO_DATA_REPOSITORIES
+  MO_APP_CORE -.->|route constants| MO_SHARED_ROUTES
+  MO_APP_SHELL -.-> MO_DATA_REPOSITORIES
+  MO_APP_SHELL -.-> MO_DATA_MODELS
+  MO_APP_SHELL -.-> MO_SHARED
+  MO_APP_SHELL -.-> MO_SYNC
+
+  MO_FEATURES -.->|data and commands| MO_DATA_REPOSITORIES
+  MO_FEATURES -.->|typed view data| MO_DATA_MODELS
+  MO_FEATURES -.->|technical services| MO_CORE
+  MO_FEATURES -.->|routes, theme and widgets| MO_SHARED
+  MO_F_SALES -.->|offline queue| MO_SYNC
+  MO_F_RETAILER -.->|notification refresh| MO_F_COMMON_NOTIFICATIONS
+  MO_F_WAREHOUSE -.->|notification refresh| MO_F_COMMON_NOTIFICATIONS
+  MO_F_WH_HOME -.->|reuses picking presentation| MO_F_WH_PICKING
+
+  MO_DATA_REPOSITORIES -.->|online source| MO_DATA_REMOTE
+  MO_DATA_REPOSITORIES -.->|cache and offline queue| MO_DATA_LOCAL
+  MO_DATA_REPOSITORIES -.->|provisional pricing| MO_DATA_PRICING
+  MO_DATA_REPOSITORIES -.-> MO_DATA_MODELS
+  MO_DATA_REPOSITORIES -.-> MO_CORE
+  MO_DATA_REMOTE -.->|API client and transport| MO_CORE_NETWORK
+  MO_DATA_REMOTE -.-> MO_CORE_AUTH
+  MO_DATA_REMOTE -.-> MO_DATA_MODELS
+  MO_DATA_LOCAL -.-> MO_DATA_MODELS
+  MO_DATA_LOCAL -.-> MO_CORE_UTILS
+  MO_DATA_DAOS -.-> MO_DATA_LOCAL_CORE
+  MO_DATA_PRICING -.-> MO_DATA_MODELS
+  MO_DATA_PRICING -.-> MO_CORE_UTILS
+  MO_DATA_MOCK -.->|implements ApiTransport| MO_CORE_NETWORK
+  MO_DATA_MOCK -.-> MO_DATA_MODELS
+  MO_DATA_MOCK -.-> MO_DATA_PRICING
+
+  MO_SYNC -.->|queued commands| MO_DATA_LOCAL
+  MO_SYNC -.->|submits commands| MO_DATA_REMOTE
+  MO_SYNC -.->|refreshes server state| MO_DATA_REPOSITORIES
+  MO_SYNC -.-> MO_DATA_MODELS
+  MO_SYNC -.-> MO_CORE
+
+  MO_CORE_NETWORK -.-> MO_CORE_CONFIG
+  MO_CORE_NETWORK -.->|bearer token| MO_CORE_STORAGE
+  MO_SHARED_WIDGETS -.-> MO_SHARED_THEME
+  MO_SHARED_WIDGETS -.-> MO_DATA_MODELS
+  MO_SHARED_WIDGETS -.-> MO_CORE
+  MO_SHARED_THEME -.-> MO_CORE_UTILS
+
+  style MO_MAIN fill:#DBEAFE,stroke:#334155,color:#0F172A
+  style MO_APP fill:#DBEAFE,stroke:#334155,color:#0F172A
+  style MO_FEATURES fill:#DCFCE7,stroke:#334155,color:#0F172A
+  style MO_DATA fill:#FEF3C7,stroke:#334155,color:#0F172A
+  style MO_CORE fill:#EDE9FE,stroke:#334155,color:#0F172A
+  style MO_SYNC fill:#FCE7F3,stroke:#334155,color:#0F172A
+  style MO_SHARED fill:#F1F5F9,stroke:#334155,color:#0F172A

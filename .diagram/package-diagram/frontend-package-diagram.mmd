@@ -1,0 +1,80 @@
+flowchart TB
+  subgraph FE_APP["app"]
+    direction LR
+    FE_APP_LAYOUT["layout"]
+    FE_APP_PAGES["pages"]
+    FE_APP_CORE["bootstrap, providers, router"]
+  end
+
+  subgraph FE_FEATURES["features"]
+    direction LR
+    FE_F_DASHBOARD["dashboard"]
+    FE_F_ORDERS["orders"]
+    FE_F_DEBTS["debts"]
+    FE_F_PICKING["picking"]
+    FE_F_RECEIPTS["receipts"]
+    FE_F_WHTRANSFER["whtransfer"]
+    FE_F_ROTATION["rotation"]
+    FE_F_FLEET["fleet"]
+    FE_F_BATCHES["batches"]
+    FE_F_BATCHPROMO["batchpromo"]
+    FE_F_DISPOSAL["disposal"]
+    FE_F_PROMOS["promos"]
+    FE_F_RETAILERS["retailers"]
+    FE_F_LOYALTY["loyalty"]
+    FE_F_GIFTS["gifts"]
+    FE_F_REDEEM["redeem"]
+    FE_F_REGIONS["regions"]
+    FE_F_CATEGORIES["categories"]
+    FE_F_PRODUCTS["products"]
+    FE_F_WAREHOUSES["warehouses"]
+    FE_F_USERS["users"]
+    FE_F_KPI["kpi"]
+    FE_F_COMPLAINTS["complaints"]
+    FE_F_CONFIG["config"]
+    FE_F_NOTIFICATIONS["notifications"]
+  end
+
+  subgraph FE_SHARED["shared"]
+    direction LR
+    subgraph FE_SHARED_API["api"]
+      direction TB
+      FE_SHARED_API_CORE["http, errors, types"]
+      FE_SHARED_API_MOCK["mock"]
+    end
+    FE_SHARED_AUTH["auth"]
+    FE_SHARED_HOOKS["hooks"]
+    FE_SHARED_LIB["lib"]
+    FE_SHARED_ROUTER["router"]
+    FE_SHARED_UI["ui"]
+  end
+
+  FE_APP_CORE -.->|renders shell| FE_APP_LAYOUT
+  FE_APP_CORE -.->|login and fallback| FE_APP_PAGES
+  FE_APP_CORE -.->|lazy routes by role| FE_FEATURES
+  FE_APP -.->|authentication and guards| FE_SHARED_AUTH
+  FE_APP -.->|route compatibility| FE_SHARED_ROUTER
+  FE_APP -.->|shared presentation| FE_SHARED_UI
+  FE_APP_LAYOUT -.->|badges and bell| FE_F_NOTIFICATIONS
+
+  FE_FEATURES -.->|HTTP and API errors| FE_SHARED_API
+  FE_FEATURES -.->|query and dialog hooks| FE_SHARED_HOOKS
+  FE_FEATURES -.->|formatting and utilities| FE_SHARED_LIB
+  FE_FEATURES -.->|navigation helpers| FE_SHARED_ROUTER
+  FE_FEATURES -.->|reusable controls| FE_SHARED_UI
+  FE_F_RETAILERS -.->|role-sensitive actions| FE_SHARED_AUTH
+  FE_F_USERS -.->|identity administration| FE_SHARED_AUTH
+
+  FE_SHARED_HOOKS -.-> FE_SHARED_API
+  FE_SHARED_HOOKS -.-> FE_SHARED_UI
+  FE_SHARED_UI -.-> FE_SHARED_API
+  FE_SHARED_UI -.-> FE_SHARED_LIB
+  FE_SHARED_UI -.-> FE_SHARED_ROUTER
+  FE_SHARED_AUTH -.->|sign-in and current user| FE_SHARED_API
+  FE_SHARED_API -.->|bearer token store| FE_SHARED_AUTH
+  FE_SHARED_API -.->|environment configuration| FE_SHARED_LIB
+  FE_SHARED_API_MOCK -.->|Axios-compatible adapter| FE_SHARED_API_CORE
+
+  style FE_APP fill:#DBEAFE,stroke:#334155,color:#0F172A
+  style FE_FEATURES fill:#DCFCE7,stroke:#334155,color:#0F172A
+  style FE_SHARED fill:#FEF3C7,stroke:#334155,color:#0F172A

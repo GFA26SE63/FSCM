@@ -1,0 +1,125 @@
+flowchart LR
+  subgraph BE_API["FSCM.API"]
+    direction TB
+    BE_API_CONTROLLERS["Controllers"]
+    BE_API_CONTRACTS["Contracts"]
+    BE_API_GRAPHQL["GraphQL"]
+    BE_API_SECURITY["Security"]
+    BE_API_ERRORS["Errors"]
+    BE_API_EXTENSIONS["Extensions"]
+    BE_API_OPTIONS["Options"]
+  end
+
+  subgraph BE_APPLICATION["FSCM.Application"]
+    direction TB
+    subgraph BE_APP_FEATURES["Features"]
+      direction TB
+      BE_APP_CATALOG["Catalog"]
+      BE_APP_DELIVERIES["Deliveries"]
+      BE_APP_IDENTITY["Identity"]
+      BE_APP_TRANSFERS["InternalTransfers"]
+      BE_APP_INVENTORY["Inventory"]
+      BE_APP_MANUAL_PAYMENTS["ManualPayments"]
+      BE_APP_MAPS["Maps"]
+      BE_APP_ORDERS["Orders"]
+      BE_APP_PAYMENTS["Payments"]
+      BE_APP_PICKING["Picking"]
+      BE_APP_PROMOTIONS["Promotions"]
+      BE_APP_QR["QrLabels"]
+      BE_APP_RETAILERS["Retailers"]
+      BE_APP_TERRITORY["Territory"]
+      BE_APP_WH_CONFIG["WarehouseConfiguration"]
+    end
+    BE_APP_ABSTRACTIONS["Abstractions"]
+    BE_APP_COMMON["Common"]
+  end
+
+  subgraph BE_DOMAIN["FSCM.Domain"]
+    direction TB
+    BE_DOMAIN_ENTITIES["Entities"]
+    BE_DOMAIN_ALLOCATION["Allocation"]
+    BE_DOMAIN_AUTHORIZATION["Authorization"]
+    BE_DOMAIN_COMMON["Common"]
+  end
+
+  subgraph BE_PERSISTENCE["FSCM.Persistence"]
+    direction TB
+    BE_PERSIST_DB["DbContexts"]
+    BE_PERSIST_CONFIG["Configurations"]
+    subgraph BE_PERSIST_STORES["Feature stores"]
+      direction TB
+      BE_PERSIST_CATALOG["Catalog"]
+      BE_PERSIST_DELIVERIES["Deliveries"]
+      BE_PERSIST_IDENTITY["Identity"]
+      BE_PERSIST_TRANSFERS["InternalTransfers"]
+      BE_PERSIST_INVENTORY["Inventory"]
+      BE_PERSIST_MANUAL_PAYMENTS["ManualPayments"]
+      BE_PERSIST_MAPS["Maps"]
+      BE_PERSIST_ORDERS["Orders"]
+      BE_PERSIST_PAYMENTS["Payments"]
+      BE_PERSIST_PICKING["Picking"]
+      BE_PERSIST_PROMOTIONS["Promotions"]
+      BE_PERSIST_QR["QrLabels"]
+      BE_PERSIST_RETAILERS["Retailers"]
+      BE_PERSIST_TERRITORY["Territory"]
+      BE_PERSIST_WH_CONFIG["WarehouseConfiguration"]
+    end
+    BE_PERSIST_MIGRATIONS["Migrations"]
+    BE_PERSIST_SEEDING["Seeding"]
+    BE_PERSIST_INTERCEPTORS["Interceptors"]
+  end
+
+  subgraph BE_INFRASTRUCTURE["FSCM.Infrastructure"]
+    direction TB
+    BE_INFRA_IDENTITY["Identity"]
+    BE_INFRA_MAPS["Maps"]
+    BE_INFRA_PAYMENTS["Payments"]
+    BE_INFRA_JOBS["BackgroundJobs"]
+    BE_INFRA_EXTERNAL["ExternalServices"]
+    BE_INFRA_AUDIT["Audit"]
+    BE_INFRA_RBAC["Rbac"]
+  end
+
+  BE_SHARED["FSCM.Shared"]
+
+  BE_API_CONTROLLERS -.->|binds requests| BE_API_CONTRACTS
+  BE_API_CONTROLLERS -.->|invokes use cases| BE_APP_FEATURES
+  BE_API_GRAPHQL -.->|read queries| BE_APP_FEATURES
+  BE_API_SECURITY -.->|actor and scope checks| BE_APP_IDENTITY
+  BE_API_ERRORS -.->|maps business errors| BE_APP_FEATURES
+  BE_API_EXTENSIONS -.->|registers| BE_API_ERRORS
+  BE_API_EXTENSIONS -.->|registers| BE_API_GRAPHQL
+  BE_API_EXTENSIONS -.->|registers| BE_API_SECURITY
+  BE_API_EXTENSIONS -.->|binds configuration| BE_API_OPTIONS
+
+  BE_API -.->|project reference and composition| BE_APPLICATION
+  BE_API -.->|project reference and composition| BE_PERSISTENCE
+  BE_API -.->|project reference and composition| BE_INFRASTRUCTURE
+
+  BE_APPLICATION -.->|domain model and rules| BE_DOMAIN
+  BE_APPLICATION -.->|shared primitives| BE_SHARED
+  BE_APP_ORDERS -.->|deterministic allocation| BE_DOMAIN_ALLOCATION
+  BE_APP_FEATURES -.->|reads and changes state| BE_DOMAIN_ENTITIES
+  BE_APP_IDENTITY -.->|roles and token purposes| BE_DOMAIN_AUTHORIZATION
+  BE_DOMAIN_ALLOCATION -.-> BE_DOMAIN_ENTITIES
+
+  BE_PERSISTENCE -.->|implements store ports| BE_APPLICATION
+  BE_PERSISTENCE -.->|maps domain state| BE_DOMAIN
+  BE_PERSIST_STORES -.->|EF Core queries and commands| BE_PERSIST_DB
+  BE_PERSIST_DB -.->|applies mappings| BE_PERSIST_CONFIG
+  BE_PERSIST_MIGRATIONS -.->|evolves schema| BE_PERSIST_DB
+  BE_PERSIST_SEEDING -.->|development data| BE_PERSIST_DB
+
+  BE_INFRASTRUCTURE -.->|implements external ports| BE_APPLICATION
+  BE_INFRA_IDENTITY -.-> BE_APP_IDENTITY
+  BE_INFRA_MAPS -.-> BE_APP_MAPS
+  BE_INFRA_PAYMENTS -.-> BE_APP_PAYMENTS
+  BE_INFRA_JOBS -.-> BE_APP_INVENTORY
+  BE_INFRA_EXTERNAL -.->|implements QR renderer port| BE_APP_QR
+
+  style BE_API fill:#DBEAFE,stroke:#334155,color:#0F172A
+  style BE_APPLICATION fill:#DCFCE7,stroke:#334155,color:#0F172A
+  style BE_DOMAIN fill:#FEF3C7,stroke:#334155,color:#0F172A
+  style BE_PERSISTENCE fill:#FCE7F3,stroke:#334155,color:#0F172A
+  style BE_INFRASTRUCTURE fill:#EDE9FE,stroke:#334155,color:#0F172A
+  style BE_SHARED fill:#F1F5F9,stroke:#334155,color:#0F172A
