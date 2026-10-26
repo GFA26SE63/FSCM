@@ -1,0 +1,140 @@
+classDiagram
+direction LR
+
+class Region {
+  -Id : Guid «PK»
+  -Code : string
+  -Name : string
+  -Description : string?
+  -IsActive : bool
+}
+
+class UserAccount {
+  -Id : Guid «PK»
+  -Email : string
+  -FullName : string
+  -Role : string
+  -IsActive : bool
+}
+
+class UserRegionAssignment {
+  -Id : Guid «PK»
+  -UserAccountId : Guid «FK»
+  -RegionId : Guid «FK»
+  -AssignedAt : DateTimeOffset
+  -UnassignedAt : DateTimeOffset?
+  -IsActive : bool
+}
+
+class SalesGroup {
+  -Id : Guid «PK»
+  -RegionId : Guid «FK»
+  -Code : string
+  -Name : string
+  -IsActive : bool
+}
+
+class SalesGroupMember {
+  -Id : Guid «PK»
+  -SalesGroupId : Guid «FK»
+  -UserAccountId : Guid «FK»
+  -AssignedAt : DateTimeOffset
+  -UnassignedAt : DateTimeOffset?
+  -IsActive : bool
+}
+
+class RetailerSalesAssignment {
+  -Id : Guid «PK»
+  -RetailerId : Guid «FK»
+  -SalesGroupId : Guid «FK»
+  -AssignedAt : DateTimeOffset
+  -UnassignedAt : DateTimeOffset?
+  -IsActive : bool
+}
+
+class Retailer {
+  -Id : Guid «PK»
+  -RegionId : Guid «FK»
+  -Code : string
+  -Name : string
+  -Status : string
+}
+
+class SalesOrder {
+  -Id : Guid «PK»
+  -OrderCode : string
+  -RetailerId : Guid «FK»
+  -SalesGroupId : Guid «FK»
+  -CreatedByUserId : Guid «FK»
+  -Status : string
+  -FinalAmount : decimal
+  -ServerReceivedAt : DateTimeOffset
+}
+
+class Payment {
+  -Id : Guid «PK»
+  -SalesOrderId : Guid «FK, UK»
+  -Status : string
+  -Amount : decimal
+  -AdjustedAmount : decimal
+  -ConfirmedAmount : decimal
+  -DeliveredDate : DateOnly?
+  -DueDate : DateOnly?
+  -PaidDate : DateOnly?
+  -Version : int
+}
+
+class SalesRankingQuery {
+  +FromDate : DateOnly
+  +ToDate : DateOnly
+  +SalesGroupId : Guid?
+}
+
+class SalesRevenueRow {
+  +SalesUserId : Guid
+  +SalesUserName : string
+  +SalesGroupId : Guid
+  +SalesGroupCode : string
+  +SalesGroupName : string
+  +RegionId : Guid
+  +OrderCount : int
+  +RecognizedRevenue : decimal
+}
+
+class SalesRankingResult {
+  +FromDate : DateOnly
+  +ToDate : DateOnly
+  +Scope : string
+  +Entries : List~SalesRankingEntryResult~
+}
+
+class SalesRankingEntryResult {
+  +Rank : int
+  +SalesUserId : Guid
+  +SalesUserName : string
+  +SalesGroupId : Guid
+  +SalesGroupCode : string
+  +SalesGroupName : string
+  +RegionId : Guid
+  +OrderCount : int
+  +RecognizedRevenue : decimal
+}
+
+Region "1" -- "0..*" SalesGroup : owns
+Region "1" -- "0..*" Retailer : contains
+UserAccount "1" -- "0..*" UserRegionAssignment : region scope
+Region "1" -- "0..*" UserRegionAssignment : scoped users
+SalesGroup "1" -- "0..*" SalesGroupMember : memberships
+UserAccount "1" -- "0..*" SalesGroupMember : members
+SalesGroup "1" -- "0..*" RetailerSalesAssignment : retailer scope
+Retailer "1" -- "0..*" RetailerSalesAssignment : assignment history
+SalesGroup "1" -- "0..*" SalesOrder : captures
+Retailer "1" -- "0..*" SalesOrder : places
+UserAccount "1" -- "0..*" SalesOrder : creates
+SalesOrder "1" -- "0..1" Payment : receivable
+SalesRankingQuery ..> SalesGroup : filters scope
+SalesOrder ..> SalesRevenueRow : aggregates delivered orders
+Payment ..> SalesRevenueRow : adjusted revenue
+SalesGroupMember ..> SalesRevenueRow : access scope
+SalesRevenueRow ..> SalesRankingEntryResult : ranked into
+SalesRankingResult "1" *-- "0..*" SalesRankingEntryResult : entries

@@ -1,0 +1,149 @@
+classDiagram
+direction LR
+
+class Region {
+  -Id : Guid «PK»
+  -Code : string
+  -Name : string
+  -Description : string?
+  -IsActive : bool
+  -CreatedAt : DateTimeOffset
+  -UpdatedAt : DateTimeOffset
+}
+
+class SalesGroup {
+  -Id : Guid «PK»
+  -RegionId : Guid «FK»
+  -Code : string
+  -Name : string
+  -IsActive : bool
+  -CreatedAt : DateTimeOffset
+  -UpdatedAt : DateTimeOffset
+}
+
+class SalesGroupMember {
+  -Id : Guid «PK»
+  -SalesGroupId : Guid «FK»
+  -UserAccountId : Guid «FK»
+  -AssignedAt : DateTimeOffset
+  -UnassignedAt : DateTimeOffset?
+  -IsActive : bool
+}
+
+class UserAccount {
+  -Id : Guid «PK»
+  -EntraObjectId : string?
+  -IdentityProvider : string
+  -Email : string
+  -FullName : string
+  -Role : string
+  -IsActive : bool
+  -CreatedAt : DateTimeOffset
+  -UpdatedAt : DateTimeOffset
+}
+
+class Retailer {
+  -Id : Guid «PK»
+  -RegionId : Guid «FK»
+  -UserAccountId : Guid? «FK»
+  -Code : string
+  -Name : string
+  -ContactName : string?
+  -Phone : string?
+  -Email : string?
+  -Address : string?
+  -Status : string
+  -RetailerType : string
+  -ForecastRevenue : decimal?
+  -StoreSizeSquareMeters : decimal?
+  -StoreSizeCategory : string
+  -PurchasingCapacity : decimal?
+  -PurchaseFrequencyPerMonth : int
+  -CreditTermDays : int
+  -RequestedCreditTermDays : int?
+  -PotentialStatus : string?
+  -PotentialScore : decimal?
+  -AssessmentNote : string?
+  -DeclaredByUserId : Guid «FK»
+  -ReviewedByUserId : Guid? «FK»
+  -AssessedByUserId : Guid? «FK»
+  -ReviewedAt : DateTimeOffset?
+  -AssessedAt : DateTimeOffset?
+  -ReviewReason : string?
+  -CreatedAt : DateTimeOffset
+  -UpdatedAt : DateTimeOffset
+}
+
+class RetailerSalesAssignment {
+  -Id : Guid «PK»
+  -RetailerId : Guid «FK»
+  -SalesGroupId : Guid «FK»
+  -AssignedAt : DateTimeOffset
+  -UnassignedAt : DateTimeOffset?
+  -IsActive : bool
+}
+
+class RetailerProductMlor {
+  -Id : Guid «PK»
+  -RetailerId : Guid «FK»
+  -ProductCategoryId : Guid? «FK»
+  -ProductId : Guid? «FK»
+  -MinimumLifeRatio : decimal
+  -MinimumLifeHours : int?
+  -Version : int
+  -UpdatedByUserId : Guid «FK»
+  -EffectiveFrom : DateTimeOffset
+  -EffectiveTo : DateTimeOffset?
+  -IsActive : bool
+}
+
+class ProductCategory {
+  -Id : Guid «PK»
+  -ParentCategoryId : Guid? «FK»
+  -Code : string
+  -Name : string
+  -Description : string?
+  -IsActive : bool
+  -CreatedAt : DateTimeOffset
+  -UpdatedAt : DateTimeOffset
+}
+
+class Product {
+  -Id : Guid «PK»
+  -ProductCategoryId : Guid «FK»
+  -Sku : string
+  -Name : string
+  -Unit : string
+  -ShelfLifeHours : int
+  -Status : string
+}
+
+class MapLocation {
+  -Id : Guid «PK»
+  -RetailerId : Guid? «FK»
+  -Latitude : decimal
+  -Longitude : decimal
+  -FormattedAddress : string?
+  -ProviderPlaceId : string?
+  -Provider : string
+  -Version : int
+  -NormalizedAt : DateTimeOffset?
+}
+
+Region "1" -- "0..*" SalesGroup : groups
+Region "1" -- "0..*" Retailer : contains
+SalesGroup "1" -- "0..*" SalesGroupMember : memberships
+UserAccount "1" -- "0..*" SalesGroupMember : member
+Retailer "1" -- "0..*" RetailerSalesAssignment : assignment history
+SalesGroup "1" -- "0..*" RetailerSalesAssignment : serves
+Retailer "1" *-- "1..*" RetailerProductMlor : declarations
+ProductCategory "0..1" -- "0..*" RetailerProductMlor : category scope
+Product "0..1" -- "0..*" RetailerProductMlor : SKU scope
+ProductCategory "1" -- "0..*" Product : classifies
+ProductCategory "0..1" -- "0..*" ProductCategory : parent
+Retailer "0..1" -- "0..1" MapLocation : geocoded at
+UserAccount "0..1" -- "0..1" Retailer : login account
+UserAccount "1" -- "0..*" Retailer : declares
+UserAccount "0..1" -- "0..*" Retailer : reviews
+UserAccount "0..1" -- "0..*" Retailer : assesses
+UserAccount "1" -- "0..*" RetailerProductMlor : updates

@@ -1,0 +1,239 @@
+classDiagram
+direction LR
+
+class AllocationRun {
+  -Id : Guid «PK»
+  -RunCode : string
+  -BusinessDate : DateOnly «UK»
+  -CutoffAt : DateTimeOffset
+  -Status : string
+  -AlgorithmSettings : json
+  -TransitTableVersion : int
+  -EtaScheduleVersion : int
+  -OrderCount : int
+  -FailureReason : string?
+  -StartedAt : DateTimeOffset
+  -SnapshotCompletedAt : DateTimeOffset?
+  -CompletedAt : DateTimeOffset?
+  -Version : int
+}
+
+class AllocationRunOrder {
+  -Id : Guid «PK»
+  -AllocationRunId : Guid «FK»
+  -SalesOrderId : Guid «FK»
+  -OrderCodeSnapshot : string
+  -RetailerId : Guid «REF»
+  -AcceptedAt : DateTimeOffset
+  -DeliveryDeadline : DateOnly?
+  -PriorityRank : int
+  -Status : string
+  -ShortageReason : string?
+}
+
+class AllocationRunLine {
+  -Id : Guid «PK»
+  -AllocationRunOrderId : Guid «FK»
+  -SalesOrderLineId : Guid «FK»
+  -ProductId : Guid «REF»
+  -SkuSnapshot : string
+  -LineNumber : int
+  -OrderedQuantity : decimal
+  -TotalShelfLifeHours : int
+  -EffectiveMlorRatio : decimal
+  -MlorSource : string
+  -ListUnitPrice : decimal
+  -BaseNetUnitPrice : decimal
+  -AllocatedQuantity : decimal
+}
+
+class AllocationRunStock {
+  -Id : Guid «PK»
+  -AllocationRunId : Guid «FK»
+  -BatchId : Guid «FK»
+  -WarehouseId : Guid «REF»
+  -ProductId : Guid «REF»
+  -ExpirationDate : DateOnly
+  -SnapshotQuantity : decimal
+  -RemainingQuantity : decimal
+  -InventoryVersion : int
+}
+
+class AllocationPlanVersion {
+  -Id : Guid «PK»
+  -AllocationRunId : Guid «FK»
+  -VersionNumber : int
+  -Status : string
+  -PricedAt : DateTimeOffset
+  -FulfilledOrderCount : int
+  -ShortOrderCount : int
+  -TotalFinalAmount : decimal
+  -ApprovedByUserId : Guid? «FK»
+  -ApprovedAt : DateTimeOffset?
+  -RecalculationReason : string?
+  -Version : int
+}
+
+class AllocationRunAllocation {
+  -Id : Guid «PK»
+  -AllocationRunId : Guid «FK»
+  -AllocationPlanVersionId : Guid «FK»
+  -AllocationRunLineId : Guid «FK»
+  -BatchId : Guid «FK»
+  -WarehouseId : Guid «REF»
+  -Quantity : decimal
+  -Sequence : int
+  -EstimatedArrivalAt : DateTimeOffset
+  -RemainingShelfLifeHours : decimal
+  -WeightedScore : decimal
+}
+
+class AllocationLineTrace {
+  -Id : Guid «PK»
+  -AllocationPlanVersionId : Guid «FK»
+  -AllocationRunLineId : Guid «FK»
+  -Outcome : string
+  -OrderedQuantity : decimal
+  -DrawnQuantity : decimal
+  -ShortageQuantity : decimal
+  -RequiredShelfLifeHours : decimal
+  -ShelfLifeWeight : decimal
+  -DistanceWeight : decimal
+  -CoverageWeight : decimal
+  -MaximumDistanceMeters : decimal
+  -Note : string?
+}
+
+class AllocationTraceCandidate {
+  -Id : Guid «PK»
+  -AllocationLineTraceId : Guid «FK»
+  -BatchId : Guid «REF»
+  -WarehouseId : Guid «REF»
+  -Stage : string
+  -Passed : bool
+  -Reason : string
+  -EstimatedArrivalAt : DateTimeOffset?
+  -RemainingShelfLifeHours : decimal?
+  -RequiredShelfLifeHours : decimal?
+}
+
+class AllocationTraceScore {
+  -Id : Guid «PK»
+  -AllocationLineTraceId : Guid «FK»
+  -Iteration : int
+  -Rank : int
+  -BatchId : Guid «REF»
+  -WarehouseId : Guid «REF»
+  -RemainingDemand : decimal
+  -ShelfLifeScore : decimal
+  -DistanceScore : decimal
+  -CoverageScore : decimal
+  -WeightedScore : decimal
+  -Selected : bool
+  -SelectedQuantity : decimal
+}
+
+class Batch {
+  -Id : Guid «PK»
+  -WarehouseId : Guid «FK»
+  -ProductId : Guid «FK»
+  -BatchCode : string
+  -Quantity : decimal
+  -ExpirationDate : DateOnly
+  -ExpiryStatus : string
+  -StockStatus : string
+  -Version : int
+}
+
+class InventoryBalance {
+  -Id : Guid «PK»
+  -BatchId : Guid «FK, UK»
+  -PhysicalQuantity : decimal
+  -ReservedQuantity : decimal
+  -AvailableQuantity : decimal
+  -Version : int
+  -UpdatedAt : DateTimeOffset
+}
+
+class Reservation {
+  -Id : Guid «PK»
+  -AllocationRunAllocationId : Guid? «FK, UK»
+  -BatchId : Guid «FK»
+  -Quantity : decimal
+  -Status : string
+  -ReservedAt : DateTimeOffset
+  -ReleasedAt : DateTimeOffset?
+  -ConsumedAt : DateTimeOffset?
+}
+
+class Warehouse {
+  -Id : Guid «PK»
+  -Code : string
+  -Name : string
+  -Type : string
+  -MinimumStockThresholdCartons : int
+  -IsActive : bool
+}
+
+class Product {
+  -Id : Guid «PK»
+  -Sku : string
+  -Name : string
+  -ShelfLifeHours : int
+  -Status : string
+}
+
+class RetailerProductMlor {
+  -Id : Guid «PK»
+  -RetailerId : Guid «FK»
+  -ProductCategoryId : Guid? «FK»
+  -ProductId : Guid? «FK»
+  -MinimumLifeRatio : decimal
+  -MinimumLifeHours : int?
+  -Version : int
+  -EffectiveFrom : DateTimeOffset
+  -EffectiveTo : DateTimeOffset?
+  -IsActive : bool
+}
+
+class SalesOrder {
+  -Id : Guid «PK»
+  -OrderCode : string
+  -RetailerId : Guid «FK»
+  -Status : string
+  -ServerReceivedAt : DateTimeOffset
+}
+
+class SalesOrderLine {
+  -Id : Guid «PK»
+  -SalesOrderId : Guid «FK»
+  -ProductId : Guid «FK»
+  -OrderedQuantity : decimal
+  -MlorSourceRuleId : Guid? «FK»
+  -MlorSourceVersion : int
+  -MlorMinimumLifeRatio : decimal
+}
+
+AllocationRun "1" *-- "0..*" AllocationRunOrder : freezes orders
+SalesOrder "1" -- "0..*" AllocationRunOrder : snapshot of
+AllocationRunOrder "1" *-- "1..*" AllocationRunLine : lines
+SalesOrderLine "1" -- "0..*" AllocationRunLine : snapshot of
+AllocationRun "1" *-- "0..*" AllocationRunStock : stock pool
+Batch "1" -- "0..*" AllocationRunStock : snapshot of
+AllocationRun "1" *-- "1..*" AllocationPlanVersion : proposals
+AllocationPlanVersion "1" *-- "0..*" AllocationRunAllocation : allocations
+AllocationRunLine "1" -- "0..*" AllocationRunAllocation : fulfilled by
+Batch "1" -- "0..*" AllocationRunAllocation : selected batch
+Warehouse "1" -- "0..*" Batch : stores
+Product "1" -- "0..*" Batch : batches
+Batch "1" *-- "1" InventoryBalance : availability
+AllocationRunAllocation "1" -- "0..1" Reservation : creates on approval
+Batch "1" -- "0..*" Reservation : reserves
+AllocationPlanVersion "1" *-- "0..*" AllocationLineTrace : explains
+AllocationRunLine "1" -- "0..*" AllocationLineTrace : traced line
+AllocationLineTrace "1" *-- "0..*" AllocationTraceCandidate : hard filters
+AllocationLineTrace "1" *-- "0..*" AllocationTraceScore : scoring turns
+Batch "1" -- "0..*" AllocationTraceCandidate : evaluated batch
+Batch "1" -- "0..*" AllocationTraceScore : ranked batch
+RetailerProductMlor "0..1" -- "0..*" SalesOrderLine : snapshotted rule
+Product "1" -- "0..*" SalesOrderLine : requested product

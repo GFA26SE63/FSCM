@@ -1,0 +1,189 @@
+classDiagram
+direction LR
+
+class RunPickingList {
+  -Id : Guid «PK»
+  -PickingCode : string «UK»
+  -AllocationRunId : Guid «FK»
+  -AllocationPlanVersionId : Guid «FK»
+  -WarehouseId : Guid «FK»
+  -AssignedToUserId : Guid? «REF»
+  -Status : string
+  -IssuedAt : DateTimeOffset
+  -StartedAt : DateTimeOffset?
+  -CompletedAt : DateTimeOffset?
+  -ExceptionType : string?
+  -ExceptionNote : string?
+  -CompletedByUserId : Guid? «FK»
+  -Version : int
+}
+
+class RunPickingGather {
+  -Id : Guid «PK»
+  -RunPickingListId : Guid «FK»
+  -ProductId : Guid «REF»
+  -SkuSnapshot : string
+  -BatchId : Guid «FK»
+  -BatchCodeSnapshot : string
+  -RequiredQuantity : decimal
+  -PickedQuantity : decimal
+  -Status : string
+}
+
+class RunPickingSplit {
+  -Id : Guid «PK»
+  -RunPickingGatherId : Guid «FK»
+  -AllocationRunAllocationId : Guid «FK, UK»
+  -AllocationRunLineId : Guid «REF»
+  -AllocationPlanPriceId : Guid «FK»
+  -SalesOrderId : Guid «REF»
+  -SalesOrderLineId : Guid «REF»
+  -OrderCodeSnapshot : string
+  -Quantity : decimal
+  -PickedQuantity : decimal
+}
+
+class Shipment {
+  -Id : Guid «PK»
+  -SalesOrderId : Guid «FK»
+  -WarehouseId : Guid «FK»
+  -RunPickingListId : Guid «FK»
+  -ShipmentCode : string «UK»
+  -Status : string
+  -DriverId : Guid? «FK»
+  -VehicleId : Guid? «FK»
+  -TotalQuantity : decimal
+  -ReceivedQuantity : decimal
+  -ReadyAt : DateTimeOffset?
+  -IssuedAt : DateTimeOffset?
+  -DispatchedAt : DateTimeOffset?
+  -ReceivedAt : DateTimeOffset?
+  -ExceptionReason : string?
+  -Version : int
+}
+
+class SalesOrder {
+  -Id : Guid «PK»
+  -OrderCode : string
+  -RetailerId : Guid «FK»
+  -Status : string
+  -FinalAmount : decimal
+}
+
+class SalesOrderLine {
+  -Id : Guid «PK»
+  -SalesOrderId : Guid «FK»
+  -ProductId : Guid «FK»
+  -LineNumber : int
+  -OrderedQuantity : decimal
+  -NetAmount : decimal
+}
+
+class ReceiptConfirmation {
+  -Id : Guid «PK»
+  -SalesOrderId : Guid «FK»
+  -ShipmentId : Guid? «FK, UK»
+  -ConfirmedByRetailerUserId : Guid «FK»
+  -OperationKey : string «UK»
+  -RequestHash : string
+  -Status : string
+  -ConfirmedAt : DateTimeOffset
+  -Note : string?
+}
+
+class ReceiptConfirmationItem {
+  -Id : Guid «PK»
+  -ReceiptConfirmationId : Guid «FK»
+  -SalesOrderLineId : Guid? «FK»
+  -BatchId : Guid «FK»
+  -BatchQrLabelId : Guid «FK»
+  -ExpectedQuantity : decimal
+  -ReceivedQuantity : decimal
+  -DamagedQuantity : decimal
+  -MissingQuantity : decimal
+  -ScannedAt : DateTimeOffset
+}
+
+class ReceiptConfirmationQrLabel {
+  -Id : Guid «PK»
+  -ReceiptConfirmationId : Guid «FK»
+  -BatchQrLabelId : Guid «FK, UK»
+  -ScannedAt : DateTimeOffset
+}
+
+class ReceiptDiscrepancy {
+  -Id : Guid «PK»
+  -SalesOrderId : Guid «FK»
+  -ReceiptConfirmationId : Guid «FK»
+  -ReportedByRetailerUserId : Guid «FK»
+  -ReviewedByUserId : Guid? «FK»
+  -Status : string
+  -Note : string?
+  -ReportedAt : DateTimeOffset
+  -ReviewedAt : DateTimeOffset?
+  -ResolvedAt : DateTimeOffset?
+}
+
+class ReceiptDiscrepancyItem {
+  -Id : Guid «PK»
+  -ReceiptDiscrepancyId : Guid «FK»
+  -BatchId : Guid? «FK»
+  -IssueType : string
+  -ExpectedQuantity : decimal
+  -ActualReceivedQuantity : decimal
+  -EvidenceBlobUrl : string?
+  -Note : string?
+}
+
+class BatchQrLabel {
+  -Id : Guid «PK»
+  -BatchId : Guid «FK»
+  -CurrentWarehouseId : Guid «FK»
+  -ParentLabelId : Guid? «FK»
+  -RootLabelId : Guid? «FK»
+  -QrCode : string «UK»
+  -Quantity : decimal
+  -Status : string
+  -Version : int
+  -GeneratedAt : DateTimeOffset
+  -InvalidatedAt : DateTimeOffset?
+}
+
+class Batch {
+  -Id : Guid «PK»
+  -WarehouseId : Guid «FK»
+  -ProductId : Guid «FK»
+  -BatchCode : string
+  -ExpirationDate : DateOnly
+  -StockStatus : string
+}
+
+class UserAccount {
+  -Id : Guid «PK»
+  -Email : string
+  -FullName : string
+  -Role : string
+}
+
+RunPickingList "1" *-- "1..*" RunPickingGather : gather by batch
+RunPickingGather "1" *-- "1..*" RunPickingSplit : split by order
+Batch "1" -- "0..*" RunPickingGather : picked batch
+SalesOrder "1" -- "0..*" RunPickingSplit : order portion
+SalesOrderLine "1" -- "0..*" RunPickingSplit : line portion
+RunPickingList "1" -- "0..*" Shipment : produces
+SalesOrder "1" -- "0..*" Shipment : delivery parts
+Shipment "0..1" -- "0..1" ReceiptConfirmation : confirmed by
+SalesOrder "1" -- "0..*" ReceiptConfirmation : receipts
+UserAccount "1" -- "0..*" ReceiptConfirmation : retailer confirms
+ReceiptConfirmation "1" *-- "1..*" ReceiptConfirmationItem : quantities
+SalesOrderLine "0..1" -- "0..*" ReceiptConfirmationItem : received line
+Batch "1" -- "0..*" ReceiptConfirmationItem : received batch
+Batch "1" *-- "0..*" BatchQrLabel : labels
+BatchQrLabel "1" -- "0..*" ReceiptConfirmationItem : scanned label
+ReceiptConfirmation "1" *-- "0..*" ReceiptConfirmationQrLabel : scan evidence
+BatchQrLabel "1" -- "0..1" ReceiptConfirmationQrLabel : consumed once
+ReceiptConfirmation "1" -- "0..*" ReceiptDiscrepancy : may report
+ReceiptDiscrepancy "1" *-- "1..*" ReceiptDiscrepancyItem : issue lines
+Batch "0..1" -- "0..*" ReceiptDiscrepancyItem : affected batch
+UserAccount "1" -- "0..*" RunPickingList : completes
+UserAccount "1" -- "0..*" ReceiptDiscrepancy : reports or reviews

@@ -1,0 +1,197 @@
+classDiagram
+direction LR
+
+class OfflineOrder {
+  -Id : int? «PK, local»
+  -ClientRequestId : string «UK»
+  -Payload : OfflineOrderPayload
+  -Status : SyncStatus
+  -CreatedAt : DateTime
+  -RetryCount : int
+  -Error : string
+  -LastAttemptAt : DateTime?
+  -SyncedAt : DateTime?
+  -ServerOrderCode : string
+  -SyncMode : string
+  -FinalAmount : int?
+  -PromoChanged : bool
+  -ChangeReason : string
+}
+
+class OfflineOrderPayload {
+  -ClientRequestId : string
+  -OfflineCode : string
+  -RetailerCode : string
+  -RetailerName : string
+  -CreatedAt : DateTime
+  -Payment : PaymentMethod
+  -CreditTerm : int
+  -Lines : List~CartLine~
+  -LocalTotal : int
+  -LocalDiscount : int
+  -LocalPromoIds : List~string~
+  +LocalFinal : int
+}
+
+class CartLine {
+  -Sku : string
+  -Qty : int
+}
+
+class SyncSnapshot {
+  -ServerTime : DateTime
+  -Retailers : List~Retailer~
+  -Products : List~Product~
+  -Prices : List~ProductPrice~
+  -Promotions : List~Promotion~
+  -Stock : List~StockEntry~
+  -FullReload : bool
+}
+
+class OrderSyncResult {
+  -ClientRequestId : string
+  -Accepted : bool
+  -OrderCode : string
+  -Reason : string
+  -FinalAmount : int?
+  -PromoChanged : bool
+  -ChangeReason : string
+}
+
+class SalesOrder {
+  -Id : Guid «PK»
+  -OrderCode : string
+  -RetailerId : Guid «FK»
+  -SalesGroupId : Guid «FK»
+  -CreatedByUserId : Guid «FK»
+  -ReviewedByUserId : Guid? «FK»
+  -ClientOrderKey : Guid «UK»
+  -RequestHash : string
+  -Source : string
+  -Status : string
+  -PaymentMethod : string
+  -DeliveryAddress : string
+  -RequestedDeliveryDate : DateOnly?
+  -CreditTermDays : int
+  -SubtotalAmount : decimal
+  -DiscountAmount : decimal
+  -FinalAmount : decimal
+  -FinalPricePendingAllocation : bool
+  -OfflineEstimatedAmount : decimal?
+  -HasOfflineDifference : bool
+  -ServerReceivedAt : DateTimeOffset
+  -ReviewedAt : DateTimeOffset?
+  -RejectionReason : string?
+  -Version : int
+}
+
+class SalesOrderLine {
+  -Id : Guid «PK»
+  -SalesOrderId : Guid «FK»
+  -ProductId : Guid «FK»
+  -ProductPriceId : Guid «FK»
+  -LineNumber : int
+  -SkuSnapshot : string
+  -ProductNameSnapshot : string
+  -OrderedQuantity : decimal
+  -UnitPrice : decimal
+  -GrossAmount : decimal
+  -DiscountAmount : decimal
+  -NetAmount : decimal
+  -MlorSourceRuleId : Guid? «FK»
+  -MlorSourceVersion : int
+  -MlorMinimumLifeRatio : decimal
+  -MlorResolvedAt : DateTimeOffset
+  -EstimatedArrivalAt : DateTimeOffset?
+  -CreatedAt : DateTimeOffset
+}
+
+class OrderPromotion {
+  -Id : Guid «PK»
+  -SalesOrderLineId : Guid «FK»
+  -PromotionId : Guid «FK»
+  -PromotionCodeSnapshot : string
+  -PromotionNameSnapshot : string
+  -PromotionTypeSnapshot : string
+  -MinimumQuantitySnapshot : decimal
+  -DiscountPercent : decimal
+  -DiscountAmount : decimal
+  -IsServerFinal : bool
+  -AppliedAt : DateTimeOffset
+}
+
+class IdempotencyKey {
+  -Id : Guid «PK»
+  -Key : string «UK»
+  -Scope : string
+  -UserAccountId : Guid «FK»
+  -SalesOrderId : Guid? «FK»
+  -Status : string
+  -CreatedAt : DateTimeOffset
+  -ExpiresAt : DateTimeOffset
+}
+
+class Retailer {
+  -Id : Guid «PK»
+  -Code : string
+  -Name : string
+  -Status : string
+  -CreditTermDays : int
+}
+
+class UserAccount {
+  -Id : Guid «PK»
+  -Email : string
+  -FullName : string
+  -Role : string
+  -IsActive : bool
+}
+
+class Product {
+  -Id : Guid «PK»
+  -ProductCategoryId : Guid «FK»
+  -Sku : string
+  -Name : string
+  -Unit : string
+  -ShelfLifeHours : int
+  -Status : string
+}
+
+class ProductPrice {
+  -Id : Guid «PK»
+  -ProductId : Guid «FK»
+  -UnitPrice : decimal
+  -EffectiveFrom : DateTimeOffset
+  -EffectiveTo : DateTimeOffset?
+  -IsActive : bool
+}
+
+class Promotion {
+  -Id : Guid «PK»
+  -Code : string
+  -Name : string
+  -PromotionType : string
+  -DiscountPercent : decimal
+  -StartAt : DateTimeOffset
+  -EndAt : DateTimeOffset
+  -IsActive : bool
+}
+
+OfflineOrder "1" *-- "1" OfflineOrderPayload : serialized payload
+OfflineOrderPayload "1" *-- "1..*" CartLine : lines
+SyncSnapshot ..> Retailer : caches
+SyncSnapshot ..> Product : caches
+SyncSnapshot ..> ProductPrice : caches
+SyncSnapshot ..> Promotion : caches
+OfflineOrder ..> OrderSyncResult : receives
+OfflineOrderPayload ..> SalesOrder : POST offline
+Retailer "1" -- "0..*" SalesOrder : places
+UserAccount "1" -- "0..*" SalesOrder : creates
+SalesOrder "1" *-- "1..*" SalesOrderLine : lines
+Product "1" -- "0..*" ProductPrice : price history
+Product "1" -- "0..*" SalesOrderLine : ordered product
+ProductPrice "1" -- "0..*" SalesOrderLine : price snapshot source
+SalesOrderLine "1" *-- "0..*" OrderPromotion : applied promotions
+Promotion "1" -- "0..*" OrderPromotion : source
+UserAccount "1" -- "0..*" IdempotencyKey : owns
+SalesOrder "0..1" -- "0..1" IdempotencyKey : deduplicated by

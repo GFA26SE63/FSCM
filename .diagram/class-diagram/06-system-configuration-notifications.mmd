@@ -1,0 +1,147 @@
+classDiagram
+direction LR
+
+class UserAccount {
+  -Id : Guid «PK»
+  -Email : string
+  -FullName : string
+  -Role : string
+  -IsActive : bool
+  -CreatedAt : DateTimeOffset
+  -UpdatedAt : DateTimeOffset
+}
+
+class SystemConfiguration {
+  -Id : Guid «PK»
+  -ConfigKey : string
+  -ConfigValue : json
+  -Description : string
+  -ValueType : string
+  -Version : int
+  -IsActive : bool
+  -UpdatedByUserId : Guid? «FK»
+  -EffectiveFrom : DateTimeOffset
+  -CreatedAt : DateTimeOffset
+  -UpdatedAt : DateTimeOffset
+}
+
+class TransitTable {
+  -Id : Guid «PK»
+  -Version : int «UK»
+  -MaxServingDistanceMeters : int
+  -EffectiveFrom : DateTimeOffset
+  -EffectiveTo : DateTimeOffset?
+  -IsActive : bool
+  -Note : string?
+  -CreatedByUserId : Guid «FK»
+  -CreatedAt : DateTimeOffset
+  -UpdatedAt : DateTimeOffset
+}
+
+class TransitTableBand {
+  -Id : Guid «PK»
+  -TransitTableId : Guid «FK»
+  -MinDistanceMeters : int
+  -MaxDistanceMeters : int
+  -HandlingMinutes : int
+  -TransitMinutes : int
+  -EstimatedCostAmount : decimal
+  -CreatedAt : DateTimeOffset
+}
+
+class ShelfLifeDiscountTable {
+  -Id : Guid «PK»
+  -Version : int «UK»
+  -EffectiveFrom : DateTimeOffset
+  -EffectiveTo : DateTimeOffset?
+  -IsActive : bool
+  -Note : string?
+  -CreatedByUserId : Guid «FK»
+  -CreatedAt : DateTimeOffset
+  -UpdatedAt : DateTimeOffset
+}
+
+class ShelfLifeDiscountTier {
+  -Id : Guid «PK»
+  -ShelfLifeDiscountTableId : Guid «FK»
+  -Scope : string
+  -ProductId : Guid? «FK»
+  -ProductCategoryId : Guid? «FK»
+  -MinRemainingPercent : decimal
+  -MaxRemainingPercent : decimal
+  -DiscountType : string
+  -DiscountValue : decimal
+  -CreatedAt : DateTimeOffset
+}
+
+class Notification {
+  -Id : Guid «PK»
+  -UserAccountId : Guid «FK»
+  -OutboxMessageId : Guid? «FK»
+  -SalesOrderId : Guid? «FK»
+  -Type : string
+  -Title : string
+  -Message : string
+  -IsRead : bool
+  -CreatedAt : DateTimeOffset
+  -ReadAt : DateTimeOffset?
+}
+
+class OutboxMessage {
+  -Id : Guid «PK»
+  -EventType : string
+  -AggregateType : string
+  -AggregateId : Guid
+  -Payload : json
+  -Status : string
+  -RetryCount : int
+  -CreatedAt : DateTimeOffset
+  -ProcessedAt : DateTimeOffset?
+  -LastError : string?
+}
+
+class AuditLog {
+  -Id : Guid «PK»
+  -UserAccountId : Guid? «FK»
+  -EntityName : string
+  -EntityId : Guid
+  -Action : string
+  -OldValues : json?
+  -NewValues : json?
+  -Reason : string?
+  -CreatedAt : DateTimeOffset
+}
+
+class SalesOrder {
+  -Id : Guid «PK»
+  -OrderCode : string
+  -Status : string
+}
+
+class Product {
+  -Id : Guid «PK»
+  -Sku : string
+  -Name : string
+}
+
+class ProductCategory {
+  -Id : Guid «PK»
+  -Code : string
+  -Name : string
+}
+
+UserAccount "0..1" -- "0..*" SystemConfiguration : updates
+UserAccount "1" -- "0..*" TransitTable : publishes
+TransitTable "1" *-- "1..*" TransitTableBand : distance bands
+UserAccount "1" -- "0..*" ShelfLifeDiscountTable : publishes
+ShelfLifeDiscountTable "1" *-- "1..*" ShelfLifeDiscountTier : discount tiers
+Product "0..1" -- "0..*" ShelfLifeDiscountTier : SKU scope
+ProductCategory "0..1" -- "0..*" ShelfLifeDiscountTier : category scope
+UserAccount "1" *-- "0..*" Notification : recipient inbox
+OutboxMessage "0..1" -- "0..*" Notification : delivery source
+SalesOrder "0..1" -- "0..*" Notification : order context
+UserAccount "0..1" -- "0..*" AuditLog : actor
+SystemConfiguration ..> AuditLog : audited change
+TransitTable ..> AuditLog : audited publication
+ShelfLifeDiscountTable ..> AuditLog : audited publication
+OutboxMessage ..> Notification : dispatches
