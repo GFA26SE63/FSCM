@@ -1,0 +1,16 @@
+sequenceDiagram
+participant Job as "allocationJob: Control"
+participant Service as "allocationRunService: Service"
+participant API as "mainController: Controller"
+participant DB as "PostgreSQL: Database"
+participant Notify as "notificationService: Service"
+Job->>Service: closeRunAndPublishResults(businessDate)
+Service->>+DB: Read approved plan outcomes and short reasons
+DB-->>-Service: Complete/short orders and trace
+Service->>DB: Mark run closed and persist outcome history
+Service->>Notify: notifySalesAndReviewers(outcomes)
+Notify->>DB: Create scoped notifications
+Service-->>API: Run result when queried
+API-->>Notify: GET /api/v1/allocation-runs/by-date/{businessDate}
+Note over Service,DB: Short orders have no reservation and are not automatically carried to a later run.
+

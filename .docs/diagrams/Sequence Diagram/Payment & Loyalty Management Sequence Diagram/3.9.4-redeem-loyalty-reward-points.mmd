@@ -1,0 +1,31 @@
+sequenceDiagram
+    actor Retailer as "Retailer"
+    actor Admin as "Admin"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant Workflow as "redemptionWorkflow: Service"
+    participant DB as "PostgreSQL: Database"
+    Retailer->>UI: Select reward and request redemption
+    UI->>+API: POST /api/v1/loyalty/redemptions
+    API->>+Workflow: Create(request, actor)
+    Workflow->>DB: Check reward validity, balance and negative-correction block
+    alt Sufficient usable points
+        Workflow->>DB: Create request and hold/deduct points idempotently
+        alt Approval required
+            Admin->>UI: Review redemption
+            UI->>+API: POST /loyalty/redemptions/{id}/approve
+            API->>+Workflow: Approve(id)
+            Workflow->>DB: Set Approved
+        end
+        API-->>-UI: Redemption status
+        Admin->>UI: Deliver and complete gift
+        UI->>+API: POST .../{id}/deliver then /complete
+        API->>+Workflow: Complete(id)
+        Workflow->>DB: Append completion ledger and audit
+    else Insufficient or negative balance
+        Workflow-->>-API: Insufficient points
+        API-->>-UI: 409/validation error
+    end
+    Note over Workflow,DB: Reject/cancel restores held points once; later adjustment/refund posts linked correction.
+
+

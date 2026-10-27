@@ -1,0 +1,27 @@
+sequenceDiagram
+    actor Payer as "Retailer/authorized staff"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant Pay as "paymentService: Service"
+    participant DB as "PostgreSQL: Database"
+    participant PayOS as "payOS: External System"
+    alt Prepaid QR/bank transfer
+        Payer->>UI: Request payment after final allocation approval
+        UI->>+API: POST /api/v1/payments/orders/{orderId}/payos-checkout
+        API->>Pay: Validate approved final amount and payment gate
+        Pay->>+PayOS: Create checkout for server amount
+        PayOS-->>-Pay: Checkout URL/order code
+        Pay-->>UI: Redirect to PayOS
+        PayOS->>API: POST /api/v1/payments/payos/webhook
+        API->>Pay: Verify signature, order, amount, currency and status
+        Pay->>DB: Idempotently confirm full payment in canonical ledger
+    else Cash / manual transfer / COD
+        Payer->>UI: Provide payment evidence
+        UI->>+API: POST /api/v1/payments/orders/{orderId}/collect
+        API->>Pay: Validate method, stage and full outstanding amount
+        Pay->>DB: Record confirmed payment idempotently
+    end
+    API-->>-UI: Payment status independent from order status
+    Note over Pay,DB: Prepaid must be fully paid before dispatch; COD is collected at delivery; deferred due date starts after complete receipt.
+
+

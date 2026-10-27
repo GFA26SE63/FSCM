@@ -1,0 +1,38 @@
+sequenceDiagram
+    actor User as "User"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant ID as "identityService: Service"
+    participant DB as "PostgreSQL: Database"
+    participant Entra as "entraId: External System"
+    User->>UI: Enter credentials and select Login
+    UI->>+API: POST /api/v1/auth/login
+    API->>+ID: Authenticate(username, password)
+    ID->>DB: Load account, credential and status
+    alt Local account valid and active
+        ID-->>-API: Issue JWT/refresh token
+        API-->>-UI: AuthenticationResult
+        UI->>+API: GET /api/v1/auth/me
+        API->>+ID: Resolve role and resource scope
+        ID-->>UI: Role, warehouse/region/group/retailer scope
+    else Invalid or inactive account
+        ID-->>-API: Authentication error
+        API-->>-UI: 401 with error message
+    end
+    opt Entra exchange
+        User->>UI: Sign in with Entra
+        UI->>+Entra: Complete identity sign-in
+        Entra-->>-UI: Identity token
+        UI->>+API: POST /api/v1/auth/entra/exchange
+        API->>+ID: Validate token and link eligible account
+        ID->>DB: Check account and assignments
+        alt Eligible account
+            ID-->>-API: Issue FSCM tokens
+            API-->>-UI: AuthenticationResult
+        else No eligible account
+            API-->>UI: 401/403 access denied
+        end
+    end
+    Note over UI,API: Google login is not exposed by the current backend contract.
+
+

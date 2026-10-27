@@ -1,0 +1,20 @@
+sequenceDiagram
+    actor User as "Admin/Sales Manager/Sales"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant Service as "reportService: Service"
+    participant DB as "PostgreSQL: Database"
+    User->>UI: Select period and dashboard filters
+    UI->>+API: GET /api/v1/reports/sales-kpis
+    API->>+Service: authorizeAndBuildKpiQuery(scope, period)
+    Service->>+DB: Read scoped delivered orders and configuration version
+    Service->>+DB: Aggregate adjusted revenue, order counts and targets
+    DB-->>-Service: KPI source records
+    Service-->>-API: KPI summary and drill-down order IDs
+    API-->>-UI: Render dashboard
+    UI->>API: GET /api/v1/reports/best-selling-products
+    API->>Service: rankDeliveredProducts(scope, period)
+    Service->>DB: Aggregate carton quantity and adjusted revenue
+    Service-->>UI: Best-selling ranking
+    Note over Service,DB: Revenue uses historical promotion, HSD discount and approved adjustment snapshots.
+

@@ -1,0 +1,25 @@
+sequenceDiagram
+    actor Admin as "Admin"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant App as "applicationService: Service"
+    participant DB as "PostgreSQL: Database"
+    Admin->>UI: Enter SKU, category, price and shelf life
+    UI->>+API: POST /api/v1/products
+    API->>App: Create product
+    App->>+DB: Validate SKU/category and save Draft
+    DB-->>-App: Draft product
+    App-->>UI: Draft created
+    Admin->>UI: Publish product
+    UI->>+API: POST /api/v1/products/{id}/publish
+    API->>App: Publish(id)
+    App->>DB: Validate mandatory fields and current version
+    alt Complete draft
+        App->>DB: Set Published and snapshot price
+        API-->>-UI: Published
+    else Invalid draft
+        API-->>-UI: Validation error
+    end
+    Note over UI,DB: Published product/price is immutable; change uses Inactive + new SKU or clone-to-Draft.
+
+

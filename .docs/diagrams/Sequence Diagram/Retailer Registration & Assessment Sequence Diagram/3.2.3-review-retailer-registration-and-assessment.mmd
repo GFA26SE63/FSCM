@@ -1,0 +1,26 @@
+sequenceDiagram
+    actor Reviewer as "Admin/authorized Operator"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant App as "applicationService: Service"
+    participant DB as "PostgreSQL: Database"
+    Reviewer->>UI: Open pending declaration
+    UI->>+API: GET /api/v1/retailers/{id}
+    API->>App: Get declaration within reviewer scope
+    App->>+DB: Read profile, assessment and MLOR rules
+    DB-->>-App: Pending declaration
+    App-->>UI: Details and review data
+    Reviewer->>UI: Approve or reject with reason
+    UI->>+API: POST /api/v1/retailers/{id}/review
+    API->>App: Review(decision, reason)
+    App->>DB: Validate authority and current version
+    alt Approved
+        App->>DB: Activate retailer and allocate business code
+        App->>DB: Audit decision and notify permitted users
+        API-->>-UI: Approved
+    else Rejected
+        App->>DB: Save rejection reason and audit
+        API-->>-UI: Rejected
+    end
+
+

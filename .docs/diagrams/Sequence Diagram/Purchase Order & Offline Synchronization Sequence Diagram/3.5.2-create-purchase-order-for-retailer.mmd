@@ -1,0 +1,20 @@
+sequenceDiagram
+    actor Sales as "Sales"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant Order as "orderService: Service"
+    participant DB as "PostgreSQL: Database"
+    Sales->>UI: Select assigned retailer and products
+    UI->>+API: POST /api/v1/orders
+    API->>Order: Create(request, actor)
+    Order->>DB: Validate territory, retailer, products, price and MLOR version
+    alt Online valid
+        Order->>DB: Save order PendingApproval with server_received_at
+        Order->>DB: Save immutable input snapshots
+        API-->>-UI: DH code and PendingApproval
+    else Invalid scope/condition
+        API-->>UI: 400/403/409 error
+    end
+    Note over Order,DB: No batch selection, reservation, Held quantity or payment occurs here.
+
+

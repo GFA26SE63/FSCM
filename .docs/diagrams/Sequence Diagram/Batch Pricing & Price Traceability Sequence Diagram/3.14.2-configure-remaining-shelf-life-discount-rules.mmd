@@ -1,0 +1,18 @@
+sequenceDiagram
+actor Admin
+participant UI as "Interface: UI"
+participant API as "mainController: Controller"
+participant Service as "shelfLifeDiscountService: Service"
+participant DB as "PostgreSQL: Database"
+Admin->>UI: Configure Category/SKU HSD discount band
+UI->>+API: POST /api/v1/shelf-life-discounts
+API->>Service: validateRule(scope, band, type, value)
+Service->>DB: Check overlap, precedence and historical versions
+alt Valid version
+    Service->>DB: Save versioned percentage/fixed rule and audit
+    DB-->>API: Rule version
+    API-->>-UI: Rule published
+else Invalid overlap or scope
+    API-->>UI: Validation error
+end
+

@@ -1,0 +1,21 @@
+sequenceDiagram
+actor Staff as "Operator/Admin"
+participant UI as "Interface: UI"
+participant API as "mainController: Controller"
+participant Service as "refundService: Service"
+participant DB as "PostgreSQL: Database"
+Staff->>UI: Create refund obligation with external reference
+UI->>+API: POST /api/v1/refunds
+API->>Service: createRefund(obligation, evidence)
+Service->>DB: Validate remaining refundable cap and save PendingRefund
+Staff->>UI: Upload execution evidence
+UI->>+API: POST /api/v1/refunds/{id}/evidence
+API->>Service: attachEvidence()
+Service->>DB: Set AwaitingVerification
+Staff->>UI: Admin verifies external refund
+UI->>+API: POST /api/v1/refunds/{id}/verify
+API->>Service: verifyRefund()
+Service->>DB: Set Refunded and append audit
+API-->>-UI: Refund completed record
+Note over Service,DB: FSCM records the externally executed refund; it does not call PayOS refund automatically.
+

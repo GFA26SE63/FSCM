@@ -1,0 +1,19 @@
+sequenceDiagram
+    actor User as "Retailer/Sales/Manager/Admin/Operator"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant App as "applicationService: Service"
+    participant DB as "PostgreSQL: Database"
+    User->>UI: Select order
+    UI->>+API: GET /api/v1/orders/{id} and /timeline
+    API->>App: Authorize resource scope
+    App->>+DB: Read order, allocation trace and status history
+    alt Authorized
+        DB-->>-App: Order snapshots and transitions
+        App-->>UI: Items, prices, fulfillment and timeline
+    else Outside scope
+        API-->>-UI: 403/404
+    end
+    Note over UI,DB: Timeline includes PendingApproval, AwaitingAllocation, Allocating, AwaitingRunApproval, Allocated, Picking, Dispatched, Delivering, Delivered and exception branches.
+
+

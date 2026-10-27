@@ -1,0 +1,24 @@
+sequenceDiagram
+    actor Admin
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant Service as "allocationPlanApprovalService: Service"
+    participant DB as "PostgreSQL: Database"
+    Admin->>UI: Open proposal version and trace
+    UI->>+API: GET /api/v1/allocation-runs/plan-versions/{versionId}
+    API->>Service: loadProposalVersion()
+    Service->>DB: Read proposal, prices and candidate trace
+    DB-->>UI: Proposal details
+    alt Request recalculation
+        Admin->>UI: Enter recalculation reason
+        UI->>+API: POST .../request-recalculation
+        API->>Service: createSupersedingVersion(reason)
+        Service->>DB: Mark prior version superseded
+        API-->>-UI: New version awaiting approval
+    else Approve
+        Admin->>UI: Approve proposal
+        UI->>API: POST .../approve
+        API->>Service: revalidateAndApprove()
+        Service-->>UI: Approved or conflict result
+    end
+

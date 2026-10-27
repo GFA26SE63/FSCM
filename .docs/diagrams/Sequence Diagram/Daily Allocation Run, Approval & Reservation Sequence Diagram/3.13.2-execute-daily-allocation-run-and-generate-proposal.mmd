@@ -1,0 +1,28 @@
+sequenceDiagram
+    participant Job as "allocationJob: Control"
+    participant Run as "allocationRunService: Service"
+    participant Planner as "allocationEngine: Service"
+    participant ETA as "deliveryEtaService: Service"
+    participant DB as "PostgreSQL: Database"
+    Job->>Run: startAtPublishedCutoff()
+    Run->>+DB: Acquire business-date distributed lock
+    Run->>+DB: Snapshot approved orders and shared stock pool
+    Run->>+ETA: resolveScheduleDistanceAndEta()
+    ETA->>+DB: Read versioned schedule, transit and distance cache
+    DB-->>-ETA: ETA inputs snapshot
+    ETA-->>-Run: Frozen allocation inputs
+    Run->>Planner: planByServerReceivedAtAndOrderCode()
+    loop Each order line
+        Planner->>Planner: Filter SKU, expiry, availability, radius, ETA and MLOR
+        Planner->>Planner: Weighted greedy batch selection
+        Planner->>Planner: Calculate post-selection HSD price fragment
+    end
+    alt All lines complete
+        Planner->>DB: Persist proposal, prices and allocation trace
+        DB-->>-Run: AwaitingRunApproval
+    else Any line short
+        Planner->>DB: Persist ShortInRun and rollback tentative draws
+        DB-->>-Run: Short result
+    end
+    Note over Run,DB: Tentative allocation does not change OnHand or Reserved.
+

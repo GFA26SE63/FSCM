@@ -1,0 +1,22 @@
+sequenceDiagram
+    actor Admin as "Admin"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant ID as "identityService: Service"
+    participant DB as "PostgreSQL: Database"
+    Admin->>UI: Create/view/update/deactivate user
+    UI->>+API: POST/PUT/PATCH /api/v1/users
+    API->>+ID: Authorize Administrator and validate request
+    ID->>+DB: Check role restrictions and existing assignments
+    alt Create or update allowed
+        ID->>+DB: Save account, role, status and scope
+        ID->>+DB: Append audit log
+        DB-->>-ID: Saved
+        ID-->>-API: User result
+        API-->>-UI: 200/201 success
+    else Administrator role or scope violates policy
+        ID-->>API: Forbidden/validation error
+        API-->>UI: 403/400 error
+    end
+
+

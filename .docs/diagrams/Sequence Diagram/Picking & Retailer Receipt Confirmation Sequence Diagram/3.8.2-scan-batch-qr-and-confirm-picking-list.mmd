@@ -1,0 +1,38 @@
+sequenceDiagram
+    actor Keeper as "Warehouse Keeper"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant Pick as "pickingService: Service"
+    participant DB as "PostgreSQL: Database"
+    participant Ship as "shipmentService: Service"
+    Keeper->>UI: Open picking list
+    UI->>+API: GET /api/v1/picking-lists/{pickingCode}
+    API->>Pick: Load assigned warehouse list
+    Pick->>DB: Read expected batch/tag/line quantities
+    loop Each batch QR scan
+        Keeper->>UI: Scan TEM tag and quantity
+        UI->>+API: POST /picking-lists/{code}/scans
+        API->>Pick: Validate warehouse, batch, tag, line and quantity
+        alt Correct scan
+            Pick->>DB: Record scan; split child QR if needed
+            API-->>-UI: Scan accepted
+        else Mismatch or duplicate
+            API-->>-UI: Reject scan
+        end
+    end
+    Keeper->>UI: Complete picking list
+    UI->>+API: POST /picking-lists/{code}/complete
+    API->>Pick: Mark warehouse portion ready
+    Pick->>DB: Save picked quantities and shipment fragment
+    UI->>+API: GET /api/v1/shipments/orders/{orderId}/readiness
+    API->>Ship: Check every expected warehouse portion and payment gate
+    alt All portions ready and prepaid paid
+        Keeper->>API: POST /api/v1/shipments/{id}/issue
+        API->>Ship: ConfirmIssue with idempotency/version
+        Ship->>DB: Decrease OnHand and Reserved once; mark shipment dispatched
+        Ship-->>UI: Dispatch recorded
+    else Not ready or unpaid
+        API-->>-UI: Dispatch blocked
+    end
+
+

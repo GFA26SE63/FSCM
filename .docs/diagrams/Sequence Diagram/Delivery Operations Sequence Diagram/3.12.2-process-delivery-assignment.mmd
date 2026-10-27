@@ -1,0 +1,19 @@
+sequenceDiagram
+    actor Staff as "Admin/Operator"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant Service as "deliveryService: Service"
+    participant DB as "PostgreSQL: Database"
+    Staff->>UI: Open dispatched shipment
+    UI->>+API: GET /api/v1/deliveries/orders/{orderId}
+    API->>Service: getAssignableShipment()
+    Service->>+DB: Read shipment and active driver/vehicle resources
+    DB-->>-Service: Available resources
+    Service-->>UI: Delivery assignment options
+    Staff->>UI: Select driver and vehicle
+    UI->>+API: PATCH /api/v1/shipments/{id}/assignment
+    API->>Service: assignShipment(driver, vehicle)
+    Service->>DB: Validate same-warehouse resource and save assignment snapshot
+    API-->>-UI: Assignment saved
+    Note over Service,DB: No driver application, route optimization or live GPS tracking is assumed.
+

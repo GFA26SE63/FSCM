@@ -1,0 +1,20 @@
+sequenceDiagram
+    actor Keeper as "Warehouse Keeper/Admin"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant App as "applicationService: Service"
+    participant DB as "PostgreSQL: Database"
+    Keeper->>UI: Open warehouse inventory or batch detail
+    UI->>API: GET /api/v1/inventory or /batches/{id}
+    API->>App: Authorize warehouse scope
+    App->>+DB: Read balances, batch expiry, QR lineage and history
+    DB-->>-App: OnHand, Reserved, Available and batch detail
+    App-->>UI: Inventory view
+    opt Expiry health
+        UI->>API: GET /api/v1/inventory/expiry/health
+        API->>App: Run/read expiry health
+        App->>DB: Find near-expiry, expired and locked quantities
+        App-->>UI: Health result and notifications/outbox state
+    end
+
+

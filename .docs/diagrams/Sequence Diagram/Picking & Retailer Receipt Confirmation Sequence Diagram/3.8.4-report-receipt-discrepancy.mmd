@@ -1,0 +1,30 @@
+sequenceDiagram
+    actor Retailer as "Retailer"
+    actor Staff as "Admin/Operator"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant App as "applicationService: Service"
+    participant Blob as "evidenceStorage: External System"
+    participant DB as "PostgreSQL: Database"
+    Retailer->>UI: Report missing/damaged quantity with evidence
+    UI->>+API: POST /api/v1/complaints
+    API->>App: Validate order, shipment, batch, tag and ownership
+    App->>Blob: Store evidence
+    App->>DB: Create Pending complaint and disputed net value
+    API-->>-UI: Complaint submitted
+    Staff->>UI: Review complaint
+    UI->>+API: POST /api/v1/complaints/{id}/resolve
+    API->>App: Resolve(decision, quantity, reason)
+    alt Approved
+        App->>DB: Create capped financial adjustment at allocated net price
+        opt Confirmed payments exceed adjusted amount
+            App->>DB: Create PendingRefund obligation
+        end
+        API-->>-UI: Adjustment/refund obligation recorded
+    else Rejected
+        App->>DB: Restore disputed amount to collectible balance and audit
+        API-->>UI: Complaint rejected
+    end
+    Note over App,DB: No automatic return, stock restoration or bank refund.
+
+

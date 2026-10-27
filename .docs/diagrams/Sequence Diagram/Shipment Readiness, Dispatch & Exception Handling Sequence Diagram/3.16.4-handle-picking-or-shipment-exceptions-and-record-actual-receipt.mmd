@@ -1,0 +1,22 @@
+sequenceDiagram
+actor Keeper as "Warehouse Keeper"
+actor Retailer
+participant UI as "Interface: UI"
+participant Pick as "pickingService: Service"
+participant Ship as "shipmentService: Service"
+participant Complaint as "complaintService: Service"
+participant DB as "PostgreSQL: Database"
+Keeper->>UI: Report QR mismatch, damage or shortage
+UI->>+Pick: flagException(pickingCode, reason)
+Pick->>DB: Mark picking/shipment NeedsHandling
+Pick-->>-UI: Exception recorded
+Retailer->>UI: Confirm received QR quantities or report discrepancy
+UI->>Ship: confirmReceipt() or createComplaint()
+alt Receipt matches
+    Ship->>DB: Save receipt confirmation and close shipment when all labels received
+else Discrepancy
+    UI->>Complaint: submit shipment-linked complaint
+    Complaint->>DB: Save evidence and disputed quantity/value
+end
+Note over Complaint,DB: No automatic return, stock restoration or partial delivery is introduced.
+

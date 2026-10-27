@@ -1,0 +1,21 @@
+sequenceDiagram
+    actor Admin as "Admin"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant Inv as "inventoryService: Service"
+    participant App as "applicationService: Service"
+    participant DB as "PostgreSQL: Database"
+    Admin->>UI: Scan/select near-expiry batches
+    UI->>+API: GET suggestions / POST batch discount rule
+    API->>Inv: Find active batches and available quantities
+    Inv->>+DB: Read expiry, OnHand, Reserved and status
+    DB-->>-Inv: Candidate batches
+    Inv-->>UI: Candidates and remaining-life data
+    Admin->>UI: Configure SKU/Category rule, percent or fixed amount
+    UI->>+API: POST /api/v1/shelf-life-discounts
+    API->>App: Validate non-overlap, version and authority
+    App->>DB: Save versioned rule and audit
+    API-->>-UI: Rule published
+    Note over App,DB: Allocation applies MLOR/batch eligibility first; this rule prices selected fragments afterward.
+
+

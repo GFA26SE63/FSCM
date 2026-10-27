@@ -1,0 +1,21 @@
+sequenceDiagram
+    participant API as "mainController: Controller"
+    participant Service as "allocationPlanApprovalService: Service"
+    participant DB as "PostgreSQL: Database"
+    participant Issue as "pickingIssueService: Service"
+    API->>+Service: approve(planVersionId)
+    Service->>+DB: Lock plan, inventory versions and order versions
+    Service->>+DB: Revalidate batch, ETA, MLOR, price and discount versions
+    alt Revalidation succeeds
+        Service->>+DB: Transactionally increase Reserved and decrease Available
+        Service->>+DB: Mark plan Approved and orders Allocated
+        Service->>Issue: issuePickingListsOnce()
+        Issue->>DB: Create warehouse picking lists and shipment splits
+        DB-->>-Service: Commit successful
+        Service-->>API: Approved result
+    else Conflict or changed condition
+        Service->>+DB: Roll back reservation transaction
+        DB-->>-Service: Conflict
+        Service-->>API: Recalculation required
+    end
+

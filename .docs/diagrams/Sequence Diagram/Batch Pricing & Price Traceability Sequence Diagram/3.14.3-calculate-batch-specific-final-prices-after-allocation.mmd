@@ -1,0 +1,17 @@
+sequenceDiagram
+participant Planner as "allocationEngine: Service"
+participant Pricing as "allocationPricingService: Service"
+participant Rules as "shelfLifeDiscountService: Service"
+participant DB as "PostgreSQL: Database"
+Planner->>+Pricing: priceSelectedBatchFragments(plan, timestamp)
+Pricing->>+DB: Read base-price snapshot and batch expiry data
+Pricing->>+Rules: resolveSkuThenCategoryRule(sku, category, hsdPercent)
+Rules->>+DB: Read active rule version at pricing timestamp
+DB-->>-Rules: Matching rule or no discount
+Rules-->>-Pricing: Rule snapshot and reason
+Pricing->>Pricing: Calculate discount amount and final unit price
+Pricing->>+DB: Store batch fragment price breakdown
+DB-->>-Pricing: Immutable price snapshot
+Pricing-->>-Planner: Final prices per allocation fragment
+Note over Pricing,DB: Price calculation occurs after MLOR-eligible batch selection; price does not influence scoring.
+

@@ -1,0 +1,23 @@
+sequenceDiagram
+actor Staff as "Admin/Operator"
+participant UI as "Interface: UI"
+participant API as "mainController: Controller"
+participant Delivery as "deliveryService: Service"
+participant Ship as "shipmentService: Service"
+participant DB as "PostgreSQL: Database"
+Staff->>UI: Assign driver and vehicle to shipment
+UI->>+API: PATCH /api/v1/shipments/{id}/assignment
+API->>Delivery: validateAndAssign()
+Delivery->>DB: Save same-warehouse assignment snapshot
+Staff->>UI: Confirm shipment issue
+UI->>+API: POST /api/v1/shipments/{id}/issue
+API->>Ship: confirmIssue(idempotencyKey, version)
+Ship->>DB: Recheck readiness and reservation
+alt Ready
+    Ship->>DB: Decrease OnHand and Reserved once
+    Ship->>DB: Mark shipment Dispatched and order when all shipments issued
+    API-->>-UI: Dispatch confirmed
+else Not ready or duplicate
+    API-->>-UI: Blocked/existing result
+end
+

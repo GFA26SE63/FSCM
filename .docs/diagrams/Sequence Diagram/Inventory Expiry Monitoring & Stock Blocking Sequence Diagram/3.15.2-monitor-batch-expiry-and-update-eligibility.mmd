@@ -1,0 +1,14 @@
+sequenceDiagram
+participant Job as "dateTrackerJob: Control"
+participant Service as "inventoryExpirySweepService: Service"
+participant DB as "PostgreSQL: Database"
+participant Notify as "notificationService: Service"
+Job->>+Service: runExpirySweep(currentTime)
+Service->>+DB: Read active batches and expiry dates
+DB-->>-Service: Near-expiry and expired candidates
+Service->>DB: Update eligibility/expiry health and audit
+Service->>Notify: publishNearExpiryOrExpiredEvent()
+Notify->>DB: Persist scoped notification/outbox message
+Service-->>-Job: Sweep result
+Note over Service,DB: Expired or disposed batches are excluded from allocation.
+

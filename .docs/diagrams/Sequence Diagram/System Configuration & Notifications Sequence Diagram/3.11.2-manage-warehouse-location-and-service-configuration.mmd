@@ -1,0 +1,18 @@
+sequenceDiagram
+    actor Admin
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant Config as "configurationService: Service"
+    participant Map as "googleMapsProvider: External System"
+    participant DB as "PostgreSQL: Database"
+    Admin->>UI: Edit warehouse address, service radius or ETA settings
+    UI->>+API: PUT /api/v1/warehouses/{id} and /configurations/{key}
+    API->>+Config: validateAndSaveConfiguration(request)
+    Config->>+Map: Geocode address or refresh distance data
+    Map-->>-Config: Coordinates/distance or controlled provider error
+    Config->>+DB: Save versioned location, transit and schedule settings
+    DB-->>-Config: Configuration version
+    Config-->>-API: Updated configuration
+    API-->>-UI: Display saved settings
+    Note over Config,DB: API keys stay server-side; allocation snapshots the versions used for ETA and distance.
+

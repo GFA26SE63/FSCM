@@ -1,0 +1,18 @@
+sequenceDiagram
+    actor Admin as "Admin"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant App as "applicationService: Service"
+    participant DB as "PostgreSQL: Database"
+    Admin->>UI: Create/update/move/delete category
+    UI->>+API: POST/PUT/DELETE /api/v1/categories
+    API->>App: Validate parent and authorization
+    App->>DB: Check circular relation and dependent products/children
+    alt Valid change
+        App->>DB: Persist category tree and audit
+        API-->>-UI: Updated category tree
+    else Circular relation or dependency exists
+        API-->>UI: 400/409 error
+    end
+
+

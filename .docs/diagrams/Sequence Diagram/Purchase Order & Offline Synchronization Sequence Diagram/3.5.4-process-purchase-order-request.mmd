@@ -1,0 +1,26 @@
+sequenceDiagram
+    actor Reviewer as "Admin/Operator"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant App as "applicationService: Service"
+    participant DB as "PostgreSQL: Database"
+    Reviewer->>UI: Open PendingApproval order
+    UI->>+API: GET /api/v1/orders/{id}
+    API->>App: Read scoped order
+    App->>DB: Load lines, snapshots and status history
+    DB-->>UI: Order details
+    Reviewer->>UI: Approve or reject with reason
+    alt Approve before cutoff
+        UI->>+API: POST /api/v1/orders/{id}/approve
+        API->>App: Approve(order)
+        App->>DB: Validate version and authority
+        App->>DB: Set AwaitingAllocation and audit
+        API-->>-UI: Approved; no stock reserved
+    else Reject
+        UI->>+API: POST /api/v1/orders/{id}/reject
+        API->>App: Reject(order, reason)
+        App->>DB: Set Rejected and notify Sales
+        API-->>-UI: Rejected
+    end
+
+

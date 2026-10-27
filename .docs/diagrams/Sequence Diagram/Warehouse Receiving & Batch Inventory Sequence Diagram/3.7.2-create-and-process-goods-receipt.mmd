@@ -1,0 +1,24 @@
+sequenceDiagram
+    actor Keeper as "Warehouse Keeper/Admin"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant Inv as "inventoryService: Service"
+    participant DB as "PostgreSQL: Database"
+    Keeper->>UI: Enter receipt lines (warehouse, SKU, expiry, quantity)
+    UI->>+API: POST /api/v1/goods-receipts
+    API->>Inv: Create receipt
+    Inv->>DB: Validate warehouse scope and batch fields
+    Inv->>DB: Save Draft/Submitted receipt; no stock increase
+    API-->>-UI: Receipt awaiting approval
+    Keeper->>UI: Approve receipt when authorized
+    UI->>API: POST /api/v1/goods-receipts/{id}/approve
+    API->>Inv: Approve with idempotency/version
+    Inv->>DB: Transactionally create/merge batch and increase OnHand
+    Inv->>DB: Create QR labels and inventory transaction
+    alt First approval
+        DB-->>API: Received and inventory updated
+    else Duplicate retry
+        DB-->>API: Existing approval result; no double increase
+    end
+
+

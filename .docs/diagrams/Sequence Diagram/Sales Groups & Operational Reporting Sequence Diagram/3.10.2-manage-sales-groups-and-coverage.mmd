@@ -1,0 +1,21 @@
+sequenceDiagram
+    actor Manager as "Sales Manager"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant Service as "salesGroupService: Service"
+    participant DB as "PostgreSQL: Database"
+    Manager->>UI: Open sales-group management
+    UI->>+API: POST/PUT /api/v1/sales-groups
+    API->>+Service: validateGroupAndScope(request)
+    Service->>+DB: Check manager organization scope
+    Service->>+DB: Save group, members and retailer assignments
+    DB-->>-Service: Updated assignments
+    Service-->>-API: Sales group result
+    API-->>-UI: Display updated coverage
+    Manager->>UI: Reassign Sales or retailer
+    UI->>+API: PUT /api/v1/territory-assignments/{type}/{id}
+    API->>Service: updateAssignment()
+    Service->>DB: Append assignment history and audit
+    API-->>-UI: Assignment updated
+    Note over Service,DB: New coverage controls future visibility; historical order creator and scope remain traceable.
+

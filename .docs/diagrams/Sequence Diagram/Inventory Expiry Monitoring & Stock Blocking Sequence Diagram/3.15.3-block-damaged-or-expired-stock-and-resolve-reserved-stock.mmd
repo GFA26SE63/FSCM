@@ -1,0 +1,19 @@
+sequenceDiagram
+actor Keeper as "Warehouse Keeper"
+participant UI as "Interface: UI"
+participant API as "mainController: Controller"
+participant Service as "inventoryLockService: Service"
+participant DB as "PostgreSQL: Database"
+Keeper->>UI: Select damaged/expired quantity
+UI->>+API: POST /api/v1/inventory-locks
+API->>Service: lockQuantity(batch, quantity, reason)
+Service->>DB: Validate available and reserved quantities
+alt No reserved conflict
+    Service->>DB: Lock quantity from allocation/issue eligibility
+    API-->>-UI: Stock blocked
+else Reserved quantity affected
+    Service->>DB: Set affected order to NeedsHandling
+    Service->>DB: Preserve reservation for authorized resolution
+    API-->>UI: NeedsHandling resolution required
+end
+

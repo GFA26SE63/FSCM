@@ -1,0 +1,21 @@
+sequenceDiagram
+    actor User as "Retailer/Sales/Admin"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant Catalog as "catalogService: Service"
+    participant Report as "reportService: Service"
+    participant DB as "PostgreSQL: Database"
+    User->>UI: Open catalog or best-selling view
+    UI->>API: GET /api/v1/products?status=Published
+    API->>Catalog: Query visible products by role/scope
+    Catalog->>DB: Read Published products and effective prices
+    DB-->>UI: Catalog results
+    opt Best-selling list
+        UI->>API: GET /api/v1/reports/best-selling-products
+        API->>Report: Rank delivered order fragments
+        Report->>DB: Aggregate carton quantity or adjusted revenue
+        Report-->>UI: Ranked products
+    end
+    Note over Catalog,DB: Draft and Inactive products are excluded from purchasable catalog.
+
+

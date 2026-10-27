@@ -1,0 +1,16 @@
+sequenceDiagram
+participant Issue as "pickingIssueService: Service"
+participant Ship as "shipmentService: Service"
+participant DB as "PostgreSQL: Database"
+Issue->>+DB: Read approved allocation fragments by warehouse
+Issue->>+DB: Create warehouse picking lists and shipment expectations
+DB-->>-Issue: One shipment expectation per warehouse portion
+Ship->>+DB: Read expected warehouses and completed picking portions
+Ship->>+DB: Read payment gate and order version
+alt Every expected portion ready and payment condition met
+    DB-->>-Ship: Whole-order ready
+else Missing portion, exception or unpaid prepaid
+    DB-->>-Ship: Dispatch blocked with reason
+end
+Ship-->>Issue: Readiness result
+

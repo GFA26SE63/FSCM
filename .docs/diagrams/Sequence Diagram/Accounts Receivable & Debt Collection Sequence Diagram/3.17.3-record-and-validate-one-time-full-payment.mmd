@@ -1,0 +1,24 @@
+sequenceDiagram
+actor Staff as "Admin/Operator/Sales"
+participant UI as "Interface: UI"
+participant API as "mainController: Controller"
+participant Payment as "paymentService: Service"
+participant PayOS as "PayOS: External System"
+participant DB as "PostgreSQL: Database"
+alt PayOS prepaid
+    Staff->>UI: Request checkout after final approval
+    UI->>+API: POST /api/v1/payments/orders/{orderId}/payos-checkout
+    API->>Payment: createCheckoutFromApprovedAmount()
+    Payment->>PayOS: Create checkout
+    PayOS-->>UI: Checkout/redirect
+    PayOS->>API: Verified webhook
+    API->>Payment: validateSignatureAmountAndOrder()
+else Manual/COD/deferred collection
+    Staff->>UI: Record full payment evidence
+    UI->>+API: POST /api/v1/payments/orders/{orderId}/collect
+    API->>Payment: collectFullAmount()
+end
+Payment->>DB: Idempotently update canonical ledger
+DB-->>API: Confirmed payment or conflict
+API-->>-UI: Payment result
+

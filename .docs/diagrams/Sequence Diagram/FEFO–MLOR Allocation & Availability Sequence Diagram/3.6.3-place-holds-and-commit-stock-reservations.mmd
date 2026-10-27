@@ -1,0 +1,33 @@
+sequenceDiagram
+    actor Admin as "Admin"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant App as "applicationService: Service"
+    participant DB as "PostgreSQL: Database"
+    participant Issue as "pickingIssueService: Service"
+    Admin->>UI: Review plan version
+    UI->>+API: GET /api/v1/allocation-runs/plan-versions/{id}
+    API->>App: Load proposal and trace
+    App->>DB: Read proposal version and snapshots
+    alt Request recalculation
+        Admin->>UI: Request recalculation with reason
+        UI->>+API: POST .../request-recalculation
+        API->>App: Create superseding proposal version
+        App->>DB: Keep prior version unapproved
+    else Approve
+        Admin->>UI: Approve proposal
+        UI->>+API: POST .../approve
+        API->>App: Revalidate inventory, batch, ETA, MLOR, price and rule versions
+        alt Revalidation passes
+            App->>DB: Transactionally increase Reserved and decrease Available
+            App->>DB: Mark version Approved and order Allocated
+            App->>Issue: Issue picking lists once
+            Issue->>DB: Create warehouse lists and order-line splits
+            API-->>-UI: Approved and Picking released
+        else Conflict
+            App->>DB: Roll back reservation and leave proposal for recalculation
+            API-->>-UI: Conflict; review new version
+        end
+    end
+
+

@@ -1,0 +1,18 @@
+sequenceDiagram
+    actor Admin as "Admin"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant App as "applicationService: Service"
+    participant DB as "PostgreSQL: Database"
+    Admin->>UI: Create/edit/activate/deactivate promotion
+    UI->>+API: POST/PUT /api/v1/promotions
+    API->>App: Validate period, scope and discount rule
+    App->>DB: Check historical-order immutability and overlap
+    alt Valid promotion
+        App->>DB: Save versioned promotion and audit
+        API-->>-UI: Promotion result
+    else Invalid or historical lock
+        API-->>UI: 400/409 error
+    end
+
+

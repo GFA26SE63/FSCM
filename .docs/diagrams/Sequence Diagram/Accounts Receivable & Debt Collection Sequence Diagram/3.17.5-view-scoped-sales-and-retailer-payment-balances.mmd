@@ -1,0 +1,14 @@
+sequenceDiagram
+actor User as "Retailer/Sales/Admin/Operator"
+participant UI as "Interface: UI"
+participant API as "mainController: Controller"
+participant Service as "retailerReceivableService: Service"
+participant DB as "PostgreSQL: Database"
+User->>UI: Open payment balances
+UI->>+API: GET /api/v1/retailer/receivables
+API->>+Service: authorizeAndReadScopedBalances(actor)
+Service->>+DB: Read canonical ledger, adjustments, disputes and refunds
+DB-->>-Service: Scoped balance records
+Service-->>-API: Adjusted amount, collected, outstanding, due and refund status
+API-->>-UI: Render payment balances
+

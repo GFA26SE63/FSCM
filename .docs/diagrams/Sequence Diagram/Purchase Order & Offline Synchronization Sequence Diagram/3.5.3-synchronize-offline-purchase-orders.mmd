@@ -1,0 +1,29 @@
+sequenceDiagram
+    actor Sales as "Sales"
+    participant UI as "Interface: UI"
+    participant Snap as "mobileSnapshotService: Service"
+    participant API as "mainController: Controller"
+    participant Order as "orderService: Service"
+    participant DB as "PostgreSQL: Database"
+    Sales->>UI: Request/refresh offline snapshot
+    UI->>+API: GET /api/v1/mobile/snapshot with ETag
+    API->>Snap: Build scoped full snapshot
+    Snap->>+DB: Read retailer, MLOR, products, prices, campaigns, indicative stock
+    DB-->>-Snap: Versioned data
+    Snap-->>UI: 200 snapshot or 304 Not Modified
+    Sales->>UI: Press Send for local draft
+    UI->>+API: POST /api/v1/orders/sync with clientOrderKey
+    API->>Order: Sync and idempotency check
+    Order->>+DB: Revalidate scope, base price, campaign and MLOR version
+    alt Conditions unchanged
+        Order->>+DB: Create order once as PendingApproval
+        API-->>-UI: Synchronized order
+    else Condition conflict
+        API-->>-UI: 409 current conditions; no order created
+    else Same clientOrderKey retry
+        DB-->>-Order: Return existing result
+        API-->>UI: Same order/result
+    end
+    Note over UI,API: No background sync, allocation, reservation or stock rejection during sync.
+
+

@@ -1,0 +1,16 @@
+sequenceDiagram
+participant Job as "paymentMonitorJob: Control"
+participant Receivable as "retailerReceivableService: Service"
+participant DB as "PostgreSQL: Database"
+participant Notify as "notificationService: Service"
+Job->>+Receivable: findOverdueReceivables(currentDate)
+Receivable->>+DB: Read due dates, outstanding and disputed values
+DB-->>-Receivable: Overdue scoped receivables
+loop Each overdue receivable
+    Receivable->>DB: Append overdue event and reminder history
+    Receivable->>Notify: sendPaymentReminder(retailer, order)
+end
+Notify->>DB: Persist notification/outbox result
+Receivable-->>-Job: Reminder sweep result
+Note over Receivable,DB: Pending disputed value is excluded from collectible-now calculation.
+

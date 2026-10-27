@@ -1,0 +1,17 @@
+sequenceDiagram
+participant Complaint as "complaintService: Service"
+participant Payment as "paymentService: Service"
+participant DB as "PostgreSQL: Database"
+Complaint->>Payment: applyApprovedAdjustment(orderId, quantity, reason)
+Payment->>DB: Read allocated net unit price and remaining unadjusted value
+Payment->>DB: Validate delivered quantity, cap and idempotency
+alt Adjustment within cap
+    Payment->>DB: Post financial adjustment and recalculate receivable
+    alt Confirmed payments exceed adjusted amount
+        Payment->>DB: Create PendingRefund obligation
+    end
+    DB-->>Complaint: Adjustment applied
+else Duplicate or exceeds cap
+    DB-->>Complaint: Conflict; no duplicate adjustment
+end
+

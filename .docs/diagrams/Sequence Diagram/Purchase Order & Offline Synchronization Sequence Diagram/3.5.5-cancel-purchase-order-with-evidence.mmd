@@ -1,0 +1,23 @@
+sequenceDiagram
+    actor Sales as "Sales"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant App as "applicationService: Service"
+    participant Blob as "evidenceStorage: External System"
+    participant DB as "PostgreSQL: Database"
+    Sales->>UI: Enter reason and attach evidence
+    UI->>+API: POST /api/v1/orders/{id}/cancel multipart
+    API->>+App: Validate actor scope, state and evidence
+    App->>+Blob: Upload validated attachment
+    Blob-->>-App: Private file reference
+    App->>DB: Save cancellation reason/evidence and audit
+    alt Before reservation
+        App->>DB: Set Cancelled; no stock movement
+    else Reserved but not picking
+        App->>DB: Release Reserved and cancel picking work once
+    else Already dispatched
+        App-->>-API: Cancellation not permitted; use complaint/refund workflow
+    end
+    API-->>-UI: Cancellation result or conflict
+
+

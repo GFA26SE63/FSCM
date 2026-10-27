@@ -1,0 +1,19 @@
+sequenceDiagram
+actor Approver as "Admin/authorized Operator"
+participant UI as "Interface: UI"
+participant API as "mainController: Controller"
+participant Service as "inventoryLifecycleService: Service"
+participant DB as "PostgreSQL: Database"
+Approver->>UI: Review write-off evidence and locked quantity
+UI->>+API: Approve write-off command
+API->>Service: approveWriteOff(id, version)
+Service->>DB: Validate authority, evidence and eligible quantity
+alt Valid approval
+    Service->>DB: Reduce OnHand, mark disposed and append inventory transaction
+    DB-->>API: Write-off approved
+    API-->>-UI: Inventory updated
+else Invalid quantity or stale version
+    DB-->>API: Conflict; no stock change
+    API-->>UI: Retry or resolve exception
+end
+

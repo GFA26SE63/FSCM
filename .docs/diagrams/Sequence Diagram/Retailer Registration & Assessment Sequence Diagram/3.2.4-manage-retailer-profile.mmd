@@ -1,0 +1,20 @@
+sequenceDiagram
+    actor Admin as "Admin"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant App as "applicationService: Service"
+    participant DB as "PostgreSQL: Database"
+    Admin->>UI: Edit or deactivate retailer
+    UI->>+API: PUT/PATCH /api/v1/retailers/{retailerId}
+    API->>+App: Validate Administrator scope and request
+    App->>DB: Check approval status and active order dependencies
+    alt Valid update
+        App->>DB: Save profile/assignment/status
+        App->>DB: Preserve order history and audit change
+        API-->>-UI: Updated retailer
+    else Bypass approval or dependency conflict
+        App-->>-API: Conflict/forbidden
+        API-->>UI: Error
+    end
+
+

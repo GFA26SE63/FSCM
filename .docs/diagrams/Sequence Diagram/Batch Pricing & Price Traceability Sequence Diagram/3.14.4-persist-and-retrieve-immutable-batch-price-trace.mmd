@@ -1,0 +1,14 @@
+sequenceDiagram
+participant API as "mainController: Controller"
+participant Service as "allocationTraceService: Service"
+participant DB as "PostgreSQL: Database"
+API->>+Service: persistPriceTrace(planVersion, fragments)
+Service->>+DB: Save base price, batch, HSD, rule, discount and final price
+DB-->>-Service: Trace persisted with version
+Service-->>-API: Stored trace result
+API->>+Service: GET /api/v1/allocation-runs/orders/{orderId}/price
+Service->>+DB: Read approved or proposal-version price trace
+DB-->>-Service: Immutable fragment breakdown
+Service-->>-API: Price history with version/status
+Note over Service,DB: Historical orders never recalculate using current configuration.
+

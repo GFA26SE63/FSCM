@@ -1,0 +1,19 @@
+sequenceDiagram
+actor Retailer
+actor Staff as "Admin/Operator"
+participant UI as "Interface: UI"
+participant API as "mainController: Controller"
+participant Service as "complaintService: Service"
+participant DB as "PostgreSQL: Database"
+Retailer->>UI: Select shipment, batch and disputed quantity
+UI->>+API: POST /api/v1/complaints
+API->>Service: validateShipmentOwnershipAndQuantity()
+Service->>DB: Save complaint, evidence reference and disputed net value
+API-->>-UI: Complaint Pending
+Staff->>UI: Review complaint and decision
+UI->>+API: POST /api/v1/complaints/{id}/resolve
+API->>Service: resolveComplaint(decision, reason)
+Service->>DB: Approve adjustment or restore disputed amount
+DB-->>API: Complaint resolved
+API-->>-UI: Resolution result
+

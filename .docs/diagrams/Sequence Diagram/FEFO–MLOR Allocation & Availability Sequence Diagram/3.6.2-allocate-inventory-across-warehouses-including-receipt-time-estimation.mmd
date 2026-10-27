@@ -1,0 +1,30 @@
+sequenceDiagram
+    participant Job as "allocationJob: Control"
+    participant Run as "allocationRunService: Service"
+    participant Planner as "allocationEngine: Service"
+    participant ETA as "deliveryEtaService: Service"
+    participant Map as "googleMapsCache: Entity"
+    participant DB as "PostgreSQL: Database"
+    Job->>Run: StartAsync(published allocation_run cutoff)
+    Run->>+DB: Acquire distributed/idempotency lock
+    Run->>+DB: Snapshot approved eligible orders and shared stock pool
+    Run->>+ETA: Resolve schedule, distance and ETA inputs
+    ETA->>+Map: Read cached warehouse-retailer distance
+    Map-->>-ETA: Versioned distance or controlled provider error
+    ETA-->>-Run: ETA/schedule/transit snapshot
+    Run->>Planner: Plan orders by server_received_at then order code
+    loop Each order line
+        Planner->>Planner: Filter SKU, active/non-expired batch, Available, distance, ETA and MLOR
+        Planner->>Planner: Greedy weighted score; tie-break batch id; recalc quantity score
+        Planner->>Planner: Select batch fragments, then resolve HSD discount SKU→Category
+    end
+    alt Every line complete
+        Planner->>DB: Persist tentative allocation, prices, candidates and trace
+        DB-->>-Run: AwaitingRunApproval proposal
+    else Any line short
+        Planner->>Planner: Roll back all tentative quantity for this order
+        Planner->>DB: Persist ShortInRun result and trace
+    end
+    Note over Planner,DB: Tentative plan changes neither OnHand nor Reserved; no cross-order batch reassignment.
+
+

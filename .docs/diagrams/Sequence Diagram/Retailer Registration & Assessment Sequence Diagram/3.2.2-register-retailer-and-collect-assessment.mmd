@@ -1,0 +1,26 @@
+sequenceDiagram
+    actor Sales as "Sales"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant App as "applicationService: Service"
+    participant DB as "PostgreSQL: Database"
+    Sales->>UI: Enter retailer profile and Category/SKU MLOR rules
+    UI->>+API: POST /api/v1/retailers
+    API->>+App: Create declaration with actor scope
+    App->>DB: Validate Sales territory and required fields
+    App->>DB: Check duplicate retailer/prospect
+    alt Valid declaration
+        App->>DB: Save retailer, MLOR declarations and assessment
+        App-->>-API: Retailer declaration KB code
+        API-->>-UI: 201 PendingReview
+    else Duplicate or invalid MLOR
+        App-->>API: Validation/conflict error
+        API-->>UI: 400/409 error
+    end
+    Sales->>UI: Submit declaration for review
+    UI->>+API: POST /api/v1/retailers/{id}/submit-review
+    API->>App: SubmitReview(id)
+    App->>DB: Change status and append history
+    API-->>-UI: Pending review confirmation
+
+

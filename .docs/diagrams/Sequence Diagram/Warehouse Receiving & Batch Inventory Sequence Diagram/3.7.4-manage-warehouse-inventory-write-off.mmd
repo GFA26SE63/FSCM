@@ -1,0 +1,26 @@
+sequenceDiagram
+    actor Keeper as "Warehouse Keeper"
+    actor Approver as "Admin/authorized Operator"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant Inv as "inventoryService: Service"
+    participant Blob as "evidenceStorage: External System"
+    participant DB as "PostgreSQL: Database"
+    Keeper->>UI: Select damaged/expired quantity and attach evidence
+    UI->>+API: POST inventory lock/write-off request
+    API->>Inv: Validate warehouse scope and eligible quantity
+    Inv->>DB: Lock quantity before write-off
+    Inv->>Blob: Store evidence reference
+    Inv->>DB: Save pending write-off and audit
+    Approver->>UI: Review write-off
+    UI->>+API: Approve write-off
+    API->>Inv: Approve with current version
+    alt Quantity and evidence valid
+        Inv->>DB: Reduce OnHand, mark disposed and finalize transaction
+        API-->>-UI: Write-off approved
+    else Reserved/locked conflict or over-quantity
+        Inv->>DB: Keep NeedsHandling/lock state; no negative stock
+        API-->>-UI: Conflict requiring authorized resolution
+    end
+
+

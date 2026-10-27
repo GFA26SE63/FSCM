@@ -1,0 +1,15 @@
+sequenceDiagram
+    actor User as "Retailer/Sales"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant App as "applicationService: Service"
+    participant DB as "PostgreSQL: Database"
+    User->>UI: Open loyalty balance
+    UI->>API: GET /api/v1/loyalty/cards/me or /{retailerId}
+    API->>App: Authorize retailer ownership or Sales assignment
+    App->>+DB: Read balance, earn/redeem/correction ledger
+    DB-->>-App: Auditable loyalty summary
+    App-->>UI: Available balance and transaction history
+    Note over App,DB: Points become usable only after complete receipt, settled adjusted amount and no pending complaint.
+
+

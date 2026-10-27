@@ -1,0 +1,24 @@
+sequenceDiagram
+    actor Retailer as "Retailer"
+    participant UI as "Interface: UI"
+    participant API as "mainController: Controller"
+    participant Ship as "shipmentService: Service"
+    participant DB as "PostgreSQL: Database"
+    Retailer->>UI: Scan every dispatched QR label
+    UI->>+API: POST /api/v1/shipments/{id}/receipt
+    API->>Ship: ConfirmReceipt(actor, QR, quantity, idempotency)
+    Ship->>DB: Verify retailer ownership, shipment, tag and quantity
+    alt Valid and not already confirmed
+        Ship->>DB: Save receipt confirmation and mark shipment received
+        Ship->>DB: Check whether all order shipments are received
+        alt All shipments received
+            Ship->>DB: Set order Delivered/complete receipt
+            Ship->>DB: Calculate deferred due date if applicable
+        end
+        API-->>-UI: Receipt confirmed
+    else Invalid or duplicate QR
+        API-->>UI: Conflict/error
+    end
+    Note over Ship,DB: Receipt does not create retailer inventory or automatically settle payment.
+
+

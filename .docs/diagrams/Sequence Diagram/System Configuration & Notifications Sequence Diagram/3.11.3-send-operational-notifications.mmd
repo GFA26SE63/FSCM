@@ -1,0 +1,18 @@
+sequenceDiagram
+    participant Event as "Business Event: Control"
+    participant Service as "notificationService: Service"
+    participant DB as "PostgreSQL: Database"
+    participant Hub as "Azure Notification Hubs: External System"
+    Event->>Service: publish(order/status/inventory/payment event)
+    Service->>+DB: Resolve recipients by role and assignment scope
+    Service->>+DB: Persist notification and outbox message
+    DB-->>-Service: Notification queued
+    Service->>+Hub: Send push notification
+    alt Delivery accepted
+        Hub-->>-Service: Provider success
+        Service->>DB: Mark delivery attempt successful
+    else Provider unavailable
+        Hub-->>Service: Provider error
+        Service->>DB: Keep retryable outcome and source transaction unchanged
+    end
+

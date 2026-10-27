@@ -1,0 +1,20 @@
+sequenceDiagram
+actor Sales
+participant UI as "Interface: UI"
+participant API as "mainController: Controller"
+participant Service as "orderService: Service"
+participant DB as "PostgreSQL: Database"
+Sales->>UI: Request cancellation with reason/evidence
+UI->>+API: POST /api/v1/orders/{id}/cancel
+API->>+Service: cancelReservedOrder()
+Service->>DB: Check order state, version and picking status
+alt Reserved and picking not started
+    Service->>DB: Release Reserved and cancel picking work once
+    Service->>DB: Set Cancelled and append audit/evidence reference
+    DB-->>API: Cancellation completed
+    API-->>-UI: Reservation released
+else Picking started or shipment dispatched
+    Service-->>-API: Cancellation not permitted; use exception/complaint flow
+    API-->>UI: Conflict
+end
+
