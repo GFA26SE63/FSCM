@@ -1,0 +1,61 @@
+@startuml daily_allocation_v1.0
+title F3 - Batching, Weighted-Greedy Allocation and Admin Quote Approval
+
+|Admin/Operator|
+start
+:Configure 12:00 (VN) batching schedule, ETA, radius Dmax=20km,\nweights HSD 50% / distance 30% / quantity 20% (total 100%);
+
+|System|
+:At 12:00 -> create/find exactly ONE run per day;
+:Select SOs the server received & approved BEFORE cutoff;
+:Snapshot SO, MLOR, post-promo price, schedule, stock, weights;
+:Sort orders by server receipt time ascending (tie -> order code):\nP1 -> C1 -> P2 -> SHORT;
+:Build a shared tentative stock pool\n(in-life, not locked, not yet Reserved);
+
+partition "Loop per ORDER" {
+  repeat :Take the next order;
+    partition "Loop per LINE (R = remaining shortfall)" {
+      repeat :Examine line, take batch-warehouse pairs of same SKU in the pool;
+        :Filter batch: in-life, not locked, valid warehouse + distance;
+        :Compute ETA (wait run + approve + pick + issue + buffer + transport);
+        if (Within Dmax & ETA not past deadline & L/SL >= MLOR?) then (eligible)
+          :Score S = 0.5*fE + 0.3*fD + 0.2*fQ;
+          :Pick highest score (tie -> earliest expiry, nearest, batch code);
+          :Take q = min(pool batch, R); reduce pool; R = R - q;
+        else (no eligible candidate)
+          :Mark line SHORT;
+          break
+        endif
+      repeat while (R > 0?) is (still short)
+      ->line filled;
+    }
+    if (All lines of the order filled?) then (filled)
+      :Keep stored quantity promotion (no re-check by small batch);
+      :Compute each batch shelf-life % at pricing point -> apply HSD% on post-promo price;
+      :Store base price, two discounts, final price, batch/warehouse, version;
+    else (short)
+      :ROLLBACK the whole order - return ALL tentative quantity to the pool;
+    endif
+  repeat while (More orders?) is (yes)
+  ->no more orders;
+}
+
+|System|
+:Aggregate filled/short plan + prices + reasons -> submit to Admin;
+
+|Admin|
+:Check stock/lock/expiry/ETA/MLOR, version, per-part prices;
+if (Plan reasonable?) then (approve)
+  |System|
+  :Atomic commit: Reserve + lock quote + response deadline\n(all succeed or all roll back);
+  :Send final quote to retailer (version, total, deadline);\nSO = "Awaiting retailer confirmation";
+else (request recalculation)
+  |Admin|
+  :Enter reason, keep old version, recompute a new plan;
+  stop
+endif
+
+|System|
+:Hand over awaiting-confirmation SO + quote + reserved quantity to F4;
+stop
+@enduml

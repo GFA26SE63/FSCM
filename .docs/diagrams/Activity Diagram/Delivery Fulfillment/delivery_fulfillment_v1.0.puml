@@ -1,0 +1,86 @@
+@startuml delivery_fulfillment_v1.0
+title F4 - Quote Confirmation, PO, Picking and Delivery
+
+|Retailer|
+start
+:Open the SO quote (check SKU, qty, promo/HSD, total, deadline);
+if (Accept the valid quote?) then (accept)
+  :Store confirmer + timestamp + quote version;
+else (reject / expired)
+  |System|
+  :Cancel SO before issue, release Reserved; handle paid money via refund case;
+  stop
+endif
+
+|Retailer|
+if (Choose payment method?) then (Prepaid)
+  |Retailer|
+  :Pay the exact quote total (e.g. P1 = 612,000d), within deadline;
+  :Submit transaction info/evidence;\nSO = "Awaiting verification";
+  |Operator|
+  :Reconcile actual amount received + timestamp;
+  if (Paid in full & valid & delivery still meets standard?) then (yes)
+    |System|
+    :Convert SO -> PO;
+  else (no / expired)
+    |System|
+    :Keep SO within deadline OR cancel + refund if already collected;
+    stop
+  endif
+else (Credit)
+  |System|
+  :Re-check credit permission + term + quote validity;
+  if (Credit valid?) then (valid)
+    :Convert SO -> PO, store Credit 7 days;
+  else (invalid)
+    :Offer Prepaid within deadline OR cancel SO;
+    stop
+  endif
+endif
+
+|System|
+:PO issues picking list + delivery parts PER warehouse;
+
+partition "Pick per warehouse" {
+  |Warehouse Keeper W1|
+  :Open picking list W1, scan the correct batch label;
+  :Gather + confirm split across POs (P1/C1/P2);
+  |Warehouse Keeper W2|
+  :Pick A2; split P1:2 and P2:3 per the split table;
+  |System|
+  if (All warehouses of the PO fully picked?) then (yes)
+  else (one warehouse short)
+    :Block issue; if short/damaged -> log exception, PO "Needs resolution";
+    stop
+  endif
+}
+
+partition "Dispatch and issue confirmation" {
+  |Operator|
+  :Assign valid vehicle + driver to each PO-warehouse part;
+  |Warehouse Keeper|
+  :Re-check lock/expiry, ETA, MLOR, receipt deadline;
+  :Confirm the actual quantity leaving each warehouse;
+  |System|
+  :Reduce OnHand + Reserved by document quantity, ONCE;
+  :PO = "Issued" when all parts have left the warehouse;
+}
+
+partition "Retailer receives per delivery part" {
+  |Retailer|
+  :Open the delivery part, scan all required QR; enter received + damaged qty;
+  if (All delivery parts received in full?) then (yes)
+    :Whole order eligible for money/points processing;
+  else (other warehouse parts remain)
+    :Wait for remaining parts (receiving one part != full order delivered);
+  endif
+  if (Shortage/damage?) then (yes)
+    :Open a complaint on the exact part/line/batch (keep actual numbers);
+  else (no)
+  endif
+}
+
+|System|
+:Hand over receipt/collection events + exceptions to F5;
+stop
+@enduml

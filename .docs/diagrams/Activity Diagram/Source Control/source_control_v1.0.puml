@@ -1,0 +1,62 @@
+@startuml source_control_v1.0
+title F1 - Sourcing and Inventory Control
+
+|Admin|
+start
+:Log in to the admin portal;
+:Manage users, warehouses, regions, sales groups\n(assign Warehouse Keeper W1/W2, Sales, Retailer);
+
+|Admin/Operator|
+:Create category + SKU_A, SKU_B in Draft\n(carton unit, packaging, total shelf life);
+:Enter base price + effective time\n(A = 100,000d, B = 50,000d);
+if (Data valid?) then (yes)
+  :Publish products;
+else (no)
+  :Fix in Draft;
+  stop
+endif
+:(Optional) Create a new Draft from a published product\nif locked info must change;
+
+|Warehouse Keeper|
+:Create goods receipt\n(warehouse, SKU, quantity, production date, expiry);
+
+|Approver|
+:Review and approve the goods receipt;
+if (Receipt valid?) then (yes)
+  :Increase stock exactly ONCE; create/merge batch by valid data key;
+else (no)
+  :Reject the receipt;
+  stop
+endif
+
+|Warehouse Keeper|
+:Reconcile batches across W1/W2;
+:Print QR labels per batch (SKU, warehouse, expiry, receipt source);
+:Scan to look up a label;
+
+partition "Lock non-sellable stock and write-off" {
+  |Warehouse Keeper|
+  :Report damaged lot / review expiry alert\n(quantity, reason, batch, evidence);
+  |Authorized user|
+  :Lock the non-issuable quantity;
+  if (Locked qty overlaps Reserved?) then (yes)
+    |System|
+    :Block issue; flag the affected order as "Needs resolution";
+  else (no)
+    :Only reduce Available of the not-yet-Reserved portion;
+  endif
+
+  |Warehouse Keeper|
+  :Create write-off request by batch + valid quantity;
+  |Approver|
+  :Approve write-off after reconciling stock and Reserved;
+  :Reduce stock per document ONCE; resolve the matching locked quantity;
+}
+
+|Warehouse Keeper|
+:Open the receipt - lock - write-off history of the batch;
+
+|System|
+:Hand over categories + valid stock pool (batch/QR) to F2/F3;
+stop
+@enduml
