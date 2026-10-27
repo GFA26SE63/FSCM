@@ -66,15 +66,36 @@ Defaults such as the 20 km service radius, allocation weights, 35-carton repleni
 
 ```text
 FSCM/
-|-- FSCM-Backend/  .NET 10 API and automated tests (independent repository)
-|-- FSCM-Frontend/ React 19 + TypeScript + Vite portal (independent repository)
-|-- FSCM-Mobile/   Flutter clients and offline sales queue (independent repository)
+|-- FSCM-Backend/  .NET 10 API and automated tests (Git submodule)
+|-- FSCM-Frontend/ React 19 + TypeScript + Vite portal (Git submodule)
+|-- FSCM-Mobile/   Flutter clients and offline sales queue (Git submodule)
 |-- .docs/         Business, architecture, API, data, testing, and delivery guidance
 |-- .diagram/      Editable architecture diagram sources
 `-- README.md
 ```
 
-The application directories are intentionally ignored by this integration repository because they have separate histories, branches, and delivery pipelines. The local `temp/` directory is also ignored and must never be used as a committed source of truth.
+The application directories retain their separate histories, branches, and delivery pipelines. This integration repository tracks them as submodules so each integration commit and review tag pins an exact backend, frontend, and mobile commit. The local `temp/` directory is ignored and must never be used as a committed source of truth.
+
+### Reproducible checkout
+
+Clone the integration repository together with all application source code:
+
+```powershell
+git -c core.longpaths=true clone --recurse-submodules https://github.com/GFA26SE63/FSCM.git
+Set-Location FSCM
+git config core.longpaths true
+```
+
+For the Review 2 baseline after the tag has been published:
+
+```powershell
+git -c core.longpaths=true clone --branch review-2 --recurse-submodules https://github.com/GFA26SE63/FSCM.git FSCM-review-2
+Set-Location FSCM-review-2
+git config core.longpaths true
+git submodule status
+```
+
+`core.longpaths=true` is required for the longest diagram paths on Windows. Existing clones can initialize the pinned application commits with `git submodule update --init --recursive`.
 
 ## Documentation
 
