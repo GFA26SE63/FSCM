@@ -1,0 +1,12 @@
+---
+title: RewardRedemption State Machine
+---
+stateDiagram-v2
+    [*] --> Pending : Retailer submits redemption (points held)
+    Pending --> Approved : Admin approves request
+    Pending --> Rejected : Admin rejects (held points released)
+    Approved --> Delivered : reward handed over / shipped
+    Approved --> Rejected : rejected after approval (held points released)
+    Delivered --> Completed : fulfilment confirmed (held -> lifetime redeemed)
+    Completed --> [*]
+    Rejected --> [*]

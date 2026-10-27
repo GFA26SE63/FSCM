@@ -1,0 +1,12 @@
+---
+title: RunPickingList State Machine
+---
+stateDiagram-v2
+    [*] --> Issued : picking sheet issued off an approved plan version
+    Issued --> Picking : first QR label scan (keeper starts picking)
+    Picking --> Picking : scan more labels / split batches
+    Picking --> Ready : every gather + allocation split fully picked
+    Picking --> NeedsHandling : keeper reports exception (Shortage/Damaged/Expired/QrMismatch)
+    Issued --> NeedsHandling : exception before any scan
+    Ready --> [*]
+    NeedsHandling --> [*]

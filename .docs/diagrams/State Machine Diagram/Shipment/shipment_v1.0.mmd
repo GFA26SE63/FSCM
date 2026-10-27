@@ -1,0 +1,12 @@
+---
+title: Shipment State Machine
+---
+stateDiagram-v2
+    [*] --> Ready : created when its warehouse RunPickingList reaches Ready
+    Ready --> Issued : stock issued at dispatch confirmation (F96)
+    Ready --> Exception : flagged as an exception (Operator, reason)
+    Issued --> Delivering : handed to driver/vehicle for delivery
+    Delivering --> Received : retailer confirms receipt of this portion
+    Issued --> Exception : exception after issue
+    Received --> [*]
+    Exception --> [*]

@@ -1,0 +1,11 @@
+---
+title: AllocationPlanVersion State Machine
+---
+stateDiagram-v2
+    [*] --> AwaitingApproval : new priced plan version created
+    AwaitingApproval --> Approved : Admin approves this version
+    AwaitingApproval --> RecalculationRequested : Admin asks to re-plan
+    AwaitingApproval --> Superseded : a newer plan version replaces this one
+    Approved --> Superseded : replaced by a later approved version
+    RecalculationRequested --> [*]
+    Superseded --> [*]
