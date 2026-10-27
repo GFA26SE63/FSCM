@@ -1,0 +1,22 @@
+---
+title: SalesOrder State Machine
+---
+stateDiagram-v2
+    [*] --> PendingApproval : Sales creates order (assisted / offline submit)
+
+    PendingApproval --> PendingAllocation : Admin/Operator approve (holds NO stock)
+    PendingApproval --> Rejected : reject (reason required)
+    PendingApproval --> Cancelled : cancel (Sales own / Admin / Operator)
+
+    PendingAllocation --> Approved : daily allocation run approved (plan + prices)
+    PendingAllocation --> Cancelled : cancel before run commitment
+    PendingAllocation --> Rejected : reject
+
+    Approved --> Picking : first warehouse QR pick scan
+    Picking --> Issued : every warehouse portion issued at dispatch (F96)
+    Issued --> Delivering : dispatched to retailer
+    Delivering --> Delivered : retailer confirms full receipt of all portions
+
+    Rejected --> [*]
+    Cancelled --> [*]
+    Delivered --> [*]

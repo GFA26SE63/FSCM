@@ -1,0 +1,9 @@
+---
+title: AllocationRunOrder State Machine
+---
+stateDiagram-v2
+    [*] --> Pending : order entered the run
+    Pending --> Fulfilled : fully allocated (all lines covered)
+    Pending --> Short : could not be fully allocated this run (waits next run)
+    Fulfilled --> [*]
+    Short --> [*]

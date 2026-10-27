@@ -1,0 +1,9 @@
+---
+title: ManualRefund State Machine
+---
+stateDiagram-v2
+    [*] --> PendingRefund : obligation created (valid cancellation / approved claim)
+    PendingRefund --> AwaitingVerification : Operator submits transfer evidence
+    AwaitingVerification --> Refunded : Admin verifies evidence (submitter != verifier)
+    AwaitingVerification --> PendingRefund : Admin rejects evidence (reason noted, Operator re-submits)
+    Refunded --> [*]

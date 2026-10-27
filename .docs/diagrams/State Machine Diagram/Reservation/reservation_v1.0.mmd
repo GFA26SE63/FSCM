@@ -1,0 +1,11 @@
+---
+title: Reservation State Machine
+---
+stateDiagram-v2
+    [*] --> Tentative : planner proposes a batch slice (shared pool, no stock held)
+    Tentative --> Reserved : run approval reserves the batch quantity
+    Tentative --> Released : plan not approved / order short -> slice dropped
+    Reserved --> Issued : stock physically issued at dispatch (on-hand decreases)
+    Reserved --> Released : order cancelled / rejected before dispatch -> free stock
+    Issued --> [*]
+    Released --> [*]

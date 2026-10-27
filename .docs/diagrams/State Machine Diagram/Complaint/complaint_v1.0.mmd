@@ -1,0 +1,12 @@
+---
+title: Complaint State Machine
+---
+stateDiagram-v2
+    [*] --> Open : Retailer reports shortage/damage after confirmed receipt
+    Open --> UnderReview : Operator starts processing (separates disputed amount)
+    UnderReview --> Approved : Admin approves adjustment (affected batch net price)
+    UnderReview --> Rejected : Admin rejects — restore per record
+    Approved --> Resolved : adjustment applied (receivable adjusted / refund raised)
+    Rejected --> Resolved : closed with no financial change
+    Open --> Resolved : direct resolve
+    Resolved --> [*]

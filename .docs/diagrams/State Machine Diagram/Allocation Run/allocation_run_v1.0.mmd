@@ -1,0 +1,15 @@
+---
+title: AllocationRun State Machine
+---
+stateDiagram-v2
+    [*] --> Snapshotted : 00:00 VN daily — snapshot eligible orders + stock pool
+    Snapshotted --> Planning : run weighted-greedy FEFO planner (no stock held)
+    Planning --> AwaitingApproval : plan version produced (batches + shelf-life prices)
+    Planning --> Failed : planning error / invalid inputs
+
+    AwaitingApproval --> Approved : Admin approves proposal + final prices (reserves stock)
+    AwaitingApproval --> Snapshotted : recalculation requested (re-plan)
+
+    Approved --> Closed : run fully consumed by reservation / picking issue
+    Failed --> [*]
+    Closed --> [*]
