@@ -1,8 +1,3 @@
-# Application repositories are maintained and versioned independently.
-FSCM-Backend/
-FSCM-Frontend/
-FSCM-Mobile/
-
 # Temporary working context; never commit its contents.
 temp/
 

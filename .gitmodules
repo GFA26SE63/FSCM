@@ -1,0 +1,9 @@
+[submodule "FSCM-Backend"]
+	path = FSCM-Backend
+	url = https://github.com/GFA26SE63/FSCM-Backend.git
+[submodule "FSCM-Frontend"]
+	path = FSCM-Frontend
+	url = https://github.com/GFA26SE63/FSCM-Frontend.git
+[submodule "FSCM-Mobile"]
+	path = FSCM-Mobile
+	url = https://github.com/GFA26SE63/FSCM-Mobile.git
