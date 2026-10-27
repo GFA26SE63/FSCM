@@ -1,0 +1,61 @@
+@startuml sales_order_v1.0
+title F2 - Retailer, MLOR, Promotions and SO Capture
+
+|Sales|
+start
+:Declare retailer - General Information tab\n(name, contact, GPS, store size, potential);
+:Shelf-life Requirements tab - set MLOR\n(Category 30%, SKU_A override 80% for R2);
+:Submit the declaration for review;
+
+|Admin|
+if (Approve retailer profile?) then (approve)
+  :Create retailer + official MLOR set;
+  :Configure credit term (R2 = Credit 7 days);
+else (reject)
+  :Return rejection reason;
+  stop
+endif
+
+|Admin|
+:Create group promotion (A+B: total >= 10 cartons -> 10% off)\n+ choose retailer/scope/effective window;
+:Configure shelf-life discount table\n(<40%: -20%; 40-<70%: -10%; >=70%: 0%);
+
+|Sales|
+:Load catalog, view price + MLOR per retailer;
+:Build the cart, apply group promotion if threshold met;
+
+partition "SO capture (online)" {
+  |Sales|
+  :Create SO (P1: A6+B4, P2: A3+B2, C1: A5, SHORT: A4+B4);
+  :Send SO to the server;
+  |System|
+  :Store server receipt time, SO code, promo/MLOR;\nSO = "Pending input approval";
+}
+
+partition "Offline draft" {
+  |Sales|
+  :Lose connection -> build cart, save draft on device;
+  :Reconnect -> manually tap Submit;
+  |System|
+  if (Price/MLOR conditions changed?) then (changed)
+    :Return the difference, require Sales confirmation;
+    |Sales|
+    :Confirm the new conditions, then resubmit;
+  else (unchanged)
+  endif
+  |System|
+  :Accept the order (idempotent by request key);
+}
+
+|Admin/Operator|
+:Open the queue; check retailer/SKU/quantity/delivery deadline/conditions;
+if (Order valid & before 12:00 cutoff?) then (yes)
+  :Approve the input demand;
+else (no / after cutoff)
+  :Reject with reason OR defer to the next run;
+endif
+
+|System|
+:Hand over SO (server receipt time + stored conditions) to F3;
+stop
+@enduml

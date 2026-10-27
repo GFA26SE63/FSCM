@@ -1,0 +1,79 @@
+@startuml finance_loyalty_v1.0
+title F5 - Credit, Completed, Loyalty and After-sales
+
+|System|
+start
+partition "Credit: raise and collect receivable" {
+  :C1 converted to a Credit PO (quote price pending delivery + stored term);
+  |Retailer|
+  :Receive all C1 parts in full (or resolve exceptions);
+  |System|
+  :Activate the receivable (e.g. 500,000d);\ndue date = full-receipt date + term (03/11 -> 10/11);
+  |Sales/Operator|
+  :Record collection of the allowed portion (evidence); separate disputed amount;
+  |System|
+  if (Outstanding = 0 & no pending case?) then (yes)
+    :C1 -> Completed;
+  else (debt/dispute remains)
+    :Keep tracking receivable (received-in-full but not paid-in-full -> not Completed);
+  endif
+}
+
+partition "Completed & award points (once)" {
+  |System|
+  :Evaluate all delivery parts + exceptions + money + pending cases;
+  if (No obligation/case left to resolve?) then (clean)
+    :Emit Completed event (e.g. P1);
+    :Award points ONCE on valid purchase value\n(612,000d -> 61 points, 1pt/10,000d, round down);
+  else (obligation remains)
+    :Not Completed;
+    stop
+  endif
+}
+
+partition "Reward redemption & point hold" {
+  |Retailer|
+  :Choose a reward (e.g. 60 points) + submit redemption request;
+  |System|
+  :Hold 60 points + reward quantity (available points left = 1);
+  |Authorized user|
+  if (Approve & deliver reward?) then (completed)
+    :Deliver reward; held 60 points -> used;
+  else (reject/cancel)
+    :Release reward + return held points;
+  endif
+}
+
+partition "Complaint, price adjustment, refund & point clawback" {
+  |Retailer|
+  :Open P1 / part W1 / batch A1, report 1 damaged carton + evidence;
+  |Admin|
+  if (Accept complaint?) then (accept)
+    :Reduce obligation by the affected goods' final price\n(A1 actual 72,000d: 612,000d -> 540,000d);
+    |System|
+    :Reconcile collected 612,000d vs obligation 540,000d -> refund 72,000d;
+    :Recompute target points on 540,000d (54) -> claw back 7 points\n(balance may go negative -> block new redemption);
+    |Admin/Operator|
+    :Create refund case, transfer externally, submit evidence;\ncase = "Awaiting verification";
+    if (Evidence valid?) then (yes)
+      :Mark "Refunded" 72,000d; net collected 540,000d; balance = 0;
+    else (reject)
+      :"Needs supplement" -> preparer supplements & resubmits same case;
+    endif
+  else (reject)
+    :Restore per the record;
+  endif
+}
+
+partition "Notifications, KPI and period close" {
+  |Sales Manager|
+  :Open KPI + period ranking for the group;
+  |Admin|
+  :Open dashboard/period report (filled/short, stock held/issued, money/exceptions);
+  :Close the period after reconciliation;
+}
+
+|System|
+:Close the money/points ledger + reports;\na post-Completed complaint opens a separate adjustment case, keeping history;
+stop
+@enduml
