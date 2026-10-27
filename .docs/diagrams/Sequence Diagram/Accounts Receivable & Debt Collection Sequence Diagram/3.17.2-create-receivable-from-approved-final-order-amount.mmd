@@ -6,10 +6,11 @@ Approval->>+Payment: publishApprovedFinalAmount(orderId, amount, term)
 Payment->>+DB: Create canonical payment ledger from approved snapshot
 Payment->>+DB: Store payment method, adjusted amount and outstanding balance
 alt Deferred payment
-    Payment->>+DB: Set due date = complete receipt date + 7/14/30 days
+    Payment->>+DB: Set due date = complete receipt date and 7/14/30 days
 else Prepaid or COD
     Payment->>+DB: Store dispatch/delivery payment gate
 end
 DB-->>-Payment: Receivable/payment ledger created
 Payment-->>-Approval: Financial gate ready
+
 

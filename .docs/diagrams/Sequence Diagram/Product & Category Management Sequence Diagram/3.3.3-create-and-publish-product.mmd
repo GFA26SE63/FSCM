@@ -20,6 +20,7 @@ sequenceDiagram
     else Invalid draft
         API-->>-UI: Validation error
     end
-    Note over UI,DB: Published product/price is immutable; change uses Inactive + new SKU or clone-to-Draft.
+    Note over UI,DB: Published product/price is immutable; change uses Inactive and new SKU or clone-to-Draft.
+
 
 
