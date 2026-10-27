@@ -1,0 +1,143 @@
+classDiagram
+direction LR
+
+class SalesOrder {
+  -Id : Guid «PK»
+  -OrderCode : string «UK»
+  -RetailerId : Guid «FK»
+  -PaymentMethod : string
+  -CreditTermDays : int
+  -FinalAmount : decimal
+  -Status : string
+}
+
+class Payment {
+  -Id : Guid «PK»
+  -SalesOrderId : Guid «FK, UK»
+  -Method : string
+  -Status : string
+  -Amount : decimal
+  -AdjustedAmount : decimal
+  -ConfirmedAmount : decimal
+  -FinalApprovedAt : DateTimeOffset
+  -DeliveredDate : DateOnly?
+  -DueDate : DateOnly?
+  -PaidDate : DateOnly?
+  -CollectionMethod : string?
+  -ConfirmedByUserId : Guid? «FK»
+  -ConfirmedAt : DateTimeOffset?
+  -Version : int
+}
+
+class ManualPayment {
+  -Id : Guid «PK»
+  -SalesOrderId : Guid «FK»
+  -Method : string
+  -Status : string
+  -Amount : decimal
+  -OperationKey : string «UK»
+  -ConfirmedByUserId : Guid? «FK»
+  -ConfirmedAt : DateTimeOffset?
+  -Note : string?
+  -Version : int
+}
+
+class ReceiptDiscrepancy {
+  -Id : Guid «PK»
+  -SalesOrderId : Guid «FK»
+  -ReceiptConfirmationId : Guid «FK»
+  -Status : string
+  -ReportedAt : DateTimeOffset
+  -ResolvedAt : DateTimeOffset?
+  -Note : string?
+}
+
+class ManualRefund {
+  -Id : Guid «PK»
+  -PaymentId : Guid «FK»
+  -SalesOrderId : Guid «FK»
+  -Amount : decimal
+  -Recipient : string
+  -Reason : string
+  -Status : string
+  -TransferredAt : DateTimeOffset?
+  -TransactionReference : string?
+  -VerifiedAt : DateTimeOffset?
+  -Version : int
+}
+
+class Retailer {
+  -Id : Guid «PK»
+  -UserAccountId : Guid? «FK»
+  -Code : string
+  -Name : string
+}
+
+class UserAccount {
+  -Id : Guid «PK»
+  -FullName : string
+  -Role : string
+}
+
+class RetailerReceivableResult {
+  +Id : Guid
+  +OrderId : Guid
+  +OrderCode : string
+  +Status : string
+  +OriginalOrderAmount : decimal
+  +FinalApprovedAmount : decimal
+  +ApprovedAdjustmentAmount : decimal
+  +AdjustedAmount : decimal
+  +ConfirmedCollectedAmount : decimal
+  +OutstandingAmount : decimal
+  +PendingDisputedAmount : decimal
+  +CollectibleAmount : decimal
+  +DueDate : DateOnly?
+  +IsOverdue : bool
+  +DaysOverdue : int
+  +PendingRefundAmount : decimal
+  +CompletedRefundAmount : decimal
+  +RefundDueAmount : decimal
+}
+
+class ReceivableCollectionHistory {
+  +Id : Guid
+  +Method : string
+  +Amount : decimal
+  +Status : string
+  +ConfirmedAt : DateTimeOffset?
+  +Reference : string?
+}
+
+class ReceivableDisputeHistory {
+  +Id : Guid
+  +Status : string
+  +DisputedAmount : decimal
+  +ReportedAt : DateTimeOffset
+  +ResolvedAt : DateTimeOffset?
+}
+
+class ReceivableRefundHistory {
+  +Id : Guid
+  +Amount : decimal
+  +Status : string
+  +TransferredAt : DateTimeOffset?
+  +TransactionReference : string?
+  +VerifiedAt : DateTimeOffset?
+  +Reason : string
+}
+
+Retailer "1" -- "0..*" SalesOrder : debtor orders
+SalesOrder "1" -- "0..1" Payment : receivable ledger
+SalesOrder "1" -- "0..*" ManualPayment : collection attempts
+UserAccount "0..1" -- "0..*" Payment : confirms collection
+UserAccount "0..1" -- "0..*" ManualPayment : confirms manual payment
+SalesOrder "1" -- "0..*" ReceiptDiscrepancy : disputes
+Payment "1" -- "0..*" ManualRefund : refund obligations
+Payment ..> RetailerReceivableResult : computes balances
+ManualPayment ..> ReceivableCollectionHistory : collection history
+ReceiptDiscrepancy ..> ReceivableDisputeHistory : dispute history
+ManualRefund ..> ReceivableRefundHistory : refund history
+RetailerReceivableResult "1" *-- "0..*" ReceivableCollectionHistory : collections
+RetailerReceivableResult "1" *-- "0..*" ReceivableDisputeHistory : disputes
+RetailerReceivableResult "1" *-- "0..*" ReceivableRefundHistory : refunds

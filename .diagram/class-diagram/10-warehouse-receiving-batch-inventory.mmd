@@ -1,0 +1,138 @@
+classDiagram
+direction LR
+
+class Warehouse {
+  -Id : Guid «PK»
+  -Code : string
+  -Name : string
+  -Type : string
+  -Address : string?
+  -MinimumStockThresholdCartons : int
+  -IsActive : bool
+}
+
+class GoodsReceipt {
+  -Id : Guid «PK»
+  -ReceiptCode : string «UK»
+  -IdempotencyKey : string? «UK»
+  -RequestHash : string?
+  -WarehouseId : Guid «FK»
+  -CreatedByUserId : Guid «FK»
+  -ApprovedByUserId : Guid? «FK»
+  -Status : string
+  -ReceivedAt : DateTimeOffset?
+  -ApprovedAt : DateTimeOffset?
+  -RejectionReason : string?
+  -Version : int
+}
+
+class GoodsReceiptLine {
+  -Id : Guid «PK»
+  -GoodsReceiptId : Guid «FK»
+  -ProductId : Guid «FK»
+  -SourceLotCode : string?
+  -ReceivedQuantity : decimal
+  -ProductionDate : DateOnly
+  -ExpirationDate : DateOnly
+  -CreatedAt : DateTimeOffset
+}
+
+class Batch {
+  -Id : Guid «PK»
+  -ParentBatchId : Guid? «FK»
+  -RootBatchId : Guid? «FK»
+  -WarehouseId : Guid «FK»
+  -ProductId : Guid «FK»
+  -GoodsReceiptLineId : Guid? «FK»
+  -BatchCode : string «UK»
+  -Quantity : decimal
+  -ExpirationDate : DateOnly
+  -ExpiryStatus : string
+  -StockStatus : string
+  -Version : int
+}
+
+class InventoryBalance {
+  -Id : Guid «PK»
+  -BatchId : Guid «FK, UK»
+  -PhysicalQuantity : decimal
+  -ReservedQuantity : decimal
+  -AvailableQuantity : decimal
+  -Version : int
+  -UpdatedAt : DateTimeOffset
+}
+
+class BatchQrLabel {
+  -Id : Guid «PK»
+  -BatchId : Guid «FK»
+  -CurrentWarehouseId : Guid «FK»
+  -GoodsReceiptId : Guid? «FK»
+  -ParentLabelId : Guid? «FK»
+  -RootLabelId : Guid? «FK»
+  -QrCode : string «UK»
+  -Quantity : decimal
+  -Status : string
+  -Version : int
+}
+
+class QrLabelEvent {
+  -Id : Guid «PK»
+  -BatchQrLabelId : Guid «FK»
+  -WarehouseId : Guid «FK»
+  -PerformedByUserId : Guid «FK»
+  -OperationKey : string «UK»
+  -EventType : string
+  -FromStatus : string
+  -ToStatus : string
+  -Quantity : decimal
+  -OccurredAt : DateTimeOffset
+}
+
+class InventoryTransaction {
+  -Id : Guid «PK»
+  -BatchId : Guid «FK»
+  -WarehouseId : Guid «FK»
+  -ProductId : Guid «FK»
+  -GoodsReceiptId : Guid? «FK»
+  -GoodsReceiptLineId : Guid? «FK»
+  -CreatedByUserId : Guid «FK»
+  -TransactionType : string
+  -SourceType : string
+  -SourceId : Guid «REF»
+  -PhysicalQuantityDelta : decimal
+  -ReservedQuantityDelta : decimal
+  -AvailableQuantityAfter : decimal
+  -OccurredAt : DateTimeOffset
+}
+
+class Product {
+  -Id : Guid «PK»
+  -Sku : string
+  -Name : string
+  -Unit : string
+}
+
+class UserAccount {
+  -Id : Guid «PK»
+  -FullName : string
+  -Role : string
+}
+
+Warehouse "1" -- "0..*" GoodsReceipt : receives at
+UserAccount "1" -- "0..*" GoodsReceipt : creates or approves
+GoodsReceipt "1" *-- "1..*" GoodsReceiptLine : lines
+Product "1" -- "0..*" GoodsReceiptLine : product
+GoodsReceiptLine "0..1" -- "0..*" Batch : creates batches
+Warehouse "1" -- "0..*" Batch : stores
+Product "1" -- "0..*" Batch : inventory of
+Batch "0..1" --> "0..*" Batch : parent lineage
+Batch "0..1" --> "0..*" Batch : root lineage
+Batch "1" *-- "1" InventoryBalance : balance
+Batch "1" *-- "0..*" BatchQrLabel : labels
+GoodsReceipt "0..1" -- "0..*" BatchQrLabel : trace origin
+Warehouse "1" -- "0..*" BatchQrLabel : current location
+BatchQrLabel "1" *-- "0..*" QrLabelEvent : lifecycle
+UserAccount "1" -- "0..*" QrLabelEvent : performs
+Batch "1" -- "0..*" InventoryTransaction : ledger
+GoodsReceipt "0..1" -- "0..*" InventoryTransaction : source document
+UserAccount "1" -- "0..*" InventoryTransaction : records

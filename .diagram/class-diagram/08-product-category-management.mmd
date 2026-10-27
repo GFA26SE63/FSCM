@@ -1,0 +1,92 @@
+classDiagram
+direction LR
+
+class ProductCategory {
+  -Id : Guid «PK»
+  -ParentCategoryId : Guid? «FK»
+  -Code : string «UK»
+  -Name : string
+  -Description : string?
+  -IsActive : bool
+  -CreatedAt : DateTimeOffset
+  -UpdatedAt : DateTimeOffset
+}
+
+class Product {
+  -Id : Guid «PK»
+  -ProductCategoryId : Guid «FK»
+  -ReplacesProductId : Guid? «FK, UK»
+  -Sku : string «UK»
+  -Name : string
+  -Unit : string
+  -ShelfLifeHours : int
+  -NearDateThresholdHours : int
+  -Status : string
+  -PublishedAt : DateTimeOffset?
+  -InactivatedAt : DateTimeOffset?
+  -CreatedAt : DateTimeOffset
+  -UpdatedAt : DateTimeOffset
+}
+
+class ProductPrice {
+  -Id : Guid «PK»
+  -ProductId : Guid «FK»
+  -UnitPrice : decimal
+  -EffectiveFrom : DateTimeOffset
+  -EffectiveTo : DateTimeOffset?
+  -IsActive : bool
+  -CreatedAt : DateTimeOffset
+}
+
+class GoodsReceiptLine {
+  -Id : Guid «PK»
+  -GoodsReceiptId : Guid «FK»
+  -ProductId : Guid «FK»
+  -ReceivedQuantity : decimal
+  -ProductionDate : DateOnly
+  -ExpirationDate : DateOnly
+}
+
+class Batch {
+  -Id : Guid «PK»
+  -ProductId : Guid «FK»
+  -WarehouseId : Guid «FK»
+  -BatchCode : string «UK»
+  -Quantity : decimal
+  -ExpirationDate : DateOnly
+  -ExpiryStatus : string
+  -StockStatus : string
+}
+
+class PromotionProduct {
+  -Id : Guid «PK»
+  -PromotionId : Guid «FK»
+  -ProductId : Guid «FK»
+}
+
+class PromotionCategory {
+  -Id : Guid «PK»
+  -PromotionId : Guid «FK»
+  -ProductCategoryId : Guid «FK»
+}
+
+class RetailerProductMlor {
+  -Id : Guid «PK»
+  -RetailerId : Guid «FK»
+  -ProductCategoryId : Guid? «FK»
+  -ProductId : Guid? «FK»
+  -MinimumLifeRatio : decimal
+  -Version : int
+  -IsActive : bool
+}
+
+ProductCategory "0..1" -- "0..*" ProductCategory : parent category
+ProductCategory "1" *-- "0..*" Product : classifies
+Product "0..1" --> "0..1" Product : replaces
+Product "1" *-- "0..*" ProductPrice : price history
+Product "1" -- "0..*" GoodsReceiptLine : received product
+Product "1" -- "0..*" Batch : inventory batches
+Product "1" -- "0..*" PromotionProduct : promotion scope
+ProductCategory "1" -- "0..*" PromotionCategory : promotion scope
+Product "0..1" -- "0..*" RetailerProductMlor : SKU MLOR
+ProductCategory "0..1" -- "0..*" RetailerProductMlor : category MLOR

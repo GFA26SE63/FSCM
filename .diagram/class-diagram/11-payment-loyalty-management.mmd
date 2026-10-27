@@ -1,0 +1,150 @@
+classDiagram
+direction LR
+
+class Payment {
+  -Id : Guid «PK»
+  -SalesOrderId : Guid «FK, UK»
+  -Method : string
+  -Status : string
+  -Amount : decimal
+  -AdjustedAmount : decimal
+  -ConfirmedAmount : decimal
+  -FinalApprovedAt : DateTimeOffset
+  -DeliveredDate : DateOnly?
+  -DueDate : DateOnly?
+  -PaidDate : DateOnly?
+  -CollectionMethod : string?
+  -PayOsOrderCode : long? «UK»
+  -PayOsPaymentLinkId : string? «UK»
+  -PayOsReference : string? «UK»
+  -ConfirmedByUserId : Guid? «FK»
+  -ConfirmedAt : DateTimeOffset?
+  -Version : int
+}
+
+class ManualPayment {
+  -Id : Guid «PK»
+  -SalesOrderId : Guid «FK»
+  -Method : string
+  -Status : string
+  -Amount : decimal
+  -OperationKey : string «UK»
+  -RequestHash : string
+  -ConfirmedByUserId : Guid? «FK»
+  -ConfirmedAt : DateTimeOffset?
+  -Note : string?
+  -Version : int
+}
+
+class SalesOrder {
+  -Id : Guid «PK»
+  -OrderCode : string
+  -RetailerId : Guid «FK»
+  -PaymentMethod : string
+  -FinalAmount : decimal
+  -CreditTermDays : int
+  -Status : string
+}
+
+class Retailer {
+  -Id : Guid «PK»
+  -Code : string
+  -Name : string
+  -UserAccountId : Guid? «FK»
+}
+
+class RetailerLoyalty {
+  -Id : Guid «PK»
+  -RetailerId : Guid «FK, UK»
+  -CurrentPoints : int
+  -HeldPoints : int
+  -LifetimeEarnedPoints : int
+  -LifetimeRedeemedPoints : int
+  -CreatedAt : DateTimeOffset
+  -UpdatedAt : DateTimeOffset
+}
+
+class LoyaltyProgram {
+  -Id : Guid «PK»
+  -Code : string «UK»
+  -Name : string
+  -Description : string?
+  -SpendAmountPerPoint : decimal
+  -MinimumRedeemPoints : int
+  -StartAt : DateTimeOffset
+  -EndAt : DateTimeOffset
+  -PointsExpireAt : DateTimeOffset?
+  -IsActive : bool
+  -CreatedByUserId : Guid «FK»
+}
+
+class LoyaltyProgramRetailer {
+  -Id : Guid «PK»
+  -LoyaltyProgramId : Guid «FK»
+  -RetailerId : Guid «FK»
+}
+
+class LoyaltyTransaction {
+  -Id : Guid «PK»
+  -LoyaltyProgramId : Guid «FK»
+  -RetailerLoyaltyId : Guid «FK»
+  -SalesOrderId : Guid? «FK»
+  -CreatedByUserId : Guid? «FK»
+  -TransactionType : string
+  -Points : int
+  -BalanceAfter : int
+  -Note : string?
+  -CreatedAt : DateTimeOffset
+}
+
+class LoyaltyReward {
+  -Id : Guid «PK»
+  -LoyaltyProgramId : Guid «FK»
+  -Code : string «UK»
+  -Name : string
+  -RewardType : string
+  -RequiredPoints : int
+  -DiscountAmount : decimal?
+  -DiscountPercent : decimal?
+  -AvailableQuantity : int?
+  -IsActive : bool
+}
+
+class RewardRedemption {
+  -Id : Guid «PK»
+  -RetailerId : Guid «FK»
+  -LoyaltyRewardId : Guid «FK»
+  -LoyaltyTransactionId : Guid? «FK, UK»
+  -SalesOrderId : Guid? «FK»
+  -ClientRequestId : string
+  -RedeemedPoints : int
+  -Status : string
+  -RedeemedByUserId : Guid «FK»
+  -RedeemedAt : DateTimeOffset
+  -FulfilledAt : DateTimeOffset?
+  -CancelledAt : DateTimeOffset?
+}
+
+class UserAccount {
+  -Id : Guid «PK»
+  -FullName : string
+  -Role : string
+}
+
+SalesOrder "1" -- "0..1" Payment : receivable
+SalesOrder "1" -- "0..*" ManualPayment : manual collections
+UserAccount "0..1" -- "0..*" Payment : confirms
+UserAccount "0..1" -- "0..*" ManualPayment : confirms
+Retailer "1" -- "0..*" SalesOrder : orders
+Retailer "1" *-- "0..1" RetailerLoyalty : points account
+LoyaltyProgram "1" *-- "0..*" LoyaltyReward : rewards
+LoyaltyProgram "1" -- "0..*" LoyaltyProgramRetailer : scope
+Retailer "1" -- "0..*" LoyaltyProgramRetailer : enrolled
+LoyaltyProgram "1" -- "0..*" LoyaltyTransaction : rules
+RetailerLoyalty "1" *-- "0..*" LoyaltyTransaction : ledger
+SalesOrder "0..1" -- "0..*" LoyaltyTransaction : earning source
+LoyaltyReward "1" -- "0..*" RewardRedemption : redeemed reward
+Retailer "1" -- "0..*" RewardRedemption : redeems
+LoyaltyTransaction "0..1" -- "0..1" RewardRedemption : redemption debit
+SalesOrder "0..1" -- "0..*" RewardRedemption : applied to
+UserAccount "1" -- "0..*" RewardRedemption : performs

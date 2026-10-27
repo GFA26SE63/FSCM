@@ -1,0 +1,133 @@
+classDiagram
+direction LR
+
+class ProductPrice {
+  -Id : Guid «PK»
+  -ProductId : Guid «FK»
+  -UnitPrice : decimal
+  -EffectiveFrom : DateTimeOffset
+  -EffectiveTo : DateTimeOffset?
+  -IsActive : bool
+  -CreatedAt : DateTimeOffset
+}
+
+class SalesOrderLine {
+  -Id : Guid «PK»
+  -SalesOrderId : Guid «FK»
+  -ProductId : Guid «FK»
+  -ProductPriceId : Guid «FK»
+  -UnitPrice : decimal
+  -GrossAmount : decimal
+  -DiscountAmount : decimal
+  -NetAmount : decimal
+  -MlorSourceRuleId : Guid? «FK»
+  -MlorSourceVersion : int
+  -MlorMinimumLifeRatio : decimal
+  -PricedAt : DateTimeOffset
+}
+
+class OrderPromotion {
+  -Id : Guid «PK»
+  -SalesOrderLineId : Guid «FK»
+  -PromotionId : Guid «FK»
+  -PromotionCodeSnapshot : string
+  -PromotionTypeSnapshot : string
+  -MinimumQuantitySnapshot : decimal
+  -DiscountPercent : decimal
+  -DiscountAmount : decimal
+  -IsServerFinal : bool
+  -AppliedAt : DateTimeOffset
+}
+
+class AllocationRunLine {
+  -Id : Guid «PK»
+  -SalesOrderLineId : Guid «FK»
+  -ListUnitPrice : decimal
+  -BaseNetUnitPrice : decimal
+  -TotalShelfLifeHours : int
+  -EffectiveMlorRatio : decimal
+}
+
+class AllocationPlanVersion {
+  -Id : Guid «PK»
+  -AllocationRunId : Guid «FK»
+  -VersionNumber : int
+  -Status : string
+  -PricedAt : DateTimeOffset
+  -TotalFinalAmount : decimal
+}
+
+class AllocationPlanPrice {
+  -Id : Guid «PK»
+  -AllocationPlanVersionId : Guid «FK»
+  -AllocationRunLineId : Guid «FK»
+  -BatchId : Guid «REF»
+  -WarehouseId : Guid «REF»
+  -Quantity : decimal
+  -ListUnitPrice : decimal
+  -BaseNetUnitPrice : decimal
+  -PricedAt : DateTimeOffset
+  -BatchExpiresAt : DateTimeOffset
+  -TotalShelfLifeHours : int
+  -RemainingShelfLifePercent : decimal
+  -ShelfLifeDiscountTierId : Guid? «REF»
+  -DiscountType : string?
+  -DiscountValue : decimal?
+  -ShelfLifeDiscountPerUnit : decimal
+  -FinalNetUnitPrice : decimal
+  -Amount : decimal
+  -DiscountTableVersion : int
+  -Explanation : string
+}
+
+class ShelfLifeDiscountTable {
+  -Id : Guid «PK»
+  -Version : int «UK»
+  -EffectiveFrom : DateTimeOffset
+  -EffectiveTo : DateTimeOffset?
+  -IsActive : bool
+}
+
+class ShelfLifeDiscountTier {
+  -Id : Guid «PK»
+  -ShelfLifeDiscountTableId : Guid «FK»
+  -Scope : string
+  -ProductId : Guid? «FK»
+  -ProductCategoryId : Guid? «FK»
+  -MinRemainingPercent : decimal
+  -MaxRemainingPercent : decimal
+  -DiscountType : string
+  -DiscountValue : decimal
+}
+
+class Batch {
+  -Id : Guid «PK»
+  -BatchCode : string
+  -ProductId : Guid «FK»
+  -ExpirationDate : DateOnly
+}
+
+class Product {
+  -Id : Guid «PK»
+  -Sku : string
+  -Name : string
+}
+
+class Promotion {
+  -Id : Guid «PK»
+  -Code : string
+  -Name : string
+  -PromotionType : string
+}
+
+Product "1" *-- "0..*" ProductPrice : list-price versions
+ProductPrice "1" -- "0..*" SalesOrderLine : source snapshot
+SalesOrderLine "1" *-- "0..*" OrderPromotion : ordinary promotion snapshot
+Promotion "1" -- "0..*" OrderPromotion : source rule
+SalesOrderLine "1" -- "0..*" AllocationRunLine : allocation snapshot
+AllocationPlanVersion "1" *-- "0..*" AllocationPlanPrice : immutable fragment prices
+AllocationRunLine "1" -- "0..*" AllocationPlanPrice : priced line
+Batch "1" -- "0..*" AllocationPlanPrice : price by batch
+ShelfLifeDiscountTable "1" *-- "1..*" ShelfLifeDiscountTier : versioned tiers
+ShelfLifeDiscountTier "0..1" -- "0..*" AllocationPlanPrice : applied tier
+Product "1" -- "0..*" Batch : batches

@@ -1,0 +1,110 @@
+classDiagram
+direction LR
+
+class UserAccount {
+  -Id : Guid «PK»
+  -EntraObjectId : string? «UK»
+  -IdentityProvider : string
+  -Email : string «UK»
+  -FullName : string
+  -Role : string
+  -IsActive : bool
+  -CreatedAt : DateTimeOffset
+  -UpdatedAt : DateTimeOffset
+}
+
+class UserCredential {
+  -Id : Guid «PK»
+  -UserAccountId : Guid «FK, UK»
+  -PasswordHash : string
+  -FailedLoginCount : int
+  -LockoutEndAt : DateTimeOffset?
+  -MustChangePassword : bool
+  -PasswordChangedAt : DateTimeOffset?
+  -CreatedAt : DateTimeOffset
+  -UpdatedAt : DateTimeOffset
+}
+
+class RefreshToken {
+  -Id : Guid «PK»
+  -UserAccountId : Guid «FK»
+  -TokenHash : string «UK»
+  -ExpiresAt : DateTimeOffset
+  -CreatedAt : DateTimeOffset
+  -RevokedAt : DateTimeOffset?
+  -ReplacedByTokenId : Guid? «FK»
+  -CreatedByIpAddress : string?
+  -RevokedByIpAddress : string?
+}
+
+class AccountToken {
+  -Id : Guid «PK»
+  -UserAccountId : Guid «FK»
+  -Purpose : string
+  -TokenHash : string «UK»
+  -ExpiresAt : DateTimeOffset
+  -ConsumedAt : DateTimeOffset?
+  -CreatedAt : DateTimeOffset
+}
+
+class UserWarehouseAssignment {
+  -Id : Guid «PK»
+  -UserAccountId : Guid «FK»
+  -WarehouseId : Guid «FK»
+  -AssignedAt : DateTimeOffset
+  -IsActive : bool
+}
+
+class UserRegionAssignment {
+  -Id : Guid «PK»
+  -UserAccountId : Guid «FK»
+  -RegionId : Guid «FK»
+  -AssignedAt : DateTimeOffset
+  -UnassignedAt : DateTimeOffset?
+  -IsActive : bool
+}
+
+class SalesGroupMember {
+  -Id : Guid «PK»
+  -SalesGroupId : Guid «FK»
+  -UserAccountId : Guid «FK»
+  -AssignedAt : DateTimeOffset
+  -UnassignedAt : DateTimeOffset?
+  -IsActive : bool
+}
+
+class Warehouse {
+  -Id : Guid «PK»
+  -Code : string
+  -Name : string
+  -Type : string
+  -Address : string?
+  -IsActive : bool
+}
+
+class Region {
+  -Id : Guid «PK»
+  -Code : string
+  -Name : string
+  -IsActive : bool
+}
+
+class SalesGroup {
+  -Id : Guid «PK»
+  -RegionId : Guid «FK»
+  -Code : string
+  -Name : string
+  -IsActive : bool
+}
+
+UserAccount "1" *-- "0..1" UserCredential : local credential
+UserAccount "1" *-- "0..*" RefreshToken : sessions
+RefreshToken "0..1" --> "0..*" RefreshToken : replaces
+UserAccount "1" *-- "0..*" AccountToken : account actions
+UserAccount "1" -- "0..*" UserWarehouseAssignment : warehouse scope
+Warehouse "1" -- "0..*" UserWarehouseAssignment : assigned users
+UserAccount "1" -- "0..*" UserRegionAssignment : region scope
+Region "1" -- "0..*" UserRegionAssignment : assigned users
+UserAccount "1" -- "0..*" SalesGroupMember : memberships
+SalesGroup "1" -- "0..*" SalesGroupMember : members
+Region "1" -- "0..*" SalesGroup : contains

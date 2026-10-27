@@ -1,0 +1,147 @@
+classDiagram
+direction LR
+
+class ReceiptDiscrepancy {
+  -Id : Guid «PK»
+  -SalesOrderId : Guid «FK»
+  -ReceiptConfirmationId : Guid «FK»
+  -ReportedByRetailerUserId : Guid «FK»
+  -ReviewedByUserId : Guid? «FK»
+  -Status : string
+  -Note : string?
+  -ReportedAt : DateTimeOffset
+  -ReviewedAt : DateTimeOffset?
+  -ResolvedAt : DateTimeOffset?
+}
+
+class ReceiptDiscrepancyItem {
+  -Id : Guid «PK»
+  -ReceiptDiscrepancyId : Guid «FK»
+  -BatchId : Guid? «FK»
+  -IssueType : string
+  -ExpectedQuantity : decimal
+  -ActualReceivedQuantity : decimal
+  -EvidenceBlobUrl : string?
+  -Note : string?
+}
+
+class ReceiptConfirmation {
+  -Id : Guid «PK»
+  -SalesOrderId : Guid «FK»
+  -ShipmentId : Guid? «FK»
+  -ConfirmedByRetailerUserId : Guid «FK»
+  -Status : string
+  -ConfirmedAt : DateTimeOffset
+}
+
+class ReceiptConfirmationItem {
+  -Id : Guid «PK»
+  -ReceiptConfirmationId : Guid «FK»
+  -SalesOrderLineId : Guid? «FK»
+  -BatchId : Guid «FK»
+  -BatchQrLabelId : Guid «FK»
+  -ExpectedQuantity : decimal
+  -ReceivedQuantity : decimal
+  -DamagedQuantity : decimal
+  -MissingQuantity : decimal
+}
+
+class SalesOrder {
+  -Id : Guid «PK»
+  -OrderCode : string
+  -RetailerId : Guid «FK»
+  -FinalAmount : decimal
+  -Status : string
+}
+
+class Payment {
+  -Id : Guid «PK»
+  -SalesOrderId : Guid «FK, UK»
+  -Amount : decimal
+  -AdjustedAmount : decimal
+  -ConfirmedAmount : decimal
+  -Status : string
+  -Version : int
+}
+
+class AdjustReceivableData {
+  +Amount : decimal
+  +Reason : string
+  +ExpectedVersion : int
+}
+
+class ManualRefund {
+  -Id : Guid «PK»
+  -PaymentId : Guid «FK»
+  -SalesOrderId : Guid «FK»
+  -Amount : decimal
+  -Recipient : string
+  -Reason : string
+  -Status : string
+  -CreateOperationKey : string «UK»
+  -CreateRequestHash : string
+  -EvidenceOperationKey : string? «UK»
+  -TransferredAt : DateTimeOffset?
+  -TransactionReference : string?
+  -EvidenceReference : string?
+  -SubmittedByUserId : Guid? «FK»
+  -SubmittedAt : DateTimeOffset?
+  -VerificationOperationKey : string? «UK»
+  -VerifiedByUserId : Guid? «FK»
+  -VerifiedAt : DateTimeOffset?
+  -VerificationNote : string?
+  -CreatedByUserId : Guid «FK»
+  -Version : int
+}
+
+class Batch {
+  -Id : Guid «PK»
+  -BatchCode : string
+  -ProductId : Guid «FK»
+  -ExpirationDate : DateOnly
+}
+
+class BatchQrLabel {
+  -Id : Guid «PK»
+  -BatchId : Guid «FK»
+  -QrCode : string «UK»
+  -Quantity : decimal
+  -Status : string
+}
+
+class UserAccount {
+  -Id : Guid «PK»
+  -FullName : string
+  -Role : string
+}
+
+class ComplaintResult {
+  +Id : Guid
+  +Code : string
+  +OrderCode : string
+  +RetailerCode : string
+  +Sku : string
+  +ExpectedQuantity : decimal
+  +ActualQuantity : decimal
+  +IssueType : string
+  +Status : string
+  +LabelCode : string?
+  +EvidenceUrl : string?
+  +Response : string?
+}
+
+SalesOrder "1" -- "0..*" ReceiptConfirmation : receipt evidence
+ReceiptConfirmation "1" *-- "1..*" ReceiptConfirmationItem : received quantities
+ReceiptConfirmation "1" -- "0..*" ReceiptDiscrepancy : complaints
+ReceiptDiscrepancy "1" *-- "1..*" ReceiptDiscrepancyItem : complaint items
+Batch "0..1" -- "0..*" ReceiptDiscrepancyItem : affected batch
+Batch "1" *-- "0..*" BatchQrLabel : trace labels
+BatchQrLabel "1" -- "0..*" ReceiptConfirmationItem : scan evidence
+UserAccount "1" -- "0..*" ReceiptDiscrepancy : reports or reviews
+SalesOrder "1" -- "0..1" Payment : receivable
+ReceiptDiscrepancy ..> AdjustReceivableData : approved adjustment
+AdjustReceivableData ..> Payment : changes adjusted amount
+Payment "1" -- "0..*" ManualRefund : refunds excess collection
+SalesOrder "1" -- "0..*" ManualRefund : order refunds
+UserAccount "1" -- "0..*" ManualRefund : creates submits verifies
+ReceiptDiscrepancy ..> ComplaintResult : API projection

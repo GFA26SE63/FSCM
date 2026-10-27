@@ -1,0 +1,145 @@
+classDiagram
+direction LR
+
+class ExpirySweepRun {
+  -Id : Guid «PK»
+  -BusinessDate : DateOnly
+  -Status : string
+  -BatchesScanned : int
+  -StatusesUpdated : int
+  -BatchesExpired : int
+  -Error : string?
+  -StartedAt : DateTimeOffset
+  -CompletedAt : DateTimeOffset?
+}
+
+class Batch {
+  -Id : Guid «PK»
+  -WarehouseId : Guid «FK»
+  -ProductId : Guid «FK»
+  -BatchCode : string «UK»
+  -Quantity : decimal
+  -ExpirationDate : DateOnly
+  -ExpiryStatus : string
+  -StockStatus : string
+  -Version : int
+}
+
+class InventoryBalance {
+  -Id : Guid «PK»
+  -BatchId : Guid «FK, UK»
+  -PhysicalQuantity : decimal
+  -ReservedQuantity : decimal
+  -AvailableQuantity : decimal
+  -Version : int
+  -UpdatedAt : DateTimeOffset
+}
+
+class InventoryLock {
+  -Id : Guid «PK»
+  -BatchId : Guid «FK»
+  -WarehouseId : Guid «FK»
+  -ProductId : Guid «FK»
+  -LockedQuantity : decimal
+  -Status : string
+  -Reason : string
+  -RequiresResolution : bool
+  -LockedByUserId : Guid? «FK»
+  -ReleasedByUserId : Guid? «REF»
+  -ReleasedAt : DateTimeOffset?
+  -Note : string?
+  -Version : int
+}
+
+class WriteOff {
+  -Id : Guid «PK»
+  -WriteOffCode : string «UK»
+  -WarehouseId : Guid «FK»
+  -CreatedByUserId : Guid «FK»
+  -Status : string
+  -Reason : string?
+  -CreatedAt : DateTimeOffset
+  -UpdatedAt : DateTimeOffset
+}
+
+class WriteOffItem {
+  -Id : Guid «PK»
+  -WriteOffId : Guid «FK»
+  -BatchId : Guid «FK»
+  -Quantity : decimal
+  -Reason : string?
+  -CreatedAt : DateTimeOffset
+}
+
+class InventoryTransaction {
+  -Id : Guid «PK»
+  -BatchId : Guid «FK»
+  -WarehouseId : Guid «FK»
+  -ProductId : Guid «FK»
+  -TransactionType : string
+  -SourceType : string
+  -SourceId : Guid «REF»
+  -PhysicalQuantityDelta : decimal
+  -ReservedQuantityDelta : decimal
+  -PhysicalQuantityAfter : decimal
+  -ReservedQuantityAfter : decimal
+  -AvailableQuantityAfter : decimal
+  -OccurredAt : DateTimeOffset
+}
+
+class OutboxMessage {
+  -Id : Guid «PK»
+  -EventType : string
+  -AggregateType : string
+  -AggregateId : Guid «REF»
+  -Payload : json
+  -Status : string
+  -RetryCount : int
+  -ProcessedAt : DateTimeOffset?
+}
+
+class Notification {
+  -Id : Guid «PK»
+  -UserAccountId : Guid «FK»
+  -OutboxMessageId : Guid? «FK»
+  -Type : string
+  -Title : string
+  -Message : string
+  -IsRead : bool
+  -CreatedAt : DateTimeOffset
+}
+
+class Warehouse {
+  -Id : Guid «PK»
+  -Code : string
+  -Name : string
+}
+
+class Product {
+  -Id : Guid «PK»
+  -Sku : string
+  -Name : string
+}
+
+class UserAccount {
+  -Id : Guid «PK»
+  -FullName : string
+  -Role : string
+}
+
+ExpirySweepRun ..> Batch : scans and updates
+Warehouse "1" -- "0..*" Batch : stores
+Product "1" -- "0..*" Batch : product lots
+Batch "1" *-- "1" InventoryBalance : balance
+Batch "1" -- "0..*" InventoryLock : blocked quantity
+Warehouse "1" -- "0..*" InventoryLock : lock location
+Product "1" -- "0..*" InventoryLock : locked product
+UserAccount "0..1" -- "0..*" InventoryLock : creates lock
+Warehouse "1" -- "0..*" WriteOff : disposal documents
+UserAccount "1" -- "0..*" WriteOff : creates
+WriteOff "1" *-- "1..*" WriteOffItem : items
+Batch "1" -- "0..*" WriteOffItem : reduces stock
+Batch "1" -- "0..*" InventoryTransaction : stock ledger
+ExpirySweepRun ..> OutboxMessage : emits expiry event
+OutboxMessage "0..1" -- "0..*" Notification : dispatch source
+UserAccount "1" *-- "0..*" Notification : recipient

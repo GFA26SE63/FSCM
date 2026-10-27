@@ -1,0 +1,130 @@
+classDiagram
+direction LR
+
+class RunPickingList {
+  -Id : Guid «PK»
+  -PickingCode : string «UK»
+  -AllocationRunId : Guid «FK»
+  -AllocationPlanVersionId : Guid «FK»
+  -WarehouseId : Guid «FK»
+  -Status : string
+  -IssuedAt : DateTimeOffset
+  -CompletedAt : DateTimeOffset?
+  -ExceptionType : string?
+  -ExceptionNote : string?
+  -Version : int
+}
+
+class RunPickingGather {
+  -Id : Guid «PK»
+  -RunPickingListId : Guid «FK»
+  -BatchId : Guid «FK»
+  -RequiredQuantity : decimal
+  -PickedQuantity : decimal
+  -Status : string
+}
+
+class RunPickingSplit {
+  -Id : Guid «PK»
+  -RunPickingGatherId : Guid «FK»
+  -AllocationRunAllocationId : Guid «FK, UK»
+  -AllocationPlanPriceId : Guid «FK»
+  -SalesOrderId : Guid «REF»
+  -SalesOrderLineId : Guid «REF»
+  -Quantity : decimal
+  -PickedQuantity : decimal
+}
+
+class Shipment {
+  -Id : Guid «PK»
+  -SalesOrderId : Guid «FK»
+  -WarehouseId : Guid «FK»
+  -RunPickingListId : Guid «FK»
+  -ShipmentCode : string «UK»
+  -Status : string
+  -DriverId : Guid? «FK»
+  -VehicleId : Guid? «FK»
+  -TotalQuantity : decimal
+  -ReceivedQuantity : decimal
+  -ReadyAt : DateTimeOffset?
+  -IssuedAt : DateTimeOffset?
+  -AssignedAt : DateTimeOffset?
+  -DispatchedAt : DateTimeOffset?
+  -ReceivedAt : DateTimeOffset?
+  -ExceptionReason : string?
+  -Version : int
+}
+
+class SalesOrder {
+  -Id : Guid «PK»
+  -OrderCode : string
+  -Status : string
+  -PaymentMethod : string
+  -Version : int
+}
+
+class Payment {
+  -Id : Guid «PK»
+  -SalesOrderId : Guid «FK, UK»
+  -Status : string
+  -AdjustedAmount : decimal
+  -ConfirmedAmount : decimal
+}
+
+class Driver {
+  -Id : Guid «PK»
+  -WarehouseId : Guid «FK»
+  -Code : string
+  -FullName : string
+  -IsActive : bool
+}
+
+class Vehicle {
+  -Id : Guid «PK»
+  -WarehouseId : Guid «FK»
+  -PlateNumber : string
+  -Capacity : decimal
+  -IsActive : bool
+}
+
+class ReceiptConfirmation {
+  -Id : Guid «PK»
+  -SalesOrderId : Guid «FK»
+  -ShipmentId : Guid? «FK, UK»
+  -ConfirmedByRetailerUserId : Guid «FK»
+  -Status : string
+  -ConfirmedAt : DateTimeOffset
+}
+
+class OrderShipmentReadinessResult {
+  +SalesOrderId : Guid
+  +OrderCode : string
+  +IsReady : bool
+  +PaymentSettled : bool
+  +HasException : bool
+  +BlockingReasons : List~string~
+  +Parts : List~ShipmentReadinessPartResult~
+}
+
+class ShipmentReadinessPartResult {
+  +ShipmentId : Guid?
+  +ShipmentCode : string?
+  +WarehouseId : Guid
+  +WarehouseCode : string
+  +Status : string
+  +ExceptionReason : string?
+}
+
+RunPickingList "1" *-- "1..*" RunPickingGather : gather work
+RunPickingGather "1" *-- "1..*" RunPickingSplit : order portions
+RunPickingList "1" -- "0..*" Shipment : produces when ready
+SalesOrder "1" -- "0..*" Shipment : all-or-nothing parts
+SalesOrder "1" -- "0..1" Payment : readiness condition
+Driver "0..1" -- "0..*" Shipment : dispatch assignment
+Vehicle "0..1" -- "0..*" Shipment : dispatch assignment
+Shipment "0..1" -- "0..1" ReceiptConfirmation : receipt outcome
+SalesOrder ..> OrderShipmentReadinessResult : evaluates
+Payment ..> OrderShipmentReadinessResult : settlement gate
+RunPickingList ..> ShipmentReadinessPartResult : picking state
+Shipment ..> ShipmentReadinessPartResult : part state
+OrderShipmentReadinessResult "1" *-- "1..*" ShipmentReadinessPartResult : parts

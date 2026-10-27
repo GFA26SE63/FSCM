@@ -1,0 +1,115 @@
+classDiagram
+direction LR
+
+class Promotion {
+  -Id : Guid «PK»
+  -Code : string «UK»
+  -Name : string
+  -PromotionType : string
+  -MinimumQuantity : decimal
+  -DiscountPercent : decimal
+  -StartAt : DateTimeOffset
+  -EndAt : DateTimeOffset
+  -IsActive : bool
+  -CreatedByUserId : Guid «FK»
+  -CreatedAt : DateTimeOffset
+  -UpdatedAt : DateTimeOffset
+}
+
+class PromotionProduct {
+  -Id : Guid «PK»
+  -PromotionId : Guid «FK»
+  -ProductId : Guid «FK»
+}
+
+class PromotionCategory {
+  -Id : Guid «PK»
+  -PromotionId : Guid «FK»
+  -ProductCategoryId : Guid «FK»
+}
+
+class PromotionRetailer {
+  -Id : Guid «PK»
+  -PromotionId : Guid «FK»
+  -RetailerId : Guid «FK»
+}
+
+class BatchPromotion {
+  -Id : Guid «PK»
+  -BatchId : Guid «FK»
+  -PromotionId : Guid «FK»
+  -AssignedByUserId : Guid «FK»
+  -IsActive : bool
+  -AssignedAt : DateTimeOffset
+  -RemovedAt : DateTimeOffset?
+}
+
+class ShelfLifeDiscountTable {
+  -Id : Guid «PK»
+  -Version : int «UK»
+  -EffectiveFrom : DateTimeOffset
+  -EffectiveTo : DateTimeOffset?
+  -IsActive : bool
+  -Note : string?
+  -CreatedByUserId : Guid «FK»
+}
+
+class ShelfLifeDiscountTier {
+  -Id : Guid «PK»
+  -ShelfLifeDiscountTableId : Guid «FK»
+  -Scope : string
+  -ProductId : Guid? «FK»
+  -ProductCategoryId : Guid? «FK»
+  -MinRemainingPercent : decimal
+  -MaxRemainingPercent : decimal
+  -DiscountType : string
+  -DiscountValue : decimal
+}
+
+class Product {
+  -Id : Guid «PK»
+  -ProductCategoryId : Guid «FK»
+  -Sku : string
+  -Name : string
+}
+
+class ProductCategory {
+  -Id : Guid «PK»
+  -Code : string
+  -Name : string
+}
+
+class Retailer {
+  -Id : Guid «PK»
+  -Code : string
+  -Name : string
+}
+
+class Batch {
+  -Id : Guid «PK»
+  -ProductId : Guid «FK»
+  -BatchCode : string
+  -ExpirationDate : DateOnly
+  -ExpiryStatus : string
+}
+
+class UserAccount {
+  -Id : Guid «PK»
+  -FullName : string
+  -Role : string
+}
+
+UserAccount "1" -- "0..*" Promotion : creates
+Promotion "1" *-- "0..*" PromotionProduct : product targets
+Product "1" -- "0..*" PromotionProduct : targeted product
+Promotion "1" *-- "0..*" PromotionCategory : category targets
+ProductCategory "1" -- "0..*" PromotionCategory : targeted category
+Promotion "1" *-- "0..*" PromotionRetailer : retailer targets
+Retailer "1" -- "0..*" PromotionRetailer : eligible retailer
+Promotion "1" -- "0..*" BatchPromotion : batch assignment
+Batch "1" -- "0..*" BatchPromotion : promoted batch
+UserAccount "1" -- "0..*" BatchPromotion : assigns
+UserAccount "1" -- "0..*" ShelfLifeDiscountTable : publishes
+ShelfLifeDiscountTable "1" *-- "1..*" ShelfLifeDiscountTier : bands
+Product "0..1" -- "0..*" ShelfLifeDiscountTier : SKU scope
+ProductCategory "0..1" -- "0..*" ShelfLifeDiscountTier : category scope

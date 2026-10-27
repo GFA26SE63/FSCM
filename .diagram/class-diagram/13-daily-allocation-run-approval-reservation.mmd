@@ -1,0 +1,146 @@
+classDiagram
+direction LR
+
+class AllocationRun {
+  -Id : Guid «PK»
+  -RunCode : string «UK»
+  -BusinessDate : DateOnly «UK»
+  -CutoffAt : DateTimeOffset
+  -Status : string
+  -AlgorithmSettings : json
+  -TransitTableVersion : int
+  -EtaScheduleVersion : int
+  -OrderCount : int
+  -FailureReason : string?
+  -StartedAt : DateTimeOffset
+  -SnapshotCompletedAt : DateTimeOffset?
+  -CompletedAt : DateTimeOffset?
+  -Version : int
+}
+
+class AllocationRunOrder {
+  -Id : Guid «PK»
+  -AllocationRunId : Guid «FK»
+  -SalesOrderId : Guid «FK»
+  -OrderCodeSnapshot : string
+  -RetailerId : Guid «REF»
+  -AcceptedAt : DateTimeOffset
+  -DeliveryDeadline : DateOnly?
+  -PriorityRank : int
+  -Status : string
+  -ShortageReason : string?
+}
+
+class AllocationRunLine {
+  -Id : Guid «PK»
+  -AllocationRunOrderId : Guid «FK»
+  -SalesOrderLineId : Guid «FK»
+  -ProductId : Guid «REF»
+  -SkuSnapshot : string
+  -OrderedQuantity : decimal
+  -TotalShelfLifeHours : int
+  -EffectiveMlorRatio : decimal
+  -MlorSource : string
+  -AllocatedQuantity : decimal
+}
+
+class AllocationRunStock {
+  -Id : Guid «PK»
+  -AllocationRunId : Guid «FK»
+  -BatchId : Guid «FK»
+  -WarehouseId : Guid «REF»
+  -ProductId : Guid «REF»
+  -ExpirationDate : DateOnly
+  -SnapshotQuantity : decimal
+  -RemainingQuantity : decimal
+  -InventoryVersion : int
+}
+
+class AllocationPlanVersion {
+  -Id : Guid «PK»
+  -AllocationRunId : Guid «FK»
+  -VersionNumber : int
+  -Status : string
+  -PricedAt : DateTimeOffset
+  -FulfilledOrderCount : int
+  -ShortOrderCount : int
+  -TotalFinalAmount : decimal
+  -ApprovedByUserId : Guid? «FK»
+  -ApprovedAt : DateTimeOffset?
+  -RecalculationRequestedByUserId : Guid? «REF»
+  -RecalculationRequestedAt : DateTimeOffset?
+  -RecalculationReason : string?
+  -Version : int
+}
+
+class AllocationRunAllocation {
+  -Id : Guid «PK»
+  -AllocationRunId : Guid «FK»
+  -AllocationPlanVersionId : Guid «FK»
+  -AllocationRunLineId : Guid «FK»
+  -BatchId : Guid «FK»
+  -WarehouseId : Guid «REF»
+  -Quantity : decimal
+  -Sequence : int
+  -EstimatedArrivalAt : DateTimeOffset
+  -RemainingShelfLifeHours : decimal
+  -WeightedScore : decimal
+}
+
+class Reservation {
+  -Id : Guid «PK»
+  -AllocationId : Guid? «FK, UK»
+  -AllocationRunAllocationId : Guid? «FK, UK»
+  -BatchId : Guid «FK»
+  -Quantity : decimal
+  -Status : string
+  -ReservedAt : DateTimeOffset
+  -ReleasedAt : DateTimeOffset?
+  -ConsumedAt : DateTimeOffset?
+}
+
+class Batch {
+  -Id : Guid «PK»
+  -BatchCode : string
+  -WarehouseId : Guid «FK»
+  -ProductId : Guid «FK»
+  -ExpirationDate : DateOnly
+  -Version : int
+}
+
+class InventoryBalance {
+  -Id : Guid «PK»
+  -BatchId : Guid «FK, UK»
+  -PhysicalQuantity : decimal
+  -ReservedQuantity : decimal
+  -AvailableQuantity : decimal
+  -Version : int
+}
+
+class SalesOrder {
+  -Id : Guid «PK»
+  -OrderCode : string
+  -Status : string
+  -ServerReceivedAt : DateTimeOffset
+  -Version : int
+}
+
+class UserAccount {
+  -Id : Guid «PK»
+  -FullName : string
+  -Role : string
+}
+
+AllocationRun "1" *-- "0..*" AllocationRunOrder : order snapshot
+SalesOrder "1" -- "0..*" AllocationRunOrder : included order
+AllocationRunOrder "1" *-- "1..*" AllocationRunLine : line snapshot
+AllocationRun "1" *-- "0..*" AllocationRunStock : frozen pool
+Batch "1" -- "0..*" AllocationRunStock : pool batch
+Batch "1" *-- "1" InventoryBalance : authoritative balance
+AllocationRun "1" *-- "1..*" AllocationPlanVersion : proposals
+UserAccount "0..1" -- "0..*" AllocationPlanVersion : approves
+AllocationPlanVersion "1" *-- "0..*" AllocationRunAllocation : plan fragments
+AllocationRunLine "1" -- "0..*" AllocationRunAllocation : fulfilled by
+Batch "1" -- "0..*" AllocationRunAllocation : chosen batch
+AllocationRunAllocation "1" -- "0..1" Reservation : reserves on approval
+Batch "1" -- "0..*" Reservation : held stock

@@ -1,0 +1,141 @@
+classDiagram
+direction LR
+
+class Delivery {
+  -Id : Guid «PK»
+  -SalesOrderId : Guid «FK, UK»
+  -DriverId : Guid «FK»
+  -VehicleId : Guid «FK»
+  -OperationKey : string «UK»
+  -Status : string
+  -DriverCodeSnapshot : string
+  -DriverNameSnapshot : string
+  -DriverPhoneSnapshot : string
+  -DriverLicenseSnapshot : string
+  -PlateNumberSnapshot : string
+  -VehicleTypeSnapshot : string
+  -Version : int
+  -AssignedAt : DateTimeOffset
+  -DispatchedAt : DateTimeOffset?
+  -DeliveredAt : DateTimeOffset?
+  -Note : string?
+}
+
+class Driver {
+  -Id : Guid «PK»
+  -WarehouseId : Guid «FK»
+  -Code : string «UK»
+  -FullName : string
+  -Phone : string
+  -LicenseNumber : string
+  -IsActive : bool
+}
+
+class Vehicle {
+  -Id : Guid «PK»
+  -WarehouseId : Guid «FK»
+  -PlateNumber : string «UK»
+  -VehicleType : string
+  -Capacity : decimal
+  -IsActive : bool
+}
+
+class Warehouse {
+  -Id : Guid «PK»
+  -Code : string
+  -Name : string
+  -Type : string
+  -IsActive : bool
+}
+
+class SalesOrder {
+  -Id : Guid «PK»
+  -OrderCode : string «UK»
+  -RetailerId : Guid «FK»
+  -DeliveryAddress : string
+  -RequestedDeliveryDate : DateOnly?
+  -Status : string
+  -Version : int
+}
+
+class Retailer {
+  -Id : Guid «PK»
+  -Code : string
+  -Name : string
+  -Address : string?
+}
+
+class Shipment {
+  -Id : Guid «PK»
+  -SalesOrderId : Guid «FK»
+  -WarehouseId : Guid «FK»
+  -RunPickingListId : Guid «FK»
+  -ShipmentCode : string «UK»
+  -Status : string
+  -DriverId : Guid? «FK»
+  -VehicleId : Guid? «FK»
+  -TotalQuantity : decimal
+  -ReceivedQuantity : decimal
+  -AssignedAt : DateTimeOffset?
+  -IssuedAt : DateTimeOffset?
+  -DispatchedAt : DateTimeOffset?
+  -ReceivedAt : DateTimeOffset?
+  -ExceptionReason : string?
+  -Version : int
+}
+
+class ReceiptConfirmation {
+  -Id : Guid «PK»
+  -SalesOrderId : Guid «FK»
+  -ShipmentId : Guid? «FK, UK»
+  -ConfirmedByRetailerUserId : Guid «FK»
+  -OperationKey : string «UK»
+  -Status : string
+  -ConfirmedAt : DateTimeOffset
+  -Note : string?
+}
+
+class MapLocation {
+  -Id : Guid «PK»
+  -WarehouseId : Guid? «FK»
+  -RetailerId : Guid? «FK»
+  -Latitude : decimal
+  -Longitude : decimal
+  -Version : int
+}
+
+class MapDistanceCache {
+  -Id : Guid «PK»
+  -WarehouseId : Guid «FK»
+  -RetailerId : Guid «FK»
+  -OriginLocationId : Guid «FK»
+  -DestinationLocationId : Guid «FK»
+  -OriginLocationVersion : int
+  -DestinationLocationVersion : int
+  -DistanceMeters : int
+  -DurationSeconds : int
+  -Provider : string
+  -ProviderStatus : string
+  -Version : int
+  -CalculatedAt : DateTimeOffset
+  -ExpiresAt : DateTimeOffset
+  -IsActive : bool
+}
+
+Warehouse "1" *-- "0..*" Driver : drivers
+Warehouse "1" *-- "0..*" Vehicle : fleet
+SalesOrder "1" -- "0..1" Delivery : legacy order delivery
+Driver "1" -- "0..*" Delivery : assigned driver
+Vehicle "1" -- "0..*" Delivery : assigned vehicle
+SalesOrder "1" -- "0..*" Shipment : warehouse parts
+Retailer "1" -- "0..*" SalesOrder : receives orders
+Warehouse "1" -- "0..*" Shipment : ships from
+Driver "0..1" -- "0..*" Shipment : assigned driver
+Vehicle "0..1" -- "0..*" Shipment : assigned vehicle
+Shipment "0..1" -- "0..1" ReceiptConfirmation : receipt
+SalesOrder "1" -- "0..*" ReceiptConfirmation : order receipts
+Warehouse "0..1" -- "0..1" MapLocation : geocode
+Retailer "0..1" -- "0..1" MapLocation : geocode
+Warehouse "1" -- "0..*" MapDistanceCache : origin warehouse
+Retailer "1" -- "0..*" MapDistanceCache : destination retailer
+MapLocation "1" -- "0..*" MapDistanceCache : origin or destination
