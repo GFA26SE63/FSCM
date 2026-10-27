@@ -24,5 +24,6 @@ sequenceDiagram
         Planner->>DB: Persist ShortInRun and rollback tentative draws
         DB-->>-Run: Short result
     end
-    Note over Run,DB: Tentative allocation does not change OnHand or Reserved.
+    Note over Run,DB: Tentative allocation does not change OnHand or Reserved
+
 

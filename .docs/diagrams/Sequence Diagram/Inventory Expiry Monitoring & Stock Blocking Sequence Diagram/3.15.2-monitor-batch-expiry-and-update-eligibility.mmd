@@ -10,5 +10,6 @@ Service->>DB: Update eligibility/expiry health and audit
 Service->>Notify: publishNearExpiryOrExpiredEvent()
 Notify->>DB: Persist scoped notification/outbox message
 Service-->>-Job: Sweep result
-Note over Service,DB: Expired or disposed batches are excluded from allocation.
+Note over Service,DB: Expired or disposed batches are excluded from allocation
+
 

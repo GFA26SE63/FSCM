@@ -16,5 +16,6 @@ sequenceDiagram
     API->>Service: rankDeliveredProducts(scope, period)
     Service->>DB: Aggregate carton quantity and adjusted revenue
     Service-->>UI: Best-selling ranking
-    Note over Service,DB: Revenue uses historical promotion, HSD discount and approved adjustment snapshots.
+    Note over Service,DB: Revenue uses historical promotion HSD discount and approved adjustment snapshots
+
 

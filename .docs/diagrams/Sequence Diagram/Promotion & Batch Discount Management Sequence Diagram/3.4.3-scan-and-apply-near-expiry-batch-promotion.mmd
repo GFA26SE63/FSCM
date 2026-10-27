@@ -16,6 +16,7 @@ sequenceDiagram
     API->>App: Validate non-overlap, version and authority
     App->>DB: Save versioned rule and audit
     API-->>-UI: Rule published
-    Note over App,DB: Allocation applies MLOR/batch eligibility first; this rule prices selected fragments afterward.
+    Note over App,DB: Allocation applies MLOR batch eligibility first this rule prices selected fragments afterward
+
 
 

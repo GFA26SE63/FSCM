@@ -22,6 +22,7 @@ sequenceDiagram
         Pay->>DB: Record confirmed payment idempotently
     end
     API-->>-UI: Payment status independent from order status
-    Note over Pay,DB: Prepaid must be fully paid before dispatch; COD is collected at delivery; deferred due date starts after complete receipt.
+    Note over Pay,DB: Prepaid must be fully paid before dispatch COD is collected at delivery deferred due date starts after complete receipt
+
 
 

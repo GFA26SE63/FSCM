@@ -12,5 +12,6 @@ loop Each overdue receivable
 end
 Notify->>DB: Persist notification/outbox result
 Receivable-->>-Job: Reminder sweep result
-Note over Receivable,DB: Pending disputed value is excluded from collectible-now calculation.
+Note over Receivable,DB: Pending disputed value is excluded from collectible now calculation
+
 

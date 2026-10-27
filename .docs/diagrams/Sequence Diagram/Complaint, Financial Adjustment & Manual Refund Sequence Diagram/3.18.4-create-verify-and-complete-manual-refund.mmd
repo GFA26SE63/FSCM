@@ -17,5 +17,6 @@ UI->>+API: POST /api/v1/refunds/{id}/verify
 API->>Service: verifyRefund()
 Service->>DB: Set Refunded and append audit
 API-->>-UI: Refund completed record
-Note over Service,DB: FSCM records the externally executed refund; it does not call PayOS refund automatically.
+Note over Service,DB: FSCM records the externally executed refund it does not call PayOS refund automatically
+
 

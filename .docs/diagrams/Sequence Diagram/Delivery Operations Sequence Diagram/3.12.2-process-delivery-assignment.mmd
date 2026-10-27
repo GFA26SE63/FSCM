@@ -15,5 +15,6 @@ sequenceDiagram
     API->>Service: assignShipment(driver, vehicle)
     Service->>DB: Validate same-warehouse resource and save assignment snapshot
     API-->>-UI: Assignment saved
-    Note over Service,DB: No driver application, route optimization or live GPS tracking is assumed.
+    Note over Service,DB: No driver application route optimization or live GPS tracking is assumed
+
 

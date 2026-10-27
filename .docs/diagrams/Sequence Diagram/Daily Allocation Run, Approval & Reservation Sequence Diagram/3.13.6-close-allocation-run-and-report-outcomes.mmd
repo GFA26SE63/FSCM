@@ -12,5 +12,6 @@ Service->>Notify: notifySalesAndReviewers(outcomes)
 Notify->>DB: Create scoped notifications
 Service-->>API: Run result when queried
 API-->>Notify: GET /api/v1/allocation-runs/by-date/{businessDate}
-Note over Service,DB: Short orders have no reservation and are not automatically carried to a later run.
+Note over Service,DB: Short orders have no reservation and are not automatically carried to a later run
+
 

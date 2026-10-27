@@ -25,6 +25,7 @@ sequenceDiagram
         Planner->>Planner: Roll back all tentative quantity for this order
         Planner->>DB: Persist ShortInRun result and trace
     end
-    Note over Planner,DB: Tentative plan changes neither OnHand nor Reserved; no cross-order batch reassignment.
+    Note over Planner,DB: Tentative plan changes neither OnHand nor Reserved no cross order batch reassignment
+
 
 
