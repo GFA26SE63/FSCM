@@ -26,8 +26,9 @@ sequenceDiagram
             API-->>-UI: Approved and Picking released
         else Conflict
             App->>DB: Roll back reservation and leave proposal for recalculation
-            API-->>-UI: Conflict; review new version
+            API-->>-UI: Conflict, review new version
         end
     end
+
 
 

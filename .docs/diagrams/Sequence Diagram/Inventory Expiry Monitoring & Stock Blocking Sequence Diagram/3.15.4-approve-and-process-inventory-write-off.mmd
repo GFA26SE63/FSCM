@@ -13,7 +13,8 @@ alt Valid approval
     DB-->>API: Write-off approved
     API-->>-UI: Inventory updated
 else Invalid quantity or stale version
-    DB-->>API: Conflict; no stock change
+    DB-->>API: Conflict, no stock change
     API-->>UI: Retry or resolve exception
 end
+
 

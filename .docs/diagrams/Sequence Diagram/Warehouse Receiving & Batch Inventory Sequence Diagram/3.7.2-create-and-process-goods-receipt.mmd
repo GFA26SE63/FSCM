@@ -8,7 +8,7 @@ sequenceDiagram
     UI->>+API: POST /api/v1/goods-receipts
     API->>Inv: Create receipt
     Inv->>DB: Validate warehouse scope and batch fields
-    Inv->>DB: Save Draft/Submitted receipt; no stock increase
+    Inv->>DB: Save Draft/Submitted receipt, no stock increase
     API-->>-UI: Receipt awaiting approval
     Keeper->>UI: Approve receipt when authorized
     UI->>API: POST /api/v1/goods-receipts/{id}/approve
@@ -18,7 +18,8 @@ sequenceDiagram
     alt First approval
         DB-->>API: Received and inventory updated
     else Duplicate retry
-        DB-->>API: Existing approval result; no double increase
+        DB-->>API: Existing approval result, no double increase
     end
+
 
 

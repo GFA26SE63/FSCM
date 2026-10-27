@@ -14,7 +14,8 @@ alt Reserved and picking not started
     DB-->>API: Cancellation completed
     API-->>-UI: Reservation released
 else Picking started or shipment dispatched
-    Service-->>-API: Cancellation not permitted; use exception/complaint flow
+    Service-->>-API: Cancellation not permitted, use exception/complaint flow
     API-->>UI: Conflict
 end
+
 

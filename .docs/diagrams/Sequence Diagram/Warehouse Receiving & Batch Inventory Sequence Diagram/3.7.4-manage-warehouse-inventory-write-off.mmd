@@ -19,8 +19,9 @@ sequenceDiagram
         Inv->>DB: Reduce OnHand, mark disposed and finalize transaction
         API-->>-UI: Write-off approved
     else Reserved/locked conflict or over-quantity
-        Inv->>DB: Keep NeedsHandling/lock state; no negative stock
+        Inv->>DB: Keep NeedsHandling/lock state, no negative stock
         API-->>-UI: Conflict requiring authorized resolution
     end
+
 
 

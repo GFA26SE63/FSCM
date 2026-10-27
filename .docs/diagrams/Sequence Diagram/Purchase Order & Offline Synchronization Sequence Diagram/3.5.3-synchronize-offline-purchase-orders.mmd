@@ -19,12 +19,13 @@ sequenceDiagram
         Order->>+DB: Create order once as PendingApproval
         API-->>-UI: Synchronized order
     else Condition conflict
-        API-->>-UI: 409 current conditions; no order created
+        API-->>-UI: 409 current conditions, no order created
     else Same clientOrderKey retry
         DB-->>-Order: Return existing result
         API-->>UI: Same order/result
     end
     Note over UI,API: No background sync allocation reservation or stock rejection during sync
+
 
 
 

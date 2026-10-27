@@ -14,7 +14,7 @@ sequenceDiagram
         UI->>+API: POST /picking-lists/{code}/scans
         API->>Pick: Validate warehouse, batch, tag, line and quantity
         alt Correct scan
-            Pick->>DB: Record scan; split child QR if needed
+            Pick->>DB: Record scan, split child QR if needed
             API-->>-UI: Scan accepted
         else Mismatch or duplicate
             API-->>-UI: Reject scan
@@ -29,10 +29,11 @@ sequenceDiagram
     alt All portions ready and prepaid paid
         Keeper->>API: POST /api/v1/shipments/{id}/issue
         API->>Ship: ConfirmIssue with idempotency/version
-        Ship->>DB: Decrease OnHand and Reserved once; mark shipment dispatched
+        Ship->>DB: Decrease OnHand and Reserved once, mark shipment dispatched
         Ship-->>UI: Dispatch recorded
     else Not ready or unpaid
         API-->>-UI: Dispatch blocked
     end
+
 
 

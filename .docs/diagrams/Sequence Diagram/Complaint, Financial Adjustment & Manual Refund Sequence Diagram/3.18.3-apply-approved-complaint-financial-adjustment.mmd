@@ -12,6 +12,7 @@ alt Adjustment within cap
     end
     DB-->>Complaint: Adjustment applied
 else Duplicate or exceeds cap
-    DB-->>Complaint: Conflict; no duplicate adjustment
+    DB-->>Complaint: Conflict, no duplicate adjustment
 end
+
 

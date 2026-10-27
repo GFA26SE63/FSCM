@@ -15,12 +15,13 @@ sequenceDiagram
         API->>App: Approve(order)
         App->>DB: Validate version and authority
         App->>DB: Set AwaitingAllocation and audit
-        API-->>-UI: Approved; no stock reserved
+        API-->>-UI: Approved, no stock reserved
     else Reject
         UI->>+API: POST /api/v1/orders/{id}/reject
         API->>App: Reject(order, reason)
         App->>DB: Set Rejected and notify Sales
         API-->>-UI: Rejected
     end
+
 
 

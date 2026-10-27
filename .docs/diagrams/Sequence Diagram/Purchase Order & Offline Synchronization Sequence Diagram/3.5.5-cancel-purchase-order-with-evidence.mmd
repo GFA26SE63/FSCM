@@ -12,12 +12,13 @@ sequenceDiagram
     Blob-->>-App: Private file reference
     App->>DB: Save cancellation reason/evidence and audit
     alt Before reservation
-        App->>DB: Set Cancelled; no stock movement
+        App->>DB: Set Cancelled, no stock movement
     else Reserved but not picking
         App->>DB: Release Reserved and cancel picking work once
     else Already dispatched
-        App-->>-API: Cancellation not permitted; use complaint/refund workflow
+        App-->>-API: Cancellation not permitted, use complaint/refund workflow
     end
     API-->>-UI: Cancellation result or conflict
+
 
 
