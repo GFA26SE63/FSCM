@@ -1,0 +1,558 @@
+erDiagram
+
+    USER_ACCOUNT {
+        uuid Id PK
+        varchar(150) EntraObjectId UK
+        varchar(150) Email UK
+        varchar(150) FullName
+        varchar(30) Role
+        boolean IsActive
+        timestamptz CreatedAt
+        timestamptz UpdatedAt
+    }
+
+    WAREHOUSE {
+        uuid Id PK
+        varchar(30) Code UK
+        varchar(150) Name
+        text Address
+        numeric(10,7) Latitude
+        numeric(10,7) Longitude
+        boolean IsActive
+        timestamptz CreatedAt
+        timestamptz UpdatedAt
+    }
+
+    USER_WAREHOUSE_ASSIGNMENT {
+        uuid Id PK
+        uuid UserAccountId FK
+        uuid WarehouseId FK
+        timestamptz AssignedAt
+        boolean IsActive
+    }
+
+    REGION {
+        uuid Id PK
+        varchar(30) Code UK
+        varchar(150) Name
+        text Description
+        boolean IsActive
+        timestamptz CreatedAt
+        timestamptz UpdatedAt
+    }
+
+    SALES_GROUP {
+        uuid Id PK
+        uuid RegionId FK
+        varchar(30) Code UK
+        varchar(150) Name
+        boolean IsActive
+        timestamptz CreatedAt
+        timestamptz UpdatedAt
+    }
+
+    SALES_GROUP_MEMBER {
+        uuid Id PK
+        uuid SalesGroupId FK
+        uuid UserAccountId FK
+        timestamptz AssignedAt
+        timestamptz UnassignedAt
+        boolean IsActive
+    }
+
+    RETAILER {
+        uuid Id PK
+        uuid RegionId FK
+        varchar(30) Code UK
+        varchar(200) Name
+        varchar(200) ContactName
+        varchar(30) Phone
+        varchar(150) Email
+        text Address
+        numeric(10,7) Latitude
+        numeric(10,7) Longitude
+        varchar(30) Status
+        uuid DeclaredByUserId FK
+        uuid ReviewedByUserId FK
+        timestamptz ReviewedAt
+        text ReviewReason
+        timestamptz CreatedAt
+        timestamptz UpdatedAt
+    }
+
+    RETAILER_SALES_ASSIGNMENT {
+        uuid Id PK
+        uuid RetailerId FK
+        uuid SalesGroupId FK
+        timestamptz AssignedAt
+        timestamptz UnassignedAt
+        boolean IsActive
+    }
+
+    PRODUCT_CATEGORY {
+        uuid Id PK
+        varchar(30) Code UK
+        varchar(150) Name
+        text Description
+        boolean IsActive
+        timestamptz CreatedAt
+        timestamptz UpdatedAt
+    }
+
+    PRODUCT {
+        uuid Id PK
+        uuid ProductCategoryId FK
+        varchar(50) Sku UK
+        varchar(200) Name
+        varchar(50) Unit
+        integer ShelfLifeHours
+        integer NearDateThresholdHours
+        boolean IsActive
+        timestamptz CreatedAt
+        timestamptz UpdatedAt
+    }
+
+    PRODUCT_PRICE {
+        uuid Id PK
+        uuid ProductId FK
+        numeric(18,2) UnitPrice
+        timestamptz EffectiveFrom
+        timestamptz EffectiveTo
+        boolean IsActive
+        timestamptz CreatedAt
+    }
+
+    RETAILER_PRODUCT_MLOR {
+        uuid Id PK
+        uuid RetailerId FK
+        uuid ProductId FK
+        numeric(5,4) MinimumLifeRatio
+        integer MinimumLifeHours
+        timestamptz EffectiveFrom
+        timestamptz EffectiveTo
+        boolean IsActive
+    }
+
+    TRANSIT_TIME_RULE {
+        uuid Id PK
+        uuid WarehouseId FK
+        integer MinDistanceMeters
+        integer MaxDistanceMeters
+        integer HandlingMinutes
+        integer TransitMinutes
+        integer MaxServingDistanceMeters
+        boolean IsActive
+        timestamptz CreatedAt
+        timestamptz UpdatedAt
+    }
+
+    GOODS_RECEIPT {
+        uuid Id PK
+        varchar(40) ReceiptCode UK
+        uuid WarehouseId FK
+        uuid CreatedByUserId FK
+        uuid ApprovedByUserId FK
+        varchar(30) Status
+        timestamptz ReceivedAt
+        timestamptz ApprovedAt
+        text RejectionReason
+        timestamptz CreatedAt
+        timestamptz UpdatedAt
+    }
+
+    GOODS_RECEIPT_LINE {
+        uuid Id PK
+        uuid GoodsReceiptId FK
+        uuid ProductId FK
+        varchar(80) SourceLotCode
+        numeric(18,3) ReceivedQuantity
+        timestamptz ExpirationAt
+        timestamptz CreatedAt
+    }
+
+    BATCH {
+        uuid Id PK
+        uuid ParentBatchId FK
+        uuid RootBatchId FK
+        uuid WarehouseId FK
+        uuid ProductId FK
+        uuid GoodsReceiptLineId FK
+        varchar(80) BatchCode UK
+        numeric(18,3) Quantity
+        timestamptz ExpirationAt
+        varchar(30) ExpiryStatus
+        varchar(30) StockStatus
+        integer Version
+        timestamptz CreatedAt
+        timestamptz UpdatedAt
+    }
+
+    BATCH_QR_LABEL {
+        uuid Id PK
+        uuid BatchId FK
+        varchar(120) QrCode UK
+        numeric(18,3) Quantity
+        varchar(30) Status
+        text BlobUrl
+        timestamptz GeneratedAt
+        timestamptz InvalidatedAt
+    }
+
+    INVENTORY_BALANCE {
+        uuid Id PK
+        uuid BatchId FK
+        numeric(18,3) PhysicalQuantity
+        numeric(18,3) HeldQuantity
+        numeric(18,3) ReservedQuantity
+        numeric(18,3) AvailableQuantity
+        integer Version
+        timestamptz UpdatedAt
+    }
+
+    PROMOTION {
+        uuid Id PK
+        varchar(40) Code UK
+        varchar(200) Name
+        varchar(30) PromotionType
+        numeric(18,3) MinimumQuantity
+        numeric(5,2) DiscountPercent
+        timestamptz StartAt
+        timestamptz EndAt
+        boolean IsActive
+        uuid CreatedByUserId FK
+        timestamptz CreatedAt
+        timestamptz UpdatedAt
+    }
+
+    PROMOTION_PRODUCT {
+        uuid Id PK
+        uuid PromotionId FK
+        uuid ProductId FK
+    }
+
+    PROMOTION_CATEGORY {
+        uuid Id PK
+        uuid PromotionId FK
+        uuid ProductCategoryId FK
+    }
+
+    PROMOTION_RETAILER {
+        uuid Id PK
+        uuid PromotionId FK
+        uuid RetailerId FK
+    }
+
+    SALES_ORDER {
+        uuid Id PK
+        varchar(40) OrderCode UK
+        uuid RetailerId FK
+        uuid SalesGroupId FK
+        uuid CreatedByUserId FK
+        uuid ReviewedByUserId FK
+        uuid ClientOrderKey UK
+        varchar(30) Source
+        varchar(30) Status
+        varchar(30) PaymentMethod
+        text DeliveryAddress
+        numeric(18,2) SubtotalAmount
+        numeric(18,2) DiscountAmount
+        numeric(18,2) FinalAmount
+        numeric(18,2) OfflineEstimatedAmount
+        boolean HasOfflineDifference
+        timestamptz ServerReceivedAt
+        timestamptz ReviewedAt
+        text RejectionReason
+        timestamptz CreatedAt
+        timestamptz UpdatedAt
+    }
+
+    SALES_ORDER_LINE {
+        uuid Id PK
+        uuid SalesOrderId FK
+        uuid ProductId FK
+        numeric(18,3) OrderedQuantity
+        numeric(18,2) UnitPrice
+        numeric(18,2) GrossAmount
+        numeric(18,2) DiscountAmount
+        numeric(18,2) NetAmount
+        timestamptz EstimatedArrivalAt
+        timestamptz CreatedAt
+    }
+
+    ORDER_PROMOTION {
+        uuid Id PK
+        uuid SalesOrderLineId FK
+        uuid PromotionId FK
+        numeric(5,2) DiscountPercent
+        numeric(18,2) DiscountAmount
+        boolean IsServerFinal
+        timestamptz AppliedAt
+    }
+
+    ALLOCATION {
+        uuid Id PK
+        uuid SalesOrderLineId FK
+        uuid BatchId FK
+        uuid WarehouseId FK
+        numeric(18,3) AllocatedQuantity
+        integer AllocationSequence
+        numeric(18,3) DistanceMeters
+        timestamptz EstimatedArrivalAt
+        integer RemainingLifeHoursAtArrival
+        varchar(30) Status
+        timestamptz CreatedAt
+    }
+
+    STOCK_HOLD {
+        uuid Id PK
+        uuid AllocationId FK
+        uuid BatchId FK
+        numeric(18,3) Quantity
+        varchar(30) Status
+        timestamptz HeldAt
+        timestamptz ReleasedAt
+    }
+
+    RESERVATION {
+        uuid Id PK
+        uuid AllocationId FK
+        uuid BatchId FK
+        numeric(18,3) Quantity
+        varchar(30) Status
+        timestamptz ReservedAt
+        timestamptz ReleasedAt
+        timestamptz ConsumedAt
+    }
+
+    PICKING_LIST {
+        uuid Id PK
+        varchar(40) PickingCode UK
+        uuid SalesOrderId FK
+        uuid WarehouseId FK
+        uuid AssignedToUserId FK
+        varchar(30) Status
+        timestamptz StartedAt
+        timestamptz ConfirmedAt
+        uuid ConfirmedByUserId FK
+        timestamptz CreatedAt
+        timestamptz UpdatedAt
+    }
+
+    PICKING_ITEM {
+        uuid Id PK
+        uuid PickingListId FK
+        uuid AllocationId FK
+        uuid SourceBatchId FK
+        uuid StockOutBatchId FK
+        numeric(18,3) RequestedQuantity
+        numeric(18,3) PickedQuantity
+        varchar(30) Status
+        timestamptz ScannedAt
+        timestamptz CompletedAt
+    }
+
+    RECEIPT_CONFIRMATION {
+        uuid Id PK
+        uuid SalesOrderId FK
+        uuid ConfirmedByRetailerUserId FK
+        varchar(30) Status
+        timestamptz ConfirmedAt
+        text Note
+        timestamptz CreatedAt
+    }
+
+    RECEIPT_CONFIRMATION_ITEM {
+        uuid Id PK
+        uuid ReceiptConfirmationId FK
+        uuid BatchId FK
+        uuid BatchQrLabelId FK
+        numeric(18,3) ExpectedQuantity
+        numeric(18,3) ReceivedQuantity
+        timestamptz ScannedAt
+    }
+
+    RECEIPT_DISCREPANCY {
+        uuid Id PK
+        uuid SalesOrderId FK
+        uuid ReceiptConfirmationId FK
+        uuid ReportedByRetailerUserId FK
+        uuid ReviewedByUserId FK
+        varchar(30) Status
+        text Note
+        timestamptz ReportedAt
+        timestamptz ReviewedAt
+        timestamptz ResolvedAt
+    }
+
+    RECEIPT_DISCREPANCY_ITEM {
+        uuid Id PK
+        uuid ReceiptDiscrepancyId FK
+        uuid BatchId FK
+        varchar(30) IssueType
+        numeric(18,3) ExpectedQuantity
+        numeric(18,3) ActualReceivedQuantity
+        text EvidenceBlobUrl
+        text Note
+    }
+
+    PAYMENT {
+        uuid Id PK
+        uuid SalesOrderId FK
+        varchar(30) Method
+        varchar(30) Status
+        numeric(18,2) Amount
+        uuid ConfirmedByUserId FK
+        timestamptz ConfirmedAt
+        text Note
+        timestamptz CreatedAt
+        timestamptz UpdatedAt
+    }
+
+    ORDER_STATUS_HISTORY {
+        uuid Id PK
+        uuid SalesOrderId FK
+        uuid ChangedByUserId FK
+        varchar(30) FromStatus
+        varchar(30) ToStatus
+        text Reason
+        timestamptz ChangedAt
+    }
+
+    NOTIFICATION {
+        uuid Id PK
+        uuid UserAccountId FK
+        uuid SalesOrderId FK
+        varchar(50) Type
+        varchar(200) Title
+        text Message
+        boolean IsRead
+        timestamptz CreatedAt
+        timestamptz ReadAt
+    }
+
+    AUDIT_LOG {
+        uuid Id PK
+        uuid UserAccountId FK
+        varchar(100) EntityName
+        uuid EntityId
+        varchar(50) Action
+        jsonb OldValues
+        jsonb NewValues
+        text Reason
+        timestamptz CreatedAt
+    }
+
+    IDEMPOTENCY_KEY {
+        uuid Id PK
+        varchar(150) Key UK
+        varchar(100) Scope
+        uuid UserAccountId FK
+        uuid SalesOrderId FK
+        varchar(30) Status
+        timestamptz CreatedAt
+        timestamptz ExpiresAt
+    }
+
+    OUTBOX_MESSAGE {
+        uuid Id PK
+        varchar(100) EventType
+        varchar(100) AggregateType
+        uuid AggregateId
+        jsonb Payload
+        varchar(30) Status
+        integer RetryCount
+        timestamptz CreatedAt
+        timestamptz ProcessedAt
+        text LastError
+    }
+
+    USER_ACCOUNT ||--o{ USER_WAREHOUSE_ASSIGNMENT : has
+    WAREHOUSE ||--o{ USER_WAREHOUSE_ASSIGNMENT : scopes
+
+    REGION ||--o{ SALES_GROUP : contains
+    SALES_GROUP ||--o{ SALES_GROUP_MEMBER : has
+    USER_ACCOUNT ||--o{ SALES_GROUP_MEMBER : joins
+
+    REGION ||--o{ RETAILER : contains
+    USER_ACCOUNT ||--o{ RETAILER : declares
+    USER_ACCOUNT ||--o{ RETAILER : reviews
+    RETAILER ||--o{ RETAILER_SALES_ASSIGNMENT : assigned
+    SALES_GROUP ||--o{ RETAILER_SALES_ASSIGNMENT : serves
+
+    PRODUCT_CATEGORY ||--o{ PRODUCT : groups
+    PRODUCT ||--o{ PRODUCT_PRICE : priced_by
+    RETAILER ||--o{ RETAILER_PRODUCT_MLOR : requires
+    PRODUCT ||--o{ RETAILER_PRODUCT_MLOR : applies_to
+
+    WAREHOUSE ||--o{ TRANSIT_TIME_RULE : uses
+
+    WAREHOUSE ||--o{ GOODS_RECEIPT : receives
+    USER_ACCOUNT ||--o{ GOODS_RECEIPT : creates
+    GOODS_RECEIPT ||--|{ GOODS_RECEIPT_LINE : contains
+    PRODUCT ||--o{ GOODS_RECEIPT_LINE : received_as
+
+    GOODS_RECEIPT_LINE ||--o{ BATCH : creates
+    WAREHOUSE ||--o{ BATCH : stores
+    PRODUCT ||--o{ BATCH : identifies
+    BATCH ||--o{ BATCH : split_into
+    BATCH ||--o{ BATCH_QR_LABEL : labeled_by
+    BATCH ||--|| INVENTORY_BALANCE : balanced_by
+
+    PROMOTION ||--o{ PROMOTION_PRODUCT : targets
+    PRODUCT ||--o{ PROMOTION_PRODUCT : included
+    PROMOTION ||--o{ PROMOTION_CATEGORY : targets
+    PRODUCT_CATEGORY ||--o{ PROMOTION_CATEGORY : included
+    PROMOTION ||--o{ PROMOTION_RETAILER : eligible_for
+    RETAILER ||--o{ PROMOTION_RETAILER : receives
+
+    RETAILER ||--o{ SALES_ORDER : owns
+    SALES_GROUP ||--o{ SALES_ORDER : handles
+    USER_ACCOUNT ||--o{ SALES_ORDER : creates
+    SALES_ORDER ||--|{ SALES_ORDER_LINE : contains
+    PRODUCT ||--o{ SALES_ORDER_LINE : ordered
+
+    SALES_ORDER_LINE ||--o{ ORDER_PROMOTION : discounted_by
+    PROMOTION ||--o{ ORDER_PROMOTION : applied
+
+    SALES_ORDER_LINE ||--o{ ALLOCATION : fulfilled_by
+    BATCH ||--o{ ALLOCATION : selected_from
+    WAREHOUSE ||--o{ ALLOCATION : supplied_by
+
+    ALLOCATION ||--o{ STOCK_HOLD : creates
+    BATCH ||--o{ STOCK_HOLD : holds
+    ALLOCATION ||--o{ RESERVATION : converts_to
+    BATCH ||--o{ RESERVATION : reserves
+
+    SALES_ORDER ||--o{ PICKING_LIST : generates
+    WAREHOUSE ||--o{ PICKING_LIST : executes_at
+    USER_ACCOUNT ||--o{ PICKING_LIST : assigned_to
+    PICKING_LIST ||--|{ PICKING_ITEM : contains
+    ALLOCATION ||--o{ PICKING_ITEM : based_on
+    BATCH ||--o{ PICKING_ITEM : source_batch
+    BATCH ||--o{ PICKING_ITEM : stock_out_batch
+
+    SALES_ORDER ||--o| RECEIPT_CONFIRMATION : confirmed_by
+    USER_ACCOUNT ||--o{ RECEIPT_CONFIRMATION : confirms
+    RECEIPT_CONFIRMATION ||--|{ RECEIPT_CONFIRMATION_ITEM : contains
+    BATCH ||--o{ RECEIPT_CONFIRMATION_ITEM : received_batch
+    BATCH_QR_LABEL ||--o{ RECEIPT_CONFIRMATION_ITEM : scanned_label
+
+    SALES_ORDER ||--o{ RECEIPT_DISCREPANCY : may_have
+    RECEIPT_CONFIRMATION ||--o{ RECEIPT_DISCREPANCY : reported_after
+    USER_ACCOUNT ||--o{ RECEIPT_DISCREPANCY : reports
+    RECEIPT_DISCREPANCY ||--|{ RECEIPT_DISCREPANCY_ITEM : contains
+    BATCH ||--o{ RECEIPT_DISCREPANCY_ITEM : affects
+
+    SALES_ORDER ||--o{ PAYMENT : has
+    USER_ACCOUNT ||--o{ PAYMENT : confirms
+
+    SALES_ORDER ||--o{ ORDER_STATUS_HISTORY : tracks
+    USER_ACCOUNT ||--o{ ORDER_STATUS_HISTORY : changes
+
+    USER_ACCOUNT ||--o{ NOTIFICATION : receives
+    SALES_ORDER ||--o{ NOTIFICATION : relates_to
+
+    USER_ACCOUNT ||--o{ AUDIT_LOG : performs
+
+    USER_ACCOUNT ||--o{ IDEMPOTENCY_KEY : owns
+    SALES_ORDER ||--o| IDEMPOTENCY_KEY : protected_by
