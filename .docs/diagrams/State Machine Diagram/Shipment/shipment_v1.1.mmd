@@ -1,0 +1,16 @@
+---
+title: Shipment State Machine
+---
+stateDiagram-v2
+    [*] --> WaitingToPick : PO issued, warehouse portion waiting for its picking list
+    WaitingToPick --> Ready : warehouse RunPickingList reaches Ready (shipment created)
+    WaitingToPick --> Exception : warehouse RunPickingList is in NeedsHandling
+    Ready --> Issued : stock issued at dispatch confirmation
+    Ready --> Exception : Operator flags exception (reason required)
+    Issued --> Delivering : driver and vehicle assigned, shipment departs
+    Issued --> Exception : Operator flags exception after issue (reason required)
+    Delivering --> Received : Retailer confirms full receipt of this portion
+    Delivering --> Exception : Retailer confirms receipt with shortage or damage
+    Exception --> Ready : Administrator resolves pre-dispatch exception (portion re-picked)
+    Exception --> Received : Administrator closes post-delivery exception, discrepancy handled by claim
+    Received --> [*]

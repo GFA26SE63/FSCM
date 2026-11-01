@@ -1,0 +1,9 @@
+---
+title: GoodsReceipt State Machine
+---
+stateDiagram-v2
+    [*] --> Pending : Warehouse Keeper creates goods receipt (published products only, idempotent)
+    Pending --> Received : Admin approves, batches created, PurchaseReceipt transaction raises OnHand
+    Pending --> Rejected : Admin rejects (rejection reason required, no stock change)
+    Received --> [*]
+    Rejected --> [*]

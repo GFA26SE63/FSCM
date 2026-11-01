@@ -1,0 +1,12 @@
+---
+title: PaymentReceipt State Machine
+---
+stateDiagram-v2
+    [*] --> Draft : staff records total amount collected (Retailer, date, evidence)
+    Draft --> Draft : allocate amounts to invoices/orders (Retailer choice or suggested order)
+    Draft --> Confirmed : confirm (allocations within receipt amount and outstanding balances, remainder to Unapplied Credit)
+    Draft --> Cancelled : discard an unconfirmed receipt
+    Confirmed --> Reversed : reversal entry posted, a corrected receipt is created separately
+    Confirmed --> [*]
+    Reversed --> [*]
+    Cancelled --> [*]

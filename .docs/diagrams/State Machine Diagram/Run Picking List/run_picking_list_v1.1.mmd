@@ -1,0 +1,12 @@
+---
+title: RunPickingList State Machine
+---
+stateDiagram-v2
+    [*] --> Issued : picking list issued per warehouse after the SO becomes a PO
+    Issued --> Picking : first valid QR batch scan by Warehouse Keeper
+    Picking --> Picking : scan validated (warehouse, SKU, batch, quantity within allocation), wrong batch blocked
+    Picking --> Ready : every picking line fully picked
+    Issued --> NeedsHandling : keeper reports exception before any scan (Shortage/Damaged/Expired/QrMismatch)
+    Picking --> NeedsHandling : keeper reports exception (Shortage/Damaged/Expired/QrMismatch)
+    NeedsHandling --> Picking : Administrator resolves exception, picking resumes
+    Ready --> [*]

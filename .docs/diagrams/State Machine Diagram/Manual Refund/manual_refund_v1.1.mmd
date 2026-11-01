@@ -1,0 +1,9 @@
+---
+title: ManualRefund State Machine
+---
+stateDiagram-v2
+    [*] --> PendingRefund : refund obligation created (approved FinancialAdjustment claim on a prepaid order)
+    PendingRefund --> AwaitingVerification : Operator submits transfer evidence
+    AwaitingVerification --> Refunded : Admin verifies evidence (submitter is not the verifier)
+    AwaitingVerification --> PendingRefund : Admin rejects evidence (reason required, Operator resubmits)
+    Refunded --> [*]

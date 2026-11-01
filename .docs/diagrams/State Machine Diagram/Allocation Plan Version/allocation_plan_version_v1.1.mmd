@@ -1,0 +1,11 @@
+---
+title: AllocationPlanVersion State Machine
+---
+stateDiagram-v2
+    [*] --> Calculated : planner produces batch slices + shelf-life prices for the SO
+    Calculated --> Committed : conditional reservation update succeeds (auto, no Admin approval)
+    Calculated --> Superseded : version conflict, a re-planned version replaces this one
+    Calculated --> Discarded : shortage or technical error, attempt rolled back
+    Committed --> [*]
+    Superseded --> [*]
+    Discarded --> [*]
