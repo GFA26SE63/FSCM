@@ -1,0 +1,9 @@
+---
+title: Product Lifecycle State Machine
+---
+stateDiagram-v2
+    [*] --> Draft : Admin creates product (editable master data)
+    Draft --> Published : publish (validations pass)
+    Draft --> Inactive : discard a draft that will not be published
+    Published --> Inactive : inactivate (end of sale or replaced by another SKU)
+    Inactive --> [*]

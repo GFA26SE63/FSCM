@@ -1,0 +1,15 @@
+---
+title: WriteOff State Machine
+---
+stateDiagram-v2
+    [*] --> Draft : Warehouse Keeper creates request (batch, quantity, reason)
+    Draft --> Draft : update items or attach evidence
+    Draft --> Submitted : submit for review with supporting evidence
+    Draft --> Cancelled : cancel an editable draft
+    Submitted --> Approved : Admin approves write-off
+    Submitted --> Rejected : Admin rejects (reason required)
+    Rejected --> Draft : revise and resubmit
+    Rejected --> [*]
+    Approved --> Processed : WriteOff/Damaged inventory transaction posted, OnHand decreases
+    Processed --> [*]
+    Cancelled --> [*]
