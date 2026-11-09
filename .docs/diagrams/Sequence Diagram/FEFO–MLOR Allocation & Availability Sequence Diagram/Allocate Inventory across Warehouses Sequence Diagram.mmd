@@ -1,0 +1,117 @@
+sequenceDiagram
+    autonumber
+
+    participant Order as OrderService
+    participant Allocation as RealTimeAllocationService
+    participant Store as RealTimeAllocationStore
+    participant DB as PostgreSQL Database
+    participant Engine as AllocationEngine
+    participant Pricing as AllocationPricingService
+
+    %% ==========================================
+    %% 1. START REAL-TIME ALLOCATION
+    %% ==========================================
+
+    Note over Order,Allocation: Triggered automatically after a valid SalesOrder is created
+
+    Order->>+Allocation: AllocateAsync(orderId)
+
+    Allocation->>+Store: LoadForUpdateAsync(orderId)
+
+    Store->>+DB: SELECT order lines, Retailer and MLOR
+    Note right of DB: Include warehouse locations, batches<br/>and available inventory balances
+
+    DB-->>Store: Order and inventory context
+    deactivate DB
+
+    Store-->>Allocation: RealTimeAllocationContext
+    deactivate Store
+
+    %% ==========================================
+    %% 2. PREPARE CANDIDATES AND RECEIPT ETA
+    %% ==========================================
+
+    Note over Allocation,Engine: Evaluate eligible batches across multiple warehouses
+
+    loop For each SalesOrderLine
+
+        Allocation->>+Allocation: DistanceMeters(warehouse, retailer)
+
+        Allocation-->>Allocation: Distance for each candidate
+        deactivate Allocation
+
+        Note over Allocation,Engine: Determine estimated receipt time using available<br/>distance and delivery assumptions
+
+        Note over Allocation,Engine: Remaining shelf life at receipt =<br/>Expiration Time - Estimated Arrival Time
+
+        %% ==========================================
+        %% 3. FILTER AND SCORE BATCHES
+        %% ==========================================
+
+        Allocation->>+Engine: Allocate(lineRequest, batchCandidates)
+
+        Note right of Engine: Apply hard eligibility filters:<br/>SKU, usable stock, expiry,<br/>service radius, ETA and MLOR
+
+        Note right of Engine: Score eligible batches using<br/>remaining life, distance and<br/>quantity coverage weights
+
+        Engine-->>Allocation: Selected fragments and exclusion reasons
+        deactivate Engine
+
+    end
+
+    %% ==========================================
+    %% 4. CHECK COMPLETE ORDER FULFILLMENT
+    %% ==========================================
+
+    alt All order lines can be fully allocated
+
+        %% ==========================================
+        %% 5. CALCULATE FINAL BATCH PRICES
+        %% ==========================================
+
+        Allocation->>+Pricing: PriceAsync(allocatedBatchParts)
+
+        Note right of Pricing: Apply selected quantity promotion,<br/>then shelf-life percentage discount
+
+        Pricing-->>Allocation: Final prices for allocated batches
+        deactivate Pricing
+
+        %% ==========================================
+        %% 6. PERSIST ALLOCATION RESULT
+        %% ==========================================
+
+        Allocation->>+Store: AddRun(), AddAllocation(), AddReservation()
+
+        Note over Allocation,Store: Persist all allocations and reservations atomically
+
+        Store->>+DB: Validate stock and commit reservations
+        Note right of DB: INSERT allocations, reservations,<br/>inventory transactions and quotation
+
+        DB-->>Store: Transaction committed
+        deactivate DB
+
+        Store-->>Allocation: Allocation and quotation saved
+        deactivate Store
+
+        Allocation-->>Order: Allocation successful - Final quotation ready
+
+    else At least one order line cannot be fulfilled
+
+        Note over Allocation,Engine: Discard tentative selections for this order
+
+        Allocation->>+Store: AddHistory(), SaveChangesAsync()
+
+        Store->>+DB: UPDATE order allocation status to Insufficient Stock
+        DB-->>Store: Shortage status recorded
+        deactivate DB
+
+        Store-->>Allocation: Failure recorded
+        deactivate Store
+
+        Allocation-->>Order: Insufficient stock - No reservation created
+
+    end
+
+    deactivate Allocation
+
+    Note over Order,DB: Reservation concurrency and commit details are expanded in Figure 3.6.3

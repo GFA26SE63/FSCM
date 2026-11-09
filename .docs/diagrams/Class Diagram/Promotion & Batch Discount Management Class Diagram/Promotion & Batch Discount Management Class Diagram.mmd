@@ -1,0 +1,337 @@
+classDiagram
+direction TB
+
+%% ==========================================
+%% API LAYER
+%% ==========================================
+
+namespace API {
+
+    class PromotionsController {
+        +List()
+        +Get()
+        +Create()
+        +Update()
+        +Activate()
+        +Deactivate()
+    }
+
+    class BatchDiscountsController {
+        +Suggestions()
+        +List()
+        +Get()
+        +Apply()
+        +Remove()
+    }
+
+    class ShelfLifeDiscountsController {
+        +Current()
+        +History()
+        +Version()
+        +Match()
+        +Publish()
+    }
+}
+
+%% ==========================================
+%% APPLICATION LAYER
+%% ==========================================
+
+namespace Application {
+
+    class PromotionService {
+        <<Service>>
+        +ListAsync()
+        +GetAsync()
+        +CreateAsync()
+        +UpdateAsync()
+        +ActivateAsync()
+        +DeactivateAsync()
+        +ListBatchSuggestionsAsync()
+        +ListBatchDiscountsAsync()
+        +ApplyBatchDiscountAsync()
+        +RemoveBatchDiscountAsync()
+        +CalculatePriceAsync()
+    }
+
+    class ShelfLifeDiscountService {
+        <<Service>>
+        +GetCurrentAsync()
+        +GetVersionAsync()
+        +ListHistoryAsync()
+        +MatchAsync()
+        +PublishAsync()
+    }
+
+    class AllocationPricingService {
+        <<Service>>
+        +PriceAsync()
+    }
+
+    class IPromotionStore {
+        <<Interface>>
+        +ListPromotionsAsync()
+        +FindPromotionAsync()
+        +FindProductsAsync()
+        +FindCategoriesAsync()
+        +FindRetailersAsync()
+        +ListBatchDiscountsAsync()
+        +AddPromotion()
+        +AddBatchPromotion()
+        +SaveChangesAsync()
+    }
+
+    class IShelfLifeDiscountStore {
+        <<Interface>>
+        +FindCurrentAsync()
+        +FindByVersionAsync()
+        +FindEffectiveAtAsync()
+        +AddTable()
+        +AddTiers()
+        +SaveChangesAsync()
+    }
+}
+
+%% ==========================================
+%% PERSISTENCE LAYER
+%% ==========================================
+
+namespace Persistence {
+
+    class PromotionStore {
+        <<Repository>>
+        +ListPromotionsAsync()
+        +FindPromotionAsync()
+        +AddPromotion()
+        +AddPromotionProduct()
+        +AddPromotionCategory()
+        +AddPromotionRetailer()
+        +AddBatchPromotion()
+        +SaveChangesAsync()
+    }
+
+    class ShelfLifeDiscountStore {
+        <<Repository>>
+        +FindCurrentAsync()
+        +FindByVersionAsync()
+        +FindEffectiveAtAsync()
+        +AddTable()
+        +AddTiers()
+        +SaveChangesAsync()
+    }
+}
+
+%% ==========================================
+%% DOMAIN - ORDINARY PROMOTIONS
+%% ==========================================
+
+namespace Domain_Promotions {
+
+    class Promotion {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +PromotionType: string
+        +MinimumQuantity: int
+        +DiscountPercent: decimal
+        +StartAt: DateTimeOffset
+        +EndAt: DateTimeOffset
+        +IsActive: bool
+        +CreatedByUserId: Guid
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class PromotionProduct {
+        +Id: Guid
+        +PromotionId: Guid
+        +ProductId: Guid
+    }
+
+    class PromotionCategory {
+        +Id: Guid
+        +PromotionId: Guid
+        +ProductCategoryId: Guid
+    }
+
+    class PromotionRetailer {
+        +Id: Guid
+        +PromotionId: Guid
+        +RetailerId: Guid
+    }
+
+    class BatchPromotion {
+        +Id: Guid
+        +BatchId: Guid
+        +PromotionId: Guid
+        +AssignedByUserId: Guid
+        +IsActive: bool
+        +AssignedAt: DateTimeOffset
+        +RemovedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - SHELF-LIFE DISCOUNTS
+%% ==========================================
+
+namespace Domain_ShelfLifeDiscounts {
+
+    class ShelfLifeDiscountTable {
+        +Id: Guid
+        +Version: int
+        +EffectiveFrom: DateTimeOffset
+        +EffectiveTo: DateTimeOffset
+        +IsActive: bool
+        +Note: string
+        +CreatedByUserId: Guid
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class ShelfLifeDiscountTier {
+        +Id: Guid
+        +ShelfLifeDiscountTableId: Guid
+        +Scope: string
+        +ProductId: Guid
+        +ProductCategoryId: Guid
+        +MinRemainingPercent: decimal
+        +MaxRemainingPercent: decimal
+        +DiscountType: string
+        +DiscountValue: decimal
+        +CreatedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - RELATED ENTITIES
+%% ==========================================
+
+namespace Domain_References {
+
+    class Product {
+        +Id: Guid
+        +ProductCategoryId: Guid
+        +Sku: string
+        +Name: string
+        +Status: string
+    }
+
+    class ProductCategory {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +IsActive: bool
+    }
+
+    class Retailer {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +Status: string
+    }
+
+    class Batch {
+        +Id: Guid
+        +ProductId: Guid
+        +BatchCode: string
+        +ProductionDate: DateOnly
+        +ExpirationDate: DateOnly
+        +ExpiryStatus: string
+        +StockStatus: string
+    }
+}
+
+%% ==========================================
+%% API DEPENDENCIES
+%% ==========================================
+
+PromotionsController ..> PromotionService : uses
+
+BatchDiscountsController ..> PromotionService : uses
+
+ShelfLifeDiscountsController ..> ShelfLifeDiscountService : uses
+
+%% ==========================================
+%% APPLICATION DEPENDENCIES
+%% ==========================================
+
+PromotionService ..> IPromotionStore : uses
+
+ShelfLifeDiscountService ..> IShelfLifeDiscountStore : uses
+
+AllocationPricingService ..> ShelfLifeDiscountService : calculates batch discount
+
+%% ==========================================
+%% INTERFACE REALIZATION
+%% ==========================================
+
+PromotionStore ..|> IPromotionStore : implements
+
+ShelfLifeDiscountStore ..|> IShelfLifeDiscountStore : implements
+
+%% ==========================================
+%% PERSISTENCE DEPENDENCIES
+%% ==========================================
+
+PromotionStore ..> Promotion : persists
+
+PromotionStore ..> BatchPromotion : persists
+
+ShelfLifeDiscountStore ..> ShelfLifeDiscountTable : persists
+
+ShelfLifeDiscountStore ..> ShelfLifeDiscountTier : persists
+
+%% ==========================================
+%% PROMOTION ASSOCIATIONS
+%% ==========================================
+
+Promotion "1" -- "0..*" PromotionProduct : eligible products
+
+Promotion "1" -- "0..*" PromotionCategory : eligible categories
+
+Promotion "1" -- "0..*" PromotionRetailer : eligible retailers
+
+Promotion "1" -- "0..*" BatchPromotion : assigned batches
+
+%% ==========================================
+%% PROMOTION TARGET ASSOCIATIONS
+%% ==========================================
+
+Product "1" -- "0..*" PromotionProduct : promotion eligibility
+
+ProductCategory "1" -- "0..*" PromotionCategory : promotion eligibility
+
+Retailer "1" -- "0..*" PromotionRetailer : promotion eligibility
+
+Batch "1" -- "0..*" BatchPromotion : batch assignments
+
+%% ==========================================
+%% SHELF-LIFE DISCOUNT ASSOCIATIONS
+%% ==========================================
+
+ShelfLifeDiscountTable "1" -- "0..*" ShelfLifeDiscountTier : defines tiers
+
+Product "0..1" -- "0..*" ShelfLifeDiscountTier : SKU discount rules
+
+ProductCategory "0..1" -- "0..*" ShelfLifeDiscountTier : category discount rules
+
+%% ==========================================
+%% PRODUCT RELATIONSHIPS
+%% ==========================================
+
+ProductCategory "1" -- "0..*" Product : categorizes
+
+Product "1" -- "0..*" Batch : has batches
+
+%% ==========================================
+%% BUSINESS CONSTRAINTS
+%% ==========================================
+
+note for Promotion "Percentage-based promotions. Only one best valid ordinary promotion applies per order line."
+
+note for ShelfLifeDiscountTable "Versioned discount configuration with effective dates."
+
+note for ShelfLifeDiscountTier "A tier targets Category or SKU. SKU overrides Category. Current business scope uses percentage discounts only."
+
+note for BatchPromotion "Links an existing Promotion to a specific Batch."

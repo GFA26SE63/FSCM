@@ -1,0 +1,188 @@
+sequenceDiagram
+    autonumber
+
+    actor User
+    participant UI as Web / Mobile App
+    participant Google as Google Identity
+    participant Auth as AuthController
+    participant Identity as IdentityService
+    participant Store as IdentityStore
+    participant Activation as RetailerActivationService
+    participant OTPStore as RetailerActivationStore
+    participant Email as Brevo Email
+    participant DB as PostgreSQL Database
+
+    alt System Account Login
+
+        User->>+UI: Enter email/phone and password
+        UI->>+Auth: Login(credentials)
+        Auth->>+Identity: LoginAsync(credentials)
+
+        Identity->>+Store: Find user and credentials
+        Store->>+DB: SELECT user, credentials, roles and scope
+        DB-->>Store: Account data
+        deactivate DB
+
+        Store-->>Identity: User and credential information
+        deactivate Store
+
+        alt Valid credentials and active account
+
+            Identity->>+Store: Save authentication session
+            Store->>+DB: INSERT refresh token session
+            DB-->>Store: Session persisted
+            deactivate DB
+
+            Store-->>Identity: Session saved
+            deactivate Store
+
+            Identity-->>Auth: JWT and refresh token
+
+        else Invalid credentials or inactive account
+
+            Identity-->>Auth: Authentication rejected
+
+        end
+
+        deactivate Identity
+
+        Auth-->>UI: Authentication response
+        deactivate Auth
+
+        UI-->>User: Open dashboard or display error
+        deactivate UI
+
+    else Google Account Login
+
+        User->>+UI: Select Sign in with Google
+
+        UI->>+Google: Request Google authentication
+        Google-->>UI: Google ID token or error
+        deactivate Google
+
+        opt Google authentication successful
+
+            UI->>+Auth: ExchangeGoogle(idToken)
+            Auth->>+Identity: ExchangeGoogleAsync(googleIdentity)
+
+            Identity->>+Store: Find existing FSCM account
+            Store->>+DB: SELECT account by Google subject or verified email
+            DB-->>Store: Account and authorization data
+            deactivate DB
+
+            Store-->>Identity: Existing account or null
+            deactivate Store
+
+            alt Active and authorized account
+
+                Identity->>+Store: Save Google link and authentication session
+                Store->>+DB: UPDATE account link / INSERT session
+                DB-->>Store: Changes committed
+                deactivate DB
+
+                Store-->>Identity: Session saved
+                deactivate Store
+
+                Identity-->>Auth: FSCM JWT and refresh token
+
+            else Account missing or unauthorized
+
+                Identity-->>Auth: Authentication rejected
+
+            end
+
+            deactivate Identity
+
+            Auth-->>UI: Authentication response
+            deactivate Auth
+
+        end
+
+        UI-->>User: Open dashboard or display error
+        deactivate UI
+
+    else Retailer First-Time Activation
+
+        User->>+UI: Request activation OTP
+
+        UI->>+Auth: RequestRetailerOtp(phone, channel)
+        Auth->>+Activation: RequestOtpAsync(phone, channel)
+
+        Activation->>+OTPStore: Validate Retailer and create OTP
+        OTPStore->>+DB: SELECT retailer account / INSERT OTP challenge
+        DB-->>OTPStore: Eligibility and challenge result
+        deactivate DB
+
+        OTPStore-->>Activation: OTP request result
+        deactivate OTPStore
+
+        opt Retailer eligible for activation
+
+            Activation->>+Email: Send activation OTP
+            Email-->>Activation: Delivery result
+            deactivate Email
+
+        end
+
+        Activation-->>Auth: OTP request status
+        deactivate Activation
+
+        Auth-->>UI: Request accepted or rejected
+        deactivate Auth
+
+        UI-->>User: Show OTP screen or error
+        deactivate UI
+
+        opt OTP request accepted
+
+            User->>+UI: Enter received OTP
+
+            UI->>+Auth: VerifyRetailerOtp(phone, otp)
+            Auth->>+Activation: VerifyOtpAsync(phone, otp)
+
+            Activation->>+OTPStore: Validate OTP challenge
+            OTPStore->>+DB: SELECT challenge / UPDATE verification state
+            DB-->>OTPStore: OTP validation result
+            deactivate DB
+
+            OTPStore-->>Activation: Verification result
+            deactivate OTPStore
+
+            Activation-->>Auth: Setup token or verification error
+            deactivate Activation
+
+            Auth-->>UI: OTP verification response
+            deactivate Auth
+
+            UI-->>User: Show password setup or error
+            deactivate UI
+
+            opt OTP verified successfully
+
+                User->>+UI: Submit new password
+
+                UI->>+Auth: SetRetailerPassword(setupToken, password)
+                Auth->>+Activation: SetPasswordAsync(setupToken, password)
+
+                Activation->>+OTPStore: Validate token and save credential
+                OTPStore->>+DB: SELECT setup token / INSERT credential
+                DB-->>OTPStore: Credential saved or rejected
+                deactivate DB
+
+                OTPStore-->>Activation: Account activation result
+                deactivate OTPStore
+
+                Activation-->>Auth: Password setup result
+                deactivate Activation
+
+                Auth-->>UI: Activation response
+                deactivate Auth
+
+                UI-->>User: Activation completed - proceed to login
+                deactivate UI
+
+            end
+
+        end
+
+    end

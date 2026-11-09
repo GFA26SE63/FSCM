@@ -1,0 +1,1491 @@
+%% FSCM PostgreSQL ERD -- generated from DBeaver GraphML export 2026-11-09
+%% All 89 exported tables, all columns, all 195 exported relationship edges.
+%% GraphML has no datatype/nullability/PK flags. "column" means TYPE NOT PROVIDED.
+%% PK labels inferred from conventional identifiers; FK labels derived from exported edges.
+%% Multiplicity of exported edges is retained. Exact constraint optionality is unknown.
+%% No missing edges invented (e.g. SALES_ORDER_QUOTE and PURCHASE_ORDER).
+erDiagram
+    __EFMigrationsHistory {
+        column MigrationId PK
+        column ProductVersion
+    }
+
+    ACCOUNT_TOKEN {
+        column Id PK
+        column UserAccountId FK
+        column Purpose
+        column TokenHash
+        column ExpiresAt
+        column ConsumedAt
+        column CreatedAt
+    }
+
+    ALLOCATION {
+        column Id PK
+        column SalesOrderLineId FK
+        column BatchId FK
+        column WarehouseId FK
+        column AllocatedQuantity
+        column AllocationSequence
+        column DistanceMeters
+        column EstimatedArrivalAt
+        column RemainingLifeHoursAtArrival
+        column Status
+        column CreatedAt
+        column CoverageScore
+        column DiscountAmount
+        column DiscountPercent
+        column DiscountSourceCode
+        column DiscountSourceType
+        column DistanceScore
+        column GrossAmount
+        column NetAmount
+        column PromotionId FK
+        column ShelfLifeScore
+        column UnitPrice
+        column WeightedScore
+        column PostPromotionUnitPrice
+        column PricedAt
+        column PricingExplanation
+        column RemainingShelfLifePercent
+        column ShelfLifeDiscountPerUnit
+        column ShelfLifeDiscountTableVersion
+        column ShelfLifeDiscountTierId
+        column ShelfLifeDiscountType
+        column ShelfLifeDiscountValue
+    }
+
+    ALLOCATION_LINE_TRACE {
+        column Id PK
+        column AllocationRunId FK
+        column AllocationRunLineId FK
+        column Outcome
+        column OrderedQuantity
+        column DrawnQuantity
+        column ShortageQuantity
+        column RequiredShelfLifeHours
+        column ShelfLifeWeight
+        column DistanceWeight
+        column CoverageWeight
+        column MaximumDistanceMeters
+        column Note
+        column CreatedAt
+    }
+
+    ALLOCATION_PLAN_PRICE {
+        column Id PK
+        column AllocationRunId FK
+        column AllocationRunLineId FK
+        column BatchId
+        column WarehouseId
+        column Quantity
+        column BaseNetUnitPrice
+        column RemainingShelfLifePercent
+        column ShelfLifeDiscountTierId
+        column DiscountType
+        column DiscountValue
+        column ShelfLifeDiscountPerUnit
+        column FinalNetUnitPrice
+        column Amount
+        column DiscountTableVersion
+        column Explanation
+        column CreatedAt
+        column BatchExpiresAt
+        column ListUnitPrice
+        column PricedAt
+        column TotalShelfLifeHours
+    }
+
+    ALLOCATION_RUN {
+        column Id PK
+        column RunCode
+        column Status
+        column AlgorithmSettings
+        column AttemptNumber
+        column FailureReason
+        column StartedAt
+        column SnapshotCompletedAt
+        column CompletedAt
+        column Version
+        column CreatedAt
+        column UpdatedAt
+        column RetryOfAllocationRunId FK
+        column SalesOrderId FK
+        column TechnicalErrorCode
+    }
+
+    ALLOCATION_RUN_ALLOCATION {
+        column Id PK
+        column AllocationRunId FK
+        column AllocationRunLineId FK
+        column BatchId FK
+        column WarehouseId
+        column Quantity
+        column Sequence
+        column EstimatedArrivalAt
+        column RemainingShelfLifeHours
+        column WeightedScore
+        column CreatedAt
+    }
+
+    ALLOCATION_RUN_LINE {
+        column Id PK
+        column AllocationRunOrderId FK
+        column SalesOrderLineId FK
+        column ProductId
+        column SkuSnapshot
+        column LineNumber
+        column OrderedQuantity
+        column TotalShelfLifeHours
+        column EffectiveMlorRatio
+        column MlorSource
+        column BaseNetUnitPrice
+        column AllocatedQuantity
+        column CreatedAt
+        column ListUnitPrice
+    }
+
+    ALLOCATION_RUN_ORDER {
+        column Id PK
+        column AllocationRunId FK
+        column SalesOrderId FK
+        column OrderCodeSnapshot
+        column RetailerId
+        column AcceptedAt
+        column DeliveryDeadline
+        column PriorityRank
+        column Status
+        column ShortageReason
+        column CreatedAt
+    }
+
+    ALLOCATION_RUN_STOCK {
+        column Id PK
+        column AllocationRunId FK
+        column BatchId FK
+        column WarehouseId
+        column ProductId
+        column ExpirationDate
+        column SnapshotQuantity
+        column RemainingQuantity
+        column InventoryVersion
+        column CreatedAt
+    }
+
+    ALLOCATION_TRACE_CANDIDATE {
+        column Id PK
+        column AllocationLineTraceId FK
+        column BatchId
+        column BatchCodeSnapshot
+        column WarehouseId
+        column WarehouseCodeSnapshot
+        column Stage
+        column Passed
+        column Reason
+        column EstimatedArrivalAt
+        column RemainingShelfLifeHours
+        column RequiredShelfLifeHours
+        column CreatedAt
+    }
+
+    ALLOCATION_TRACE_SCORE {
+        column Id PK
+        column AllocationLineTraceId FK
+        column Iteration
+        column Rank
+        column BatchId
+        column BatchCodeSnapshot
+        column WarehouseId
+        column WarehouseCodeSnapshot
+        column RemainingDemand
+        column ShelfLifeScore
+        column DistanceScore
+        column CoverageScore
+        column WeightedScore
+        column Selected
+        column SelectedQuantity
+        column CreatedAt
+    }
+
+    AUDIT_LOG {
+        column Id PK
+        column UserAccountId FK
+        column EntityName
+        column EntityId
+        column Action
+        column OldValues
+        column NewValues
+        column Reason
+        column CreatedAt
+    }
+
+    BATCH {
+        column Id PK
+        column ParentBatchId FK
+        column RootBatchId FK
+        column WarehouseId FK
+        column ProductId FK
+        column GoodsReceiptLineId FK
+        column BatchCode
+        column Quantity
+        column ExpirationDate
+        column ExpiryStatus
+        column StockStatus
+        column Version
+        column CreatedAt
+        column UpdatedAt
+        column ProductionDate
+    }
+
+    BATCH_QR_LABEL {
+        column Id PK
+        column BatchId FK
+        column QrCode
+        column Quantity
+        column Status
+        column BlobUrl
+        column GeneratedAt
+        column InvalidatedAt
+        column CurrentWarehouseId FK
+        column ParentLabelId FK
+        column RootLabelId FK
+        column UpdatedAt
+        column Version
+        column GoodsReceiptId FK
+    }
+
+    BUSINESS_DOCUMENT_SEQUENCE {
+        column DocumentType PK
+        column BusinessDate PK
+        column LastNumber
+    }
+
+    COMPLAINT_EVIDENCE {
+        column Id PK
+        column ReceiptDiscrepancyId FK
+        column UploadedByUserId FK
+        column FileName
+        column ContentType
+        column BlobKey
+        column UploadedAt
+    }
+
+    DELIVERY {
+        column Id PK
+        column SalesOrderId FK
+        column DriverId FK
+        column VehicleId FK
+        column Status
+        column AssignedAt
+        column DispatchedAt
+        column DeliveredAt
+        column Note
+        column CreatedAt
+        column UpdatedAt
+        column DriverCodeSnapshot
+        column DriverLicenseSnapshot
+        column DriverNameSnapshot
+        column DriverPhoneSnapshot
+        column OperationKey
+        column PlateNumberSnapshot
+        column VehicleTypeSnapshot
+        column Version
+    }
+
+    DRIVER {
+        column Id PK
+        column FullName
+        column Phone
+        column LicenseNumber
+        column IsActive
+        column CreatedAt
+        column UpdatedAt
+        column Code
+        column WarehouseId FK
+    }
+
+    EXPIRY_SWEEP_RUN {
+        column Id PK
+        column BusinessDate
+        column Status
+        column BatchesScanned
+        column StatusesUpdated
+        column BatchesExpired
+        column Error
+        column StartedAt
+        column CompletedAt
+    }
+
+    GOODS_RECEIPT {
+        column Id PK
+        column ReceiptCode
+        column WarehouseId FK
+        column CreatedByUserId FK
+        column ApprovedByUserId FK
+        column Status
+        column ReceivedAt
+        column ApprovedAt
+        column RejectionReason
+        column CreatedAt
+        column UpdatedAt
+        column IdempotencyKey
+        column RequestHash
+        column Version
+    }
+
+    GOODS_RECEIPT_LINE {
+        column Id PK
+        column GoodsReceiptId FK
+        column ProductId FK
+        column SourceLotCode
+        column ReceivedQuantity
+        column ExpirationDate
+        column CreatedAt
+        column ProductionDate
+    }
+
+    IDEMPOTENCY_KEY {
+        column Id PK
+        column Key
+        column Scope
+        column UserAccountId FK
+        column SalesOrderId FK
+        column Status
+        column CreatedAt
+        column ExpiresAt
+    }
+
+    INVENTORY_BALANCE {
+        column Id PK
+        column BatchId FK
+        column PhysicalQuantity
+        column ReservedQuantity
+        column AvailableQuantity
+        column Version
+        column UpdatedAt
+    }
+
+    INVENTORY_LOCK {
+        column Id PK
+        column BatchId FK
+        column WarehouseId FK
+        column ProductId FK
+        column LockedQuantity
+        column Status
+        column Reason
+        column RequiresResolution
+        column LockedByUserId FK
+        column ReleasedByUserId
+        column ReleasedAt
+        column Note
+        column Version
+        column CreatedAt
+        column UpdatedAt
+    }
+
+    INVENTORY_TRANSACTION {
+        column Id PK
+        column BatchId FK
+        column WarehouseId FK
+        column ProductId FK
+        column GoodsReceiptId FK
+        column GoodsReceiptLineId FK
+        column CreatedByUserId FK
+        column TransactionType
+        column ReferenceCode
+        column PhysicalQuantityDelta
+        column ReservedQuantityDelta
+        column PhysicalQuantityAfter
+        column ReservedQuantityAfter
+        column AvailableQuantityAfter
+        column Note
+        column OccurredAt
+        column SourceId
+        column SourceType
+    }
+
+    LOYALTY_PROGRAM {
+        column Id PK
+        column Code
+        column Name
+        column Description
+        column SpendAmountPerPoint
+        column MinimumRedeemPoints
+        column StartAt
+        column EndAt
+        column IsActive
+        column CreatedByUserId FK
+        column CreatedAt
+        column UpdatedAt
+        column PointsExpireAt
+    }
+
+    LOYALTY_PROGRAM_RETAILER {
+        column Id PK
+        column LoyaltyProgramId FK
+        column RetailerId FK
+    }
+
+    LOYALTY_REWARD {
+        column Id PK
+        column LoyaltyProgramId FK
+        column Code
+        column Name
+        column Description
+        column RewardType
+        column RequiredPoints
+        column DiscountAmount
+        column DiscountPercent
+        column AvailableQuantity
+        column IsActive
+        column CreatedAt
+        column UpdatedAt
+        column ImageUrl
+    }
+
+    LOYALTY_TRANSACTION {
+        column Id PK
+        column LoyaltyProgramId FK
+        column RetailerLoyaltyId FK
+        column SalesOrderId FK
+        column CreatedByUserId FK
+        column TransactionType
+        column Points
+        column BalanceAfter
+        column Note
+        column CreatedAt
+    }
+
+    MANUAL_REFUND {
+        column Id PK
+        column PaymentId FK
+        column SalesOrderId FK
+        column Amount
+        column Recipient
+        column Reason
+        column Status
+        column CreateOperationKey
+        column CreateRequestHash
+        column EvidenceOperationKey
+        column EvidenceRequestHash
+        column TransferredAt
+        column TransactionReference
+        column EvidenceReference
+        column SubmittedByUserId FK
+        column SubmittedAt
+        column VerificationOperationKey
+        column VerificationRequestHash
+        column VerifiedByUserId FK
+        column VerifiedAt
+        column VerificationNote
+        column CreatedByUserId FK
+        column Version
+        column CreatedAt
+        column UpdatedAt
+        column ReceiptDiscrepancyId FK
+    }
+
+    MAP_DISTANCE_CACHE {
+        column Id PK
+        column WarehouseId FK
+        column RetailerId FK
+        column OriginLocationId FK
+        column DestinationLocationId FK
+        column OriginLocationVersion
+        column DestinationLocationVersion
+        column DistanceMeters
+        column DurationSeconds
+        column Provider
+        column ProviderStatus
+        column Version
+        column CalculatedAt
+        column ExpiresAt
+        column IsActive
+    }
+
+    MAP_LOCATION {
+        column Id PK
+        column WarehouseId FK
+        column RetailerId FK
+        column Latitude
+        column Longitude
+        column FormattedAddress
+        column ProviderPlaceId
+        column CreatedAt
+        column UpdatedAt
+        column NormalizedAt
+        column Provider
+        column Version
+    }
+
+    NOTIFICATION {
+        column Id PK
+        column UserAccountId FK
+        column SalesOrderId FK
+        column Type
+        column Title
+        column Message
+        column IsRead
+        column CreatedAt
+        column ReadAt
+        column OutboxMessageId FK
+        column DeepLink
+        column RelatedEntityId
+        column RelatedEntityType
+    }
+
+    ORDER_PROMOTION {
+        column Id PK
+        column SalesOrderLineId FK
+        column PromotionId FK
+        column DiscountPercent
+        column DiscountAmount
+        column IsServerFinal
+        column AppliedAt
+        column EffectiveFromSnapshot
+        column EffectiveToSnapshot
+        column MinimumQuantitySnapshot
+        column PromotionCodeSnapshot
+        column PromotionNameSnapshot
+        column PromotionTypeSnapshot
+    }
+
+    ORDER_STATUS_HISTORY {
+        column Id PK
+        column SalesOrderId FK
+        column ChangedByUserId FK
+        column FromStatus
+        column ToStatus
+        column Reason
+        column ChangedAt
+    }
+
+    OUTBOX_MESSAGE {
+        column Id PK
+        column EventType
+        column AggregateType
+        column AggregateId
+        column Payload
+        column Status
+        column RetryCount
+        column CreatedAt
+        column ProcessedAt
+        column LastError
+    }
+
+    PAYMENT {
+        column Id PK
+        column SalesOrderId FK
+        column Method
+        column Status
+        column Amount
+        column ConfirmedByUserId FK
+        column ConfirmedAt
+        column Note
+        column CreatedAt
+        column UpdatedAt
+        column CollectionMethod
+        column DeliveredDate
+        column DueDate
+        column OperationKey
+        column PaidDate
+        column RequestHash
+        column Version
+        column PayOsCheckoutUrl
+        column PayOsExpiredAt
+        column PayOsLinkStatus
+        column PayOsOrderCode
+        column PayOsPaymentLinkId
+        column PayOsQrCode
+        column PayOsReference
+        column ConfirmedAmount
+        column FinalApprovalReference
+        column FinalApprovedAt
+        column PayOsWebhookHash
+        column AdjustedAmount
+    }
+
+    PAYMENT_RECEIPT {
+        column Id PK
+        column ReceiptCode
+        column RetailerId FK
+        column ReceivedAmount
+        column UnappliedCreditAmount
+        column Status
+        column Reference
+        column Note
+        column ConfirmedByUserId FK
+        column ConfirmedAt
+        column ReversedByUserId FK
+        column ReversedAt
+        column ReversalReason
+        column OperationKey
+        column Version
+        column CreatedAt
+        column UpdatedAt
+    }
+
+    PAYMENT_RECEIPT_ALLOCATION {
+        column Id PK
+        column PaymentReceiptId FK
+        column PaymentId FK
+        column Amount
+        column CreatedAt
+    }
+
+    PICKING_ITEM {
+        column Id PK
+        column PickingListId FK
+        column AllocationId FK
+        column SourceBatchId FK
+        column StockOutBatchId FK
+        column RequestedQuantity
+        column PickedQuantity
+        column Status
+        column ScannedAt
+        column CompletedAt
+    }
+
+    PICKING_LIST {
+        column Id PK
+        column PickingCode
+        column PurchaseOrderId FK
+        column WarehouseId FK
+        column AssignedToUserId FK
+        column Status
+        column StartedAt
+        column ConfirmedAt
+        column ConfirmedByUserId FK
+        column CreatedAt
+        column UpdatedAt
+        column Version
+    }
+
+    PRODUCT {
+        column Id PK
+        column ProductCategoryId FK
+        column Sku
+        column Name
+        column Unit
+        column ShelfLifeHours
+        column NearDateThresholdHours
+        column Status
+        column PublishedAt
+        column InactivatedAt
+        column CreatedAt
+        column UpdatedAt
+        column ReplacesProductId FK
+        column ImageBlobKey
+    }
+
+    PRODUCT_CATEGORY {
+        column Id PK
+        column ParentCategoryId FK
+        column Code
+        column Name
+        column Description
+        column IsActive
+        column CreatedAt
+        column UpdatedAt
+    }
+
+    PRODUCT_PRICE {
+        column Id PK
+        column ProductId FK
+        column UnitPrice
+        column EffectiveFrom
+        column EffectiveTo
+        column IsActive
+        column CreatedAt
+    }
+
+    PROMOTION {
+        column Id PK
+        column Code
+        column Name
+        column PromotionType
+        column MinimumQuantity
+        column DiscountPercent
+        column StartAt
+        column EndAt
+        column IsActive
+        column CreatedByUserId FK
+        column CreatedAt
+        column UpdatedAt
+        column CampaignMode
+    }
+
+    PROMOTION_CATEGORY {
+        column Id PK
+        column PromotionId FK
+        column ProductCategoryId FK
+    }
+
+    PROMOTION_PRODUCT {
+        column Id PK
+        column PromotionId FK
+        column ProductId FK
+        column DiscountPercent
+        column MinimumQuantity
+    }
+
+    PROMOTION_RETAILER {
+        column Id PK
+        column PromotionId FK
+        column RetailerId FK
+    }
+
+    PURCHASE_ORDER {
+        column Id PK
+        column PurchaseOrderCode
+        column SalesOrderId
+        column SalesOrderQuoteId
+        column Status
+        column PaymentMethod
+        column IssuedAt
+        column IssuedByUserId
+        column Version
+        column CreatedAt
+        column UpdatedAt
+    }
+
+    QR_LABEL_EVENT {
+        column Id PK
+        column BatchQrLabelId FK
+        column WarehouseId FK
+        column PerformedByUserId FK
+        column OperationKey
+        column EventType
+        column FromStatus
+        column ToStatus
+        column Quantity
+        column ReferenceCode
+        column Note
+        column OccurredAt
+    }
+
+    RECEIPT_CONFIRMATION {
+        column Id PK
+        column SalesOrderId FK
+        column ConfirmedByRetailerUserId FK
+        column Status
+        column ConfirmedAt
+        column Note
+        column CreatedAt
+        column OperationKey
+        column RequestHash
+        column ShipmentId FK
+    }
+
+    RECEIPT_CONFIRMATION_ITEM {
+        column Id PK
+        column ReceiptConfirmationId FK
+        column BatchId FK
+        column BatchQrLabelId FK
+        column ExpectedQuantity
+        column ReceivedQuantity
+        column ScannedAt
+        column DamagedQuantity
+        column MissingQuantity
+        column SalesOrderLineId FK
+    }
+
+    RECEIPT_CONFIRMATION_QR_LABEL {
+        column Id PK
+        column ReceiptConfirmationId FK
+        column BatchQrLabelId FK
+        column ScannedAt
+    }
+
+    RECEIPT_DISCREPANCY {
+        column Id PK
+        column SalesOrderId FK
+        column ReceiptConfirmationId FK
+        column ReportedByRetailerUserId FK
+        column ReviewedByUserId FK
+        column Status
+        column Note
+        column ReportedAt
+        column ReviewedAt
+        column ResolvedAt
+        column ResolutionType
+    }
+
+    RECEIPT_DISCREPANCY_ITEM {
+        column Id PK
+        column ReceiptDiscrepancyId FK
+        column BatchId FK
+        column IssueType
+        column ExpectedQuantity
+        column ActualReceivedQuantity
+        column EvidenceBlobUrl
+        column Note
+        column AdjustmentAmount
+        column AllocationPlanPriceId
+        column FinalUnitPrice
+        column ShipmentId
+        column AllocationId FK
+    }
+
+    REFRESH_TOKEN {
+        column Id PK
+        column UserAccountId FK
+        column TokenHash
+        column ExpiresAt
+        column CreatedAt
+        column RevokedAt
+        column ReplacedByTokenId FK
+        column CreatedByIpAddress
+        column RevokedByIpAddress
+    }
+
+    REGION {
+        column Id PK
+        column Code
+        column Name
+        column Description
+        column IsActive
+        column CreatedAt
+        column UpdatedAt
+    }
+
+    REPLACEMENT_CASE {
+        column Id PK
+        column ReceiptDiscrepancyId FK
+        column WarehouseId FK
+        column Status
+        column ApprovedAt
+        column ShippedAt
+        column ReceivedAt
+        column Version
+        column CreatedAt
+        column UpdatedAt
+    }
+
+    RESERVATION {
+        column Id PK
+        column AllocationId FK
+        column BatchId FK
+        column Quantity
+        column Status
+        column ReservedAt
+        column ReleasedAt
+        column ConsumedAt
+        column AllocationRunAllocationId FK
+    }
+
+    RETAILER {
+        column Id PK
+        column RegionId FK
+        column Code
+        column Name
+        column Address
+        column Status
+        column ForecastRevenue
+        column StoreSizeSquareMeters
+        column PurchasingCapacity
+        column PotentialStatus
+        column PotentialScore
+        column AssessmentNote
+        column DeclaredByUserId FK
+        column ReviewedByUserId FK
+        column AssessedByUserId FK
+        column ReviewedAt
+        column AssessedAt
+        column ReviewReason
+        column CreatedAt
+        column UpdatedAt
+        column CreditTermDays
+        column PurchaseFrequencyPerMonth
+        column RetailerType
+        column StoreSizeCategory
+        column UserAccountId FK
+        column RequestedCreditTermDays
+        column StorefrontImageBlobKey
+    }
+
+    RETAILER_ACTIVATION_CHALLENGE {
+        column Id PK
+        column UserAccountId FK
+        column OtpHash
+        column SetupTokenHash
+        column RequestedIpAddress
+        column FailedAttemptCount
+        column ExpiresAt
+        column VerifiedAt
+        column SetupTokenExpiresAt
+        column ConsumedAt
+        column CreatedAt
+    }
+
+    RETAILER_DECLARATION_CONTACT {
+        column RetailerId PK,FK
+        column ContactName
+        column Phone
+        column Email
+        column CreatedAt
+        column UpdatedAt
+    }
+
+    RETAILER_LOYALTY {
+        column Id PK
+        column RetailerId FK
+        column CurrentPoints
+        column LifetimeEarnedPoints
+        column LifetimeRedeemedPoints
+        column CreatedAt
+        column UpdatedAt
+        column HeldPoints
+    }
+
+    RETAILER_PRODUCT_MLOR {
+        column Id PK
+        column RetailerId FK
+        column ProductId FK
+        column MinimumLifeRatio
+        column MinimumLifeHours
+        column EffectiveFrom
+        column EffectiveTo
+        column IsActive
+        column ProductCategoryId FK
+        column UpdatedByUserId FK
+        column Version
+    }
+
+    RETAILER_SALES_ASSIGNMENT {
+        column Id PK
+        column RetailerId FK
+        column SalesGroupId FK
+        column AssignedAt
+        column UnassignedAt
+        column IsActive
+    }
+
+    REWARD_REDEMPTION {
+        column Id PK
+        column RetailerId FK
+        column LoyaltyRewardId FK
+        column LoyaltyTransactionId FK
+        column SalesOrderId FK
+        column RedeemedPoints
+        column Status
+        column RedeemedByUserId FK
+        column RedeemedAt
+        column FulfilledAt
+        column CancelledAt
+        column Note
+        column CreatedAt
+        column UpdatedAt
+        column ClientRequestId
+    }
+
+    SALES_GROUP {
+        column Id PK
+        column RegionId FK
+        column Code
+        column Name
+        column IsActive
+        column CreatedAt
+        column UpdatedAt
+    }
+
+    SALES_GROUP_MEMBER {
+        column Id PK
+        column SalesGroupId FK
+        column UserAccountId FK
+        column AssignedAt
+        column UnassignedAt
+        column IsActive
+    }
+
+    SALES_ORDER {
+        column Id PK
+        column OrderCode
+        column RetailerId FK
+        column SalesGroupId FK
+        column CreatedByUserId FK
+        column ReviewedByUserId FK
+        column ClientOrderKey
+        column Source
+        column Status
+        column PaymentMethod
+        column DeliveryAddress
+        column SubtotalAmount
+        column DiscountAmount
+        column FinalAmount
+        column OfflineEstimatedAmount
+        column HasOfflineDifference
+        column ServerReceivedAt
+        column ReviewedAt
+        column RejectionReason
+        column CreatedAt
+        column UpdatedAt
+        column CreditTermDays
+        column Note
+        column RequestHash
+        column RequestedDeliveryDate
+        column RetailerCodeSnapshot
+        column RetailerNameSnapshot
+        column Version
+        column FinalPricePendingAllocation
+        column AcceptedAt
+    }
+
+    SALES_ORDER_ATTACHMENT {
+        column Id PK
+        column SalesOrderId FK
+        column UploadedByUserId FK
+        column AttachmentType
+        column FileName
+        column ContentType
+        column BlobUrl
+        column UploadedAt
+    }
+
+    SALES_ORDER_LINE {
+        column Id PK
+        column SalesOrderId FK
+        column ProductId FK
+        column OrderedQuantity
+        column UnitPrice
+        column GrossAmount
+        column DiscountAmount
+        column NetAmount
+        column EstimatedArrivalAt
+        column CreatedAt
+        column DiscountPercent
+        column DiscountSourceCode
+        column DiscountSourceType
+        column LineNumber
+        column ProductNameSnapshot
+        column SkuSnapshot
+        column FinalPricePendingAllocation
+        column MlorMinimumLifeHours
+        column MlorMinimumLifeRatio
+        column MlorProductCategoryId FK
+        column MlorResolvedAt
+        column MlorSourceRuleId FK
+        column MlorSourceScope
+        column MlorSourceVersion
+        column PricedAt
+        column ProductPriceEffectiveFrom
+        column ProductPriceEffectiveTo
+        column ProductPriceId FK
+    }
+
+    SALES_ORDER_QUOTE {
+        column Id PK
+        column SalesOrderId
+        column AllocationRunId
+        column RevisionNumber
+        column Status
+        column TotalAmount
+        column IssuedAt
+        column ExpiresAt
+        column AcceptedByUserId
+        column AcceptedAt
+        column RejectionReason
+        column PurchaseOrderId
+        column Version
+        column CreatedAt
+        column UpdatedAt
+    }
+
+    SHELF_LIFE_DISCOUNT_TABLE {
+        column Id PK
+        column Version
+        column EffectiveFrom
+        column EffectiveTo
+        column IsActive
+        column Note
+        column CreatedByUserId FK
+        column CreatedAt
+        column UpdatedAt
+    }
+
+    SHELF_LIFE_DISCOUNT_TIER {
+        column Id PK
+        column ShelfLifeDiscountTableId FK
+        column Scope
+        column ProductId FK
+        column ProductCategoryId FK
+        column MinRemainingPercent
+        column MaxRemainingPercent
+        column DiscountType
+        column DiscountValue
+        column CreatedAt
+    }
+
+    SHIPMENT {
+        column Id PK
+        column SalesOrderId FK
+        column WarehouseId FK
+        column ShipmentCode
+        column Status
+        column TotalQuantity
+        column ReceivedQuantity
+        column ReadyAt
+        column IssuedAt
+        column DispatchedAt
+        column ReceivedAt
+        column ExceptionReason
+        column Version
+        column CreatedAt
+        column UpdatedAt
+        column AssignedAt
+        column DriverCodeSnapshot
+        column DriverId FK
+        column DriverLicenseSnapshot
+        column DriverNameSnapshot
+        column DriverPhoneSnapshot
+        column PlateNumberSnapshot
+        column VehicleId FK
+        column VehicleTypeSnapshot
+        column PickingListId FK
+    }
+
+    SYSTEM_CONFIGURATION {
+        column Id PK
+        column ConfigKey
+        column ConfigValue
+        column Description
+        column ValueType
+        column IsActive
+        column UpdatedByUserId FK
+        column CreatedAt
+        column UpdatedAt
+        column EffectiveFrom
+        column Version
+    }
+
+    TRANSIT_TABLE {
+        column Id PK
+        column Version
+        column MaxServingDistanceMeters
+        column EffectiveFrom
+        column EffectiveTo
+        column IsActive
+        column Note
+        column CreatedByUserId FK
+        column CreatedAt
+        column UpdatedAt
+    }
+
+    TRANSIT_TABLE_BAND {
+        column Id PK
+        column TransitTableId FK
+        column MinDistanceMeters
+        column MaxDistanceMeters
+        column HandlingMinutes
+        column TransitMinutes
+        column EstimatedCostAmount
+        column CreatedAt
+    }
+
+    TRANSIT_TIME_RULE {
+        column Id PK
+        column WarehouseId FK
+        column MinDistanceMeters
+        column MaxDistanceMeters
+        column HandlingMinutes
+        column TransitMinutes
+        column MaxServingDistanceMeters
+        column IsActive
+        column CreatedAt
+        column UpdatedAt
+        column EffectiveFrom
+        column EffectiveTo
+        column Version
+        column EstimatedTransportCost
+    }
+
+    USER_ACCOUNT {
+        column Id PK
+        column GoogleSubject
+        column Email
+        column FullName
+        column Role
+        column IsActive
+        column CreatedAt
+        column UpdatedAt
+        column IdentityProvider
+        column Phone
+    }
+
+    USER_CREDENTIAL {
+        column Id PK
+        column UserAccountId FK
+        column PasswordHash
+        column FailedLoginCount
+        column LockoutEndAt
+        column MustChangePassword
+        column PasswordChangedAt
+        column CreatedAt
+        column UpdatedAt
+    }
+
+    USER_REGION_ASSIGNMENT {
+        column Id PK
+        column UserAccountId FK
+        column RegionId FK
+        column AssignedAt
+        column UnassignedAt
+        column IsActive
+    }
+
+    USER_WAREHOUSE_ASSIGNMENT {
+        column Id PK
+        column UserAccountId FK
+        column WarehouseId FK
+        column AssignedAt
+        column IsActive
+    }
+
+    VEHICLE {
+        column Id PK
+        column PlateNumber
+        column VehicleType
+        column Capacity
+        column IsActive
+        column CreatedAt
+        column UpdatedAt
+        column WarehouseId FK
+    }
+
+    WAREHOUSE {
+        column Id PK
+        column Code
+        column Name
+        column Address
+        column IsActive
+        column CreatedAt
+        column UpdatedAt
+        column MinimumStockThresholdCartons
+        column RegionId FK
+    }
+
+    WRITE_OFF {
+        column Id PK
+        column WriteOffCode
+        column WarehouseId FK
+        column CreatedByUserId FK
+        column Status
+        column Reason
+        column CreatedAt
+        column UpdatedAt
+    }
+
+    WRITE_OFF_ATTACHMENT {
+        column Id PK
+        column WriteOffId FK
+        column UploadedByUserId FK
+        column FileName
+        column ContentType
+        column BlobUrl
+        column UploadedAt
+    }
+
+    WRITE_OFF_ITEM {
+        column Id PK
+        column WriteOffId FK
+        column BatchId FK
+        column Quantity
+        column Reason
+        column CreatedAt
+    }
+
+    ALLOCATION ||..o{ PICKING_ITEM : "AllocationId"
+    ALLOCATION ||..o{ RECEIPT_DISCREPANCY_ITEM : "AllocationId"
+    ALLOCATION ||..o{ RESERVATION : "AllocationId"
+    ALLOCATION_LINE_TRACE ||..o{ ALLOCATION_TRACE_CANDIDATE : "AllocationLineTraceId"
+    ALLOCATION_LINE_TRACE ||..o{ ALLOCATION_TRACE_SCORE : "AllocationLineTraceId"
+    ALLOCATION_RUN ||..o{ ALLOCATION_LINE_TRACE : "AllocationRunId"
+    ALLOCATION_RUN ||..o{ ALLOCATION_PLAN_PRICE : "AllocationRunId"
+    ALLOCATION_RUN ||..o{ ALLOCATION_RUN : "RetryOfAllocationRunId"
+    ALLOCATION_RUN ||..o{ ALLOCATION_RUN_ALLOCATION : "AllocationRunId"
+    ALLOCATION_RUN ||..o{ ALLOCATION_RUN_ORDER : "AllocationRunId"
+    ALLOCATION_RUN ||..o{ ALLOCATION_RUN_STOCK : "AllocationRunId"
+    ALLOCATION_RUN_ALLOCATION ||..o{ RESERVATION : "AllocationRunAllocationId"
+    ALLOCATION_RUN_LINE ||..o{ ALLOCATION_LINE_TRACE : "AllocationRunLineId"
+    ALLOCATION_RUN_LINE ||..o{ ALLOCATION_PLAN_PRICE : "AllocationRunLineId"
+    ALLOCATION_RUN_LINE ||..o{ ALLOCATION_RUN_ALLOCATION : "AllocationRunLineId"
+    ALLOCATION_RUN_ORDER ||..o{ ALLOCATION_RUN_LINE : "AllocationRunOrderId"
+    BATCH ||..o{ ALLOCATION : "BatchId"
+    BATCH ||..o{ ALLOCATION_RUN_ALLOCATION : "BatchId"
+    BATCH ||..o{ ALLOCATION_RUN_STOCK : "BatchId"
+    BATCH ||..o{ BATCH : "ParentBatchId"
+    BATCH ||..o{ BATCH : "RootBatchId"
+    BATCH ||..o{ BATCH_QR_LABEL : "BatchId"
+    BATCH ||..o{ INVENTORY_BALANCE : "BatchId"
+    BATCH ||..o{ INVENTORY_LOCK : "BatchId"
+    BATCH ||..o{ INVENTORY_TRANSACTION : "BatchId"
+    BATCH ||..o{ PICKING_ITEM : "SourceBatchId"
+    BATCH ||..o{ PICKING_ITEM : "StockOutBatchId"
+    BATCH ||..o{ RECEIPT_CONFIRMATION_ITEM : "BatchId"
+    BATCH ||..o{ RECEIPT_DISCREPANCY_ITEM : "BatchId"
+    BATCH ||..o{ RESERVATION : "BatchId"
+    BATCH ||..o{ WRITE_OFF_ITEM : "BatchId"
+    BATCH_QR_LABEL ||..o{ BATCH_QR_LABEL : "ParentLabelId"
+    BATCH_QR_LABEL ||..o{ BATCH_QR_LABEL : "RootLabelId"
+    BATCH_QR_LABEL ||..o{ QR_LABEL_EVENT : "BatchQrLabelId"
+    BATCH_QR_LABEL ||..o{ RECEIPT_CONFIRMATION_ITEM : "BatchQrLabelId"
+    BATCH_QR_LABEL ||..o{ RECEIPT_CONFIRMATION_QR_LABEL : "BatchQrLabelId"
+    DRIVER ||..o{ DELIVERY : "DriverId"
+    DRIVER ||..o{ SHIPMENT : "DriverId"
+    GOODS_RECEIPT ||..o{ BATCH_QR_LABEL : "GoodsReceiptId"
+    GOODS_RECEIPT ||..o{ GOODS_RECEIPT_LINE : "GoodsReceiptId"
+    GOODS_RECEIPT ||..o{ INVENTORY_TRANSACTION : "GoodsReceiptId"
+    GOODS_RECEIPT_LINE ||..o{ BATCH : "GoodsReceiptLineId"
+    GOODS_RECEIPT_LINE ||..o{ INVENTORY_TRANSACTION : "GoodsReceiptLineId"
+    LOYALTY_PROGRAM ||..o{ LOYALTY_PROGRAM_RETAILER : "LoyaltyProgramId"
+    LOYALTY_PROGRAM ||..o{ LOYALTY_REWARD : "LoyaltyProgramId"
+    LOYALTY_PROGRAM ||..o{ LOYALTY_TRANSACTION : "LoyaltyProgramId"
+    LOYALTY_REWARD ||..o{ REWARD_REDEMPTION : "LoyaltyRewardId"
+    LOYALTY_TRANSACTION ||..o{ REWARD_REDEMPTION : "LoyaltyTransactionId"
+    MAP_LOCATION ||..o{ MAP_DISTANCE_CACHE : "DestinationLocationId"
+    MAP_LOCATION ||..o{ MAP_DISTANCE_CACHE : "OriginLocationId"
+    OUTBOX_MESSAGE ||..o{ NOTIFICATION : "OutboxMessageId"
+    PAYMENT ||..o{ MANUAL_REFUND : "PaymentId"
+    PAYMENT ||..o{ PAYMENT_RECEIPT_ALLOCATION : "PaymentId"
+    PAYMENT_RECEIPT ||..o{ PAYMENT_RECEIPT_ALLOCATION : "PaymentReceiptId"
+    PICKING_LIST ||..o{ PICKING_ITEM : "PickingListId"
+    PICKING_LIST ||..o{ SHIPMENT : "PickingListId"
+    PRODUCT ||..o{ BATCH : "ProductId"
+    PRODUCT ||..o{ GOODS_RECEIPT_LINE : "ProductId"
+    PRODUCT ||..o{ INVENTORY_LOCK : "ProductId"
+    PRODUCT ||..o{ INVENTORY_TRANSACTION : "ProductId"
+    PRODUCT ||..o{ PRODUCT : "ReplacesProductId"
+    PRODUCT ||..o{ PRODUCT_PRICE : "ProductId"
+    PRODUCT ||..o{ PROMOTION_PRODUCT : "ProductId"
+    PRODUCT ||..o{ RETAILER_PRODUCT_MLOR : "ProductId"
+    PRODUCT ||..o{ SALES_ORDER_LINE : "ProductId"
+    PRODUCT ||..o{ SHELF_LIFE_DISCOUNT_TIER : "ProductId"
+    PRODUCT_CATEGORY ||..o{ PRODUCT : "ProductCategoryId"
+    PRODUCT_CATEGORY ||..o{ PRODUCT_CATEGORY : "ParentCategoryId"
+    PRODUCT_CATEGORY ||..o{ PROMOTION_CATEGORY : "ProductCategoryId"
+    PRODUCT_CATEGORY ||..o{ RETAILER_PRODUCT_MLOR : "ProductCategoryId"
+    PRODUCT_CATEGORY ||..o{ SALES_ORDER_LINE : "MlorProductCategoryId"
+    PRODUCT_CATEGORY ||..o{ SHELF_LIFE_DISCOUNT_TIER : "ProductCategoryId"
+    PRODUCT_PRICE ||..o{ SALES_ORDER_LINE : "ProductPriceId"
+    PROMOTION ||..o{ ALLOCATION : "PromotionId"
+    PROMOTION ||..o{ ORDER_PROMOTION : "PromotionId"
+    PROMOTION ||..o{ PROMOTION_CATEGORY : "PromotionId"
+    PROMOTION ||..o{ PROMOTION_PRODUCT : "PromotionId"
+    PROMOTION ||..o{ PROMOTION_RETAILER : "PromotionId"
+    PURCHASE_ORDER ||..o{ PICKING_LIST : "PurchaseOrderId"
+    RECEIPT_CONFIRMATION ||..o{ RECEIPT_CONFIRMATION_ITEM : "ReceiptConfirmationId"
+    RECEIPT_CONFIRMATION ||..o{ RECEIPT_CONFIRMATION_QR_LABEL : "ReceiptConfirmationId"
+    RECEIPT_CONFIRMATION ||..o{ RECEIPT_DISCREPANCY : "ReceiptConfirmationId"
+    RECEIPT_DISCREPANCY ||..o{ COMPLAINT_EVIDENCE : "ReceiptDiscrepancyId"
+    RECEIPT_DISCREPANCY ||..o{ MANUAL_REFUND : "ReceiptDiscrepancyId"
+    RECEIPT_DISCREPANCY ||..o{ RECEIPT_DISCREPANCY_ITEM : "ReceiptDiscrepancyId"
+    RECEIPT_DISCREPANCY ||..o{ REPLACEMENT_CASE : "ReceiptDiscrepancyId"
+    REFRESH_TOKEN ||..o{ REFRESH_TOKEN : "ReplacedByTokenId"
+    REGION ||..o{ RETAILER : "RegionId"
+    REGION ||..o{ SALES_GROUP : "RegionId"
+    REGION ||..o{ USER_REGION_ASSIGNMENT : "RegionId"
+    REGION ||..o{ WAREHOUSE : "RegionId"
+    RETAILER ||..o{ LOYALTY_PROGRAM_RETAILER : "RetailerId"
+    RETAILER ||..o{ MAP_DISTANCE_CACHE : "RetailerId"
+    RETAILER ||..o{ MAP_LOCATION : "RetailerId"
+    RETAILER ||..o{ PAYMENT_RECEIPT : "RetailerId"
+    RETAILER ||..o{ PROMOTION_RETAILER : "RetailerId"
+    RETAILER ||..o{ RETAILER_DECLARATION_CONTACT : "RetailerId"
+    RETAILER ||..o{ RETAILER_LOYALTY : "RetailerId"
+    RETAILER ||..o{ RETAILER_PRODUCT_MLOR : "RetailerId"
+    RETAILER ||..o{ RETAILER_SALES_ASSIGNMENT : "RetailerId"
+    RETAILER ||..o{ REWARD_REDEMPTION : "RetailerId"
+    RETAILER ||..o{ SALES_ORDER : "RetailerId"
+    RETAILER_LOYALTY ||..o{ LOYALTY_TRANSACTION : "RetailerLoyaltyId"
+    RETAILER_PRODUCT_MLOR ||..o{ SALES_ORDER_LINE : "MlorSourceRuleId"
+    SALES_GROUP ||..o{ RETAILER_SALES_ASSIGNMENT : "SalesGroupId"
+    SALES_GROUP ||..o{ SALES_GROUP_MEMBER : "SalesGroupId"
+    SALES_GROUP ||..o{ SALES_ORDER : "SalesGroupId"
+    SALES_ORDER ||..o{ ALLOCATION_RUN : "SalesOrderId"
+    SALES_ORDER ||..o{ ALLOCATION_RUN_ORDER : "SalesOrderId"
+    SALES_ORDER ||..o{ DELIVERY : "SalesOrderId"
+    SALES_ORDER ||..o{ IDEMPOTENCY_KEY : "SalesOrderId"
+    SALES_ORDER ||..o{ LOYALTY_TRANSACTION : "SalesOrderId"
+    SALES_ORDER ||..o{ MANUAL_REFUND : "SalesOrderId"
+    SALES_ORDER ||..o{ NOTIFICATION : "SalesOrderId"
+    SALES_ORDER ||..o{ ORDER_STATUS_HISTORY : "SalesOrderId"
+    SALES_ORDER ||..o{ PAYMENT : "SalesOrderId"
+    SALES_ORDER ||..o{ RECEIPT_CONFIRMATION : "SalesOrderId"
+    SALES_ORDER ||..o{ RECEIPT_DISCREPANCY : "SalesOrderId"
+    SALES_ORDER ||..o{ REWARD_REDEMPTION : "SalesOrderId"
+    SALES_ORDER ||..o{ SALES_ORDER_ATTACHMENT : "SalesOrderId"
+    SALES_ORDER ||..o{ SALES_ORDER_LINE : "SalesOrderId"
+    SALES_ORDER ||..o{ SHIPMENT : "SalesOrderId"
+    SALES_ORDER_LINE ||..o{ ALLOCATION : "SalesOrderLineId"
+    SALES_ORDER_LINE ||..o{ ALLOCATION_RUN_LINE : "SalesOrderLineId"
+    SALES_ORDER_LINE ||..o{ ORDER_PROMOTION : "SalesOrderLineId"
+    SALES_ORDER_LINE ||..o{ RECEIPT_CONFIRMATION_ITEM : "SalesOrderLineId"
+    SHELF_LIFE_DISCOUNT_TABLE ||..o{ SHELF_LIFE_DISCOUNT_TIER : "ShelfLifeDiscountTableId"
+    SHIPMENT ||..o{ RECEIPT_CONFIRMATION : "ShipmentId"
+    TRANSIT_TABLE ||..o{ TRANSIT_TABLE_BAND : "TransitTableId"
+    USER_ACCOUNT ||..o{ ACCOUNT_TOKEN : "UserAccountId"
+    USER_ACCOUNT ||..o{ AUDIT_LOG : "UserAccountId"
+    USER_ACCOUNT ||..o{ COMPLAINT_EVIDENCE : "UploadedByUserId"
+    USER_ACCOUNT ||..o{ GOODS_RECEIPT : "ApprovedByUserId"
+    USER_ACCOUNT ||..o{ GOODS_RECEIPT : "CreatedByUserId"
+    USER_ACCOUNT ||..o{ IDEMPOTENCY_KEY : "UserAccountId"
+    USER_ACCOUNT ||..o{ INVENTORY_LOCK : "LockedByUserId"
+    USER_ACCOUNT ||..o{ INVENTORY_TRANSACTION : "CreatedByUserId"
+    USER_ACCOUNT ||..o{ LOYALTY_PROGRAM : "CreatedByUserId"
+    USER_ACCOUNT ||..o{ LOYALTY_TRANSACTION : "CreatedByUserId"
+    USER_ACCOUNT ||..o{ MANUAL_REFUND : "CreatedByUserId"
+    USER_ACCOUNT ||..o{ MANUAL_REFUND : "SubmittedByUserId"
+    USER_ACCOUNT ||..o{ MANUAL_REFUND : "VerifiedByUserId"
+    USER_ACCOUNT ||..o{ NOTIFICATION : "UserAccountId"
+    USER_ACCOUNT ||..o{ ORDER_STATUS_HISTORY : "ChangedByUserId"
+    USER_ACCOUNT ||..o{ PAYMENT : "ConfirmedByUserId"
+    USER_ACCOUNT ||..o{ PAYMENT_RECEIPT : "ConfirmedByUserId"
+    USER_ACCOUNT ||..o{ PAYMENT_RECEIPT : "ReversedByUserId"
+    USER_ACCOUNT ||..o{ PICKING_LIST : "AssignedToUserId"
+    USER_ACCOUNT ||..o{ PICKING_LIST : "ConfirmedByUserId"
+    USER_ACCOUNT ||..o{ PROMOTION : "CreatedByUserId"
+    USER_ACCOUNT ||..o{ QR_LABEL_EVENT : "PerformedByUserId"
+    USER_ACCOUNT ||..o{ RECEIPT_CONFIRMATION : "ConfirmedByRetailerUserId"
+    USER_ACCOUNT ||..o{ RECEIPT_DISCREPANCY : "ReportedByRetailerUserId"
+    USER_ACCOUNT ||..o{ RECEIPT_DISCREPANCY : "ReviewedByUserId"
+    USER_ACCOUNT ||..o{ REFRESH_TOKEN : "UserAccountId"
+    USER_ACCOUNT ||..o{ RETAILER : "AssessedByUserId"
+    USER_ACCOUNT ||..o{ RETAILER : "DeclaredByUserId"
+    USER_ACCOUNT ||..o{ RETAILER : "ReviewedByUserId"
+    USER_ACCOUNT ||..o{ RETAILER : "UserAccountId"
+    USER_ACCOUNT ||..o{ RETAILER_ACTIVATION_CHALLENGE : "UserAccountId"
+    USER_ACCOUNT ||..o{ RETAILER_PRODUCT_MLOR : "UpdatedByUserId"
+    USER_ACCOUNT ||..o{ REWARD_REDEMPTION : "RedeemedByUserId"
+    USER_ACCOUNT ||..o{ SALES_GROUP_MEMBER : "UserAccountId"
+    USER_ACCOUNT ||..o{ SALES_ORDER : "CreatedByUserId"
+    USER_ACCOUNT ||..o{ SALES_ORDER : "ReviewedByUserId"
+    USER_ACCOUNT ||..o{ SALES_ORDER_ATTACHMENT : "UploadedByUserId"
+    USER_ACCOUNT ||..o{ SHELF_LIFE_DISCOUNT_TABLE : "CreatedByUserId"
+    USER_ACCOUNT ||..o{ SYSTEM_CONFIGURATION : "UpdatedByUserId"
+    USER_ACCOUNT ||..o{ TRANSIT_TABLE : "CreatedByUserId"
+    USER_ACCOUNT ||..o{ USER_CREDENTIAL : "UserAccountId"
+    USER_ACCOUNT ||..o{ USER_REGION_ASSIGNMENT : "UserAccountId"
+    USER_ACCOUNT ||..o{ USER_WAREHOUSE_ASSIGNMENT : "UserAccountId"
+    USER_ACCOUNT ||..o{ WRITE_OFF : "CreatedByUserId"
+    USER_ACCOUNT ||..o{ WRITE_OFF_ATTACHMENT : "UploadedByUserId"
+    VEHICLE ||..o{ DELIVERY : "VehicleId"
+    VEHICLE ||..o{ SHIPMENT : "VehicleId"
+    WAREHOUSE ||..o{ ALLOCATION : "WarehouseId"
+    WAREHOUSE ||..o{ BATCH : "WarehouseId"
+    WAREHOUSE ||..o{ BATCH_QR_LABEL : "CurrentWarehouseId"
+    WAREHOUSE ||..o{ DRIVER : "WarehouseId"
+    WAREHOUSE ||..o{ GOODS_RECEIPT : "WarehouseId"
+    WAREHOUSE ||..o{ INVENTORY_LOCK : "WarehouseId"
+    WAREHOUSE ||..o{ INVENTORY_TRANSACTION : "WarehouseId"
+    WAREHOUSE ||..o{ MAP_DISTANCE_CACHE : "WarehouseId"
+    WAREHOUSE ||..o{ MAP_LOCATION : "WarehouseId"
+    WAREHOUSE ||..o{ PICKING_LIST : "WarehouseId"
+    WAREHOUSE ||..o{ QR_LABEL_EVENT : "WarehouseId"
+    WAREHOUSE ||..o{ REPLACEMENT_CASE : "WarehouseId"
+    WAREHOUSE ||..o{ SHIPMENT : "WarehouseId"
+    WAREHOUSE ||..o{ TRANSIT_TIME_RULE : "WarehouseId"
+    WAREHOUSE ||..o{ USER_WAREHOUSE_ASSIGNMENT : "WarehouseId"
+    WAREHOUSE ||..o{ VEHICLE : "WarehouseId"
+    WAREHOUSE ||..o{ WRITE_OFF : "WarehouseId"
+    WRITE_OFF ||..o{ WRITE_OFF_ATTACHMENT : "WriteOffId"
+    WRITE_OFF ||..o{ WRITE_OFF_ITEM : "WriteOffId"

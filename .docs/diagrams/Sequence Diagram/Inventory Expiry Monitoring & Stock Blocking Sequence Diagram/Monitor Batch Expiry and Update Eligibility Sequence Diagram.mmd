@@ -1,0 +1,243 @@
+sequenceDiagram
+    autonumber
+
+    actor Host as .NET Application Host
+    participant Job as DateTrackerHostedService
+    participant Service as InventoryExpirySweepService
+    participant Store as InventoryStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. START EXPIRY MONITORING JOB
+    %% ==========================================
+
+    Host->>+Job: ExecuteAsync(stoppingToken)
+
+    Note over Job,DB: Scheduled inventory expiry monitoring
+
+    loop Each scheduled sweep while worker is active
+
+        %% ==========================================
+        %% 2. TRIGGER EXPIRY SWEEP
+        %% ==========================================
+
+        Job->>+Service: RunAsync(stoppingToken)
+
+        Note right of Service: Determine current Vietnam business date
+
+        %% ==========================================
+        %% 3. LOAD BATCH EXPIRY CANDIDATES
+        %% ==========================================
+
+        Service->>+Store: ListBatchesForExpirySweepAsync(stoppingToken)
+
+        Store->>+DB: SELECT batches and relevant inventory data
+        DB-->>Store: Batch expiry candidates
+        deactivate DB
+
+        Store-->>Service: BatchExpiryCandidate list
+        deactivate Store
+
+        %% ==========================================
+        %% 4. CHECK AVAILABLE CANDIDATES
+        %% ==========================================
+
+        alt No batches require evaluation
+
+            Note right of Service: Sweep completes with zero candidates
+
+        else Batch candidates found
+
+            %% ==========================================
+            %% 5. PROCESS EACH BATCH
+            %% ==========================================
+
+            loop For each BatchExpiryCandidate
+
+                %% ==========================================
+                %% 6. CALCULATE EXPIRY STATUS
+                %% ==========================================
+
+                Service->>+Service: CalculateExpiryStatus(...)
+
+                Service-->>Service: Calculated ExpiryStatus
+                deactivate Service
+
+                %% ==========================================
+                %% 7. COMPARE CURRENT AND NEW STATUS
+                %% ==========================================
+
+                alt Expiry status has not changed
+
+                    Note right of Service: Keep existing Batch status
+
+                    Note right of Service: Do not create duplicate expiry event
+
+                else Expiry status has changed
+
+                    Note right of Service: Update tracked Batch.ExpiryStatus
+
+                    %% ==========================================
+                    %% 8. HANDLE EXPIRY TRANSITION
+                    %% ==========================================
+
+                    alt Batch transitions to Expired
+
+                        Note over Service,Store: Expired stock must not be used for new allocations
+
+                        %% ==========================================
+                        %% 9. CREATE EXPIRY INVENTORY LOCK
+                        %% ==========================================
+
+                        opt Batch has stock requiring expiry lock
+
+                            Service->>+Service: BuildExpiryLock(...)
+
+                            Service-->>Service: InventoryLock
+                            deactivate Service
+
+                            alt Existing reservations are affected
+
+                                Note right of Service: Set RequiresResolution on the lock
+
+                                Note right of Service: Preserve existing reservations for exception handling
+
+                            else No reservations are affected
+
+                                Note right of Service: Lock expired stock without reservation resolution
+
+                            end
+
+                            Service->>+Store: AddInventoryLock(inventoryLock)
+
+                            Store-->>Service: InventoryLock staged
+                            deactivate Store
+
+                        end
+
+                        %% ==========================================
+                        %% 10. PREPARE BATCH EXPIRED EVENT
+                        %% ==========================================
+
+                        Service->>+Service: BuildBatchExpiredMessage(...)
+
+                        Service-->>Service: OutboxMessage
+                        deactivate Service
+
+                        %% ==========================================
+                        %% 11. STAGE OUTBOX MESSAGE
+                        %% ==========================================
+
+                        Service->>+Store: AddOutboxMessage(outboxMessage)
+
+                        Store-->>Service: OutboxMessage staged
+                        deactivate Store
+
+                    else Batch transitions to Near-Expiry
+
+                        Note right of Service: Update expiry status only
+
+                        Note right of Service: No BatchExpired event or expiry lock
+
+                    else Batch transitions to another valid status
+
+                        Note right of Service: Preserve calculated status
+
+                    end
+
+                end
+
+            end
+
+        end
+
+        %% ==========================================
+        %% 12. RECORD EXPIRY SWEEP EXECUTION
+        %% ==========================================
+
+        Note right of Service: Calculate scanned, updated and expired counters
+
+        Service->>+Store: AddSweepRun(expirySweepRun)
+
+        Store-->>Service: ExpirySweepRun staged
+        deactivate Store
+
+        %% ==========================================
+        %% 13. SAVE EXPIRY MONITORING RESULTS
+        %% ==========================================
+
+        Service->>+Store: SaveChangesAsync(stoppingToken)
+
+        Store->>+DB: UPDATE changed Batch expiry statuses
+
+        Note right of DB: INSERT InventoryLocks and BatchExpired OutboxMessages
+
+        Note right of DB: INSERT ExpirySweepRun and counters
+
+        %% ==========================================
+        %% 14. HANDLE PERSISTENCE RESULT
+        %% ==========================================
+
+        alt Database save succeeds
+
+            DB-->>Store: Changes persisted
+
+        else Database save fails
+
+            DB-->>Store: Persistence exception
+
+        end
+
+        deactivate DB
+
+        Store-->>Service: Save result or exception
+        deactivate Store
+
+        %% ==========================================
+        %% 15. COMPLETE EXPIRY SWEEP
+        %% ==========================================
+
+        alt Sweep completed successfully
+
+            Service-->>Job: ExpirySweepResult
+
+        else Sweep encounters persistence error
+
+            Service-->>Job: Processing exception
+
+        end
+
+        deactivate Service
+
+        %% ==========================================
+        %% 16. WAIT FOR NEXT SCHEDULE
+        %% ==========================================
+
+        opt Background worker continues running
+
+            Note right of Job: Calculate delay until next scheduled run
+
+        end
+
+    end
+
+    %% ==========================================
+    %% 17. STOP BACKGROUND WORKER
+    %% ==========================================
+
+    Job-->>Host: ExecuteAsync completed or cancelled
+    deactivate Job
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over Service,DB: Expiry monitoring does not deduct Physical Stock
+
+    Note over Service,DB: Expired Batch eligibility is checked again during real-time allocation
+
+    Note over Service,DB: Existing Reservations are not silently deleted
+
+    Note over Service,DB: Repeated sweeps must avoid duplicate expiry events
+
+    Note over Job,DB: Outbox notification delivery is handled by a separate background process

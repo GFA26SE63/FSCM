@@ -1,0 +1,20 @@
+---
+title: Complaint State Machine
+---
+stateDiagram-v2
+    [*] --> Open : Retailer submits claim (shipment, line, batch, quantity, reason, evidence)
+    Open --> Approved : Admin/Operator accepts claim
+    Open --> Rejected : Admin/Operator rejects claim (reason required)
+    Rejected --> Open : Retailer supplements evidence and resubmits
+    Rejected --> Resolved : closed without resubmission
+    Approved --> Replacement : outcome Replacement chosen
+    Approved --> FinancialAdjustment : outcome FinancialAdjustment chosen
+    state Replacement {
+        [*] --> Preparing : designated warehouse prepares replacement batch
+        Preparing --> Shipped : replacement batch issued (ReplacementIssue, stock decreases)
+        Shipped --> Received : Retailer confirms replacement received
+        Received --> [*]
+    }
+    Replacement --> Resolved : replacement completed
+    FinancialAdjustment --> Resolved : receivable reduced or refund raised at final price (Loyalty adjusted)
+    Resolved --> [*]

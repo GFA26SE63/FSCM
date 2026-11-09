@@ -1,0 +1,28 @@
+---
+title: SalesOrder State Machine
+---
+stateDiagram-v2
+    [*] --> Allocating : Retailer/Sales submits SO (account, service radius, price, promotion, credit validated)
+    Allocating --> Quoted : real-time allocation covers every line, reservation + price snapshot committed
+    Allocating --> AllocationFailed : stock shortage (OutOfStock), whole SO rolled back, no reservation
+    Allocating --> AllocationConflict : optimistic-lock conflict after 3 automatic retries
+    Allocating --> Cancelled : Retailer/Sales withdraws SO before allocation commits
+    AllocationConflict --> Allocating : technical retry (retry queue or Admin/Operator Retry)
+    AllocationConflict --> Cancelled : Retailer/Sales withdraws SO
+    AllocationFailed --> Allocating : quantities adjusted and SO resubmitted
+    AllocationFailed --> Cancelled : Retailer/Sales withdraws SO
+    Quoted --> AwaitingPayment : Retailer accepts quote and chooses Prepaid (deadline N days)
+    Quoted --> PurchaseOrderIssued : Retailer accepts quote on Credit (eligibility and credit limit pass)
+    Quoted --> Rejected : Retailer rejects quote (reason required, reservation released)
+    Quoted --> Expired : quote deadline passed (reservation released)
+    AwaitingPayment --> PurchaseOrderIssued : prepayment confirmed in full
+    AwaitingPayment --> Expired : payment deadline passed (quote closed, reservation released)
+    PurchaseOrderIssued --> Picking : picking lists issued per warehouse, first valid QR batch scan
+    Picking --> Issued : every warehouse portion picked and stock issued at dispatch confirmation
+    Issued --> Delivering : shipments handed to driver/vehicle
+    Delivering --> Delivered : Retailer confirms receipt of every shipment
+    Delivered --> Completed : payment settled and no open claim (Loyalty points awarded)
+    Cancelled --> [*]
+    Rejected --> [*]
+    Expired --> [*]
+    Completed --> [*]

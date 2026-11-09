@@ -1,0 +1,457 @@
+classDiagram
+direction TB
+
+%% ==========================================
+%% API LAYER
+%% ==========================================
+
+namespace API {
+
+    class PaymentsController {
+        <<Controller>>
+        +List()
+        +GetByOrder()
+        +Collect()
+        +Adjust()
+        +CreatePayOsCheckout()
+        +PayOsWebhook()
+    }
+
+    class PaymentReceiptsController {
+        <<Controller>>
+        +Confirm()
+        +Reverse()
+    }
+
+    class RetailerReceivablesController {
+        <<Controller>>
+        +List()
+        +GetByOrder()
+    }
+}
+
+%% ==========================================
+%% APPLICATION SERVICES
+%% ==========================================
+
+namespace Application_Services {
+
+    class PaymentService {
+        <<Service>>
+        +ListAsync()
+        +GetByOrderAsync()
+        +CollectAsync()
+        +AdjustReceivableAsync()
+        +CreatePayOsCheckoutAsync()
+        +HandlePayOsWebhookAsync()
+        -ValidateReadRole()
+        -ValidateCollectionAuthority()
+        -ValidatePayOsWebhook()
+        -NormalizeOperationKey()
+        -ValidateAmount()
+    }
+
+    class PaymentPlanService {
+        <<Service>>
+        +CreateForFinalApprovedOrderAsync()
+        +CreateForDeliveredOrderAsync()
+    }
+
+    class PaymentReceiptService {
+        <<Service>>
+        +ConfirmAsync()
+        +ReverseAsync()
+        -ToResultAsync()
+        -ApplyDerivedStatus()
+        -Validate()
+        -NormalizeKey()
+    }
+
+    class RetailerReceivableService {
+        <<Service>>
+        +ListAsync()
+        +GetByOrderAsync()
+        -Today()
+        -ToResult()
+        -Validate()
+        -NormalizeStatus()
+    }
+
+    class QuoteService {
+        <<Service>>
+        +AcceptAsync()
+        +RejectAsync()
+    }
+
+    class PurchaseOrderGateService {
+        <<Service>>
+        +TryCreateAsync()
+    }
+}
+
+%% ==========================================
+%% APPLICATION INTERFACES
+%% ==========================================
+
+namespace Application_Interfaces {
+
+    class IPaymentStore {
+        <<interface>>
+        +FindByOrderAsync()
+        +FindByOperationKeyAsync()
+        +FindByPayOsOrderCodeAsync()
+        +ListAsync()
+        +CanViewAsync()
+        +Add()
+        +AddAuditLog()
+        +SaveChangesAsync()
+        +ExecuteInTransactionAsync()
+        +ClearTracking()
+    }
+
+    class IPaymentPlanService {
+        <<interface>>
+        +CreateForFinalApprovedOrderAsync()
+        +CreateForDeliveredOrderAsync()
+    }
+
+    class IPaymentReceiptStore {
+        <<interface>>
+        +FindReceiptByOperationKeyAsync()
+        +FindReceiptAsync()
+        +ListAllocationsAsync()
+        +FindPaymentsForUpdateAsync()
+        +ConfirmedAllocationTotalAsync()
+        +AddReceipt()
+        +AddAllocations()
+        +AddAuditLog()
+        +SaveChangesAsync()
+        +ExecuteInTransactionAsync()
+        +ClearTracking()
+    }
+
+    class IRetailerReceivableStore {
+        <<interface>>
+        +ListAsync()
+        +FindByOrderAsync()
+    }
+}
+
+%% ==========================================
+%% PERSISTENCE LAYER
+%% ==========================================
+
+namespace Persistence {
+
+    class PaymentStore {
+        <<Repository>>
+        +FindByOrderAsync()
+        +FindByOperationKeyAsync()
+        +FindByPayOsOrderCodeAsync()
+        +ListAsync()
+        +CanViewAsync()
+        +Add()
+        +AddAuditLog()
+        +SaveChangesAsync()
+        +ExecuteInTransactionAsync()
+        +ClearTracking()
+    }
+
+    class PaymentReceiptStore {
+        <<Repository>>
+        +FindReceiptByOperationKeyAsync()
+        +FindReceiptAsync()
+        +ListAllocationsAsync()
+        +FindPaymentsForUpdateAsync()
+        +ConfirmedAllocationTotalAsync()
+        +AddReceipt()
+        +AddAllocations()
+        +AddAuditLog()
+        +SaveChangesAsync()
+        +ExecuteInTransactionAsync()
+        +ClearTracking()
+    }
+
+    class RetailerReceivableStore {
+        <<Repository>>
+        +ListAsync()
+        +FindByOrderAsync()
+        -LoadAsync()
+    }
+}
+
+%% ==========================================
+%% DOMAIN - RETAILER AND ORDER
+%% ==========================================
+
+namespace Domain_Order {
+
+    class Retailer {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +Status: string
+        +CreditTermDays: int
+        +RequestedCreditTermDays: int
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class SalesOrder {
+        +Id: Guid
+        +OrderCode: string
+        +RetailerId: Guid
+        +PaymentMethod: string
+        +CreditTermDays: int
+        +FinalAmount: decimal
+        +Status: string
+        +AcceptedAt: DateTimeOffset
+        +Version: int
+        +CreatedAt: DateTimeOffset
+    }
+
+    class SalesOrderQuote {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +Status: string
+        +TotalAmount: decimal
+        +IssuedAt: DateTimeOffset
+        +AcceptedAt: DateTimeOffset
+        +ExpiresAt: DateTimeOffset
+        +Version: int
+    }
+}
+
+%% ==========================================
+%% DOMAIN - PAYMENT OBLIGATION
+%% ==========================================
+
+namespace Domain_Receivables {
+
+    class Payment {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +Method: string
+        +Status: string
+        +Amount: decimal
+        +AdjustedAmount: decimal
+        +ConfirmedAmount: decimal
+        +FinalApprovedAt: DateTimeOffset
+        +DeliveredDate: DateOnly
+        +DueDate: DateOnly
+        +PaidDate: DateOnly
+        +CollectionMethod: string
+        +OperationKey: string
+        +RequestHash: string
+        +PayOsOrderCode: long
+        +PayOsPaymentLinkId: string
+        +PayOsCheckoutUrl: string
+        +PayOsQrCode: string
+        +PayOsLinkStatus: string
+        +PayOsReference: string
+        +ConfirmedByUserId: Guid
+        +ConfirmedAt: DateTimeOffset
+        +Version: int
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class PaymentReceipt {
+        +Id: Guid
+        +ReceiptCode: string
+        +RetailerId: Guid
+        +ReceivedAmount: decimal
+        +UnappliedCreditAmount: decimal
+        +Status: string
+        +Reference: string
+        +Note: string
+        +ConfirmedByUserId: Guid
+        +ConfirmedAt: DateTimeOffset
+        +ReversedByUserId: Guid
+        +ReversedAt: DateTimeOffset
+        +ReversalReason: string
+        +OperationKey: string
+        +Version: int
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class PaymentReceiptAllocation {
+        +Id: Guid
+        +PaymentReceiptId: Guid
+        +PaymentId: Guid
+        +Amount: decimal
+        +CreatedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - FINANCIAL ADJUSTMENTS
+%% ==========================================
+
+namespace Domain_FinancialAdjustments {
+
+    class ReceiptDiscrepancy {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +ReceiptConfirmationId: Guid
+        +Status: string
+        +ResolutionType: string
+        +ReportedAt: DateTimeOffset
+        +ResolvedAt: DateTimeOffset
+    }
+
+    class ManualRefund {
+        +Id: Guid
+        +PaymentId: Guid
+        +SalesOrderId: Guid
+        +Amount: decimal
+        +Recipient: string
+        +Reason: string
+        +Status: string
+        +TransactionReference: string
+        +EvidenceReference: string
+        +TransferredAt: DateTimeOffset
+        +SubmittedByUserId: Guid
+        +SubmittedAt: DateTimeOffset
+        +VerifiedByUserId: Guid
+        +VerifiedAt: DateTimeOffset
+        +VerificationNote: string
+        +Version: int
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - AUDIT
+%% ==========================================
+
+namespace Domain_Audit {
+
+    class AuditLog {
+        +Id: Guid
+        +UserAccountId: Guid
+        +EntityName: string
+        +EntityId: Guid
+        +Action: string
+        +OldValues: string
+        +NewValues: string
+        +Reason: string
+        +CreatedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% API DEPENDENCIES
+%% ==========================================
+
+PaymentsController ..> PaymentService : uses
+
+PaymentReceiptsController ..> PaymentReceiptService : uses
+
+RetailerReceivablesController ..> RetailerReceivableService : uses
+
+%% ==========================================
+%% APPLICATION DEPENDENCIES
+%% ==========================================
+
+PaymentService ..> IPaymentStore : uses
+
+PaymentReceiptService ..> IPaymentReceiptStore : uses
+
+RetailerReceivableService ..> IRetailerReceivableStore : uses
+
+PaymentPlanService ..> IPaymentStore : uses
+
+QuoteService ..> IPaymentPlanService : creates payment obligation
+
+QuoteService ..> PurchaseOrderGateService : checks PO release
+
+PaymentService ..> PurchaseOrderGateService : checks PO after PayOS settlement
+
+%% ==========================================
+%% INTERFACE REALIZATION
+%% ==========================================
+
+PaymentStore ..|> IPaymentStore : implements
+
+PaymentReceiptStore ..|> IPaymentReceiptStore : implements
+
+RetailerReceivableStore ..|> IRetailerReceivableStore : implements
+
+PaymentPlanService ..|> IPaymentPlanService : implements
+
+%% ==========================================
+%% PERSISTENCE DEPENDENCIES
+%% ==========================================
+
+PaymentStore ..> Payment : manages
+
+PaymentStore ..> SalesOrder : reads order context
+
+PaymentStore ..> AuditLog : records changes
+
+PaymentReceiptStore ..> PaymentReceipt : manages
+
+PaymentReceiptStore ..> PaymentReceiptAllocation : manages allocations
+
+PaymentReceiptStore ..> Payment : updates settlements
+
+PaymentReceiptStore ..> AuditLog : records changes
+
+RetailerReceivableStore ..> Payment : reads obligations
+
+RetailerReceivableStore ..> SalesOrder : reads order context
+
+RetailerReceivableStore ..> ReceiptDiscrepancy : reads disputes
+
+RetailerReceivableStore ..> ManualRefund : reads refund history
+
+%% ==========================================
+%% RETAILER RELATIONSHIPS
+%% ==========================================
+
+Retailer "1" -- "0..*" SalesOrder : places
+
+Retailer "1" -- "0..*" PaymentReceipt : makes payments
+
+%% ==========================================
+%% SALES ORDER RELATIONSHIPS
+%% ==========================================
+
+SalesOrder "1" -- "0..*" SalesOrderQuote : quotations
+
+SalesOrder "1" -- "0..1" Payment : payment obligation
+
+%% ==========================================
+%% CONSOLIDATED PAYMENT RECEIPTS
+%% ==========================================
+
+PaymentReceipt "1" *-- "0..*" PaymentReceiptAllocation : contains
+
+Payment "1" -- "0..*" PaymentReceiptAllocation : receives allocated funds
+
+%% ==========================================
+%% FINANCIAL ADJUSTMENT RELATIONSHIPS
+%% ==========================================
+
+SalesOrder "1" -- "0..*" ReceiptDiscrepancy : reported issues
+
+SalesOrder "1" -- "0..*" ManualRefund : refund obligations
+
+Payment "1" -- "0..*" ManualRefund : associated refunds
+
+%% ==========================================
+%% BUSINESS DATA DEPENDENCIES
+%% ==========================================
+
+PaymentPlanService ..> SalesOrderQuote : uses approved amount
+
+PaymentPlanService ..> SalesOrder : uses payment method
+
+RetailerReceivableService ..> Payment : calculates balances
+
+RetailerReceivableService ..> PaymentReceiptAllocation : summarizes collections
+
+RetailerReceivableService ..> ManualRefund : considers refunds

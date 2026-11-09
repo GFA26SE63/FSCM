@@ -1,0 +1,560 @@
+classDiagram
+direction TB
+
+%% ==========================================
+%% API LAYER
+%% ==========================================
+
+namespace API {
+
+    class BusinessConfigurationsController {
+        <<Controller>>
+        +List()
+        +History()
+        +Update()
+    }
+
+    class WarehousesController {
+        <<Controller>>
+        +List()
+        +Get()
+        +Create()
+        +Update()
+        +UpdateStatus()
+    }
+
+    class MapController {
+        <<Controller>>
+        +Geocode()
+        +GetLocation()
+        +ListDistances()
+        +RefreshDistance()
+    }
+
+    class TransitTablesController {
+        <<Controller>>
+        +Current()
+        +History()
+        +Version()
+        +Lookup()
+        +Publish()
+    }
+
+    class NotificationsController {
+        <<Controller>>
+        +List()
+        +Badges()
+        +MarkRead()
+        +MarkAllRead()
+    }
+}
+
+%% ==========================================
+%% APPLICATION SERVICES
+%% ==========================================
+
+namespace Application_Services {
+
+    class WarehouseConfigurationService {
+        <<Service>>
+        +ListCurrentConfigurationsAsync()
+        +ListConfigurationHistoryAsync()
+        +UpdateConfigurationAsync()
+        +ListWarehousesAsync()
+        +GetWarehouseAsync()
+        +CreateWarehouseAsync()
+        +UpdateWarehouseAsync()
+        +SetWarehouseStatusAsync()
+        +ListTransitRulesAsync()
+        +ReplaceTransitRulesAsync()
+    }
+
+    class MapService {
+        <<Service>>
+        +GeocodeAsync()
+        +GetLocationAsync()
+        +ListDistancesAsync()
+        +RefreshDistanceAsync()
+    }
+
+    class TransitTableService {
+        <<Service>>
+        +GetCurrentAsync()
+        +GetVersionAsync()
+        +ListHistoryAsync()
+        +LookupAsync()
+        +PublishAsync()
+    }
+
+    class NotificationService {
+        <<Service>>
+        +ListAsync()
+        +GetBadgesAsync()
+        +MarkReadAsync()
+        +MarkAllReadAsync()
+    }
+
+    class InventoryOutboxDispatcher {
+        <<Service>>
+        +DispatchAsync()
+    }
+}
+
+%% ==========================================
+%% APPLICATION INTERFACES
+%% ==========================================
+
+namespace Application_Interfaces {
+
+    class IWarehouseConfigurationStore {
+        <<interface>>
+        +ListCurrentConfigurationsAsync()
+        +FindCurrentConfigurationAsync()
+        +ListConfigurationHistoryAsync()
+        +AddConfiguration()
+        +ListWarehousesAsync()
+        +FindWarehouseAsync()
+        +FindWarehouseByCodeAsync()
+        +AddWarehouse()
+        +FindWarehouseLocationAsync()
+        +AddLocation()
+        +ListTransitRulesAsync()
+        +AddTransitRules()
+        +AddAuditLog()
+        +SaveChangesAsync()
+    }
+
+    class IMapStore {
+        <<interface>>
+        +FindLocationAsync()
+        +AddLocation()
+        +FindActiveDistanceAsync()
+        +ListDistancesAsync()
+        +AddDistance()
+        +WarehouseExistsAsync()
+        +RetailerExistsAsync()
+        +SaveChangesAsync()
+    }
+
+    class ITransitTableStore {
+        <<interface>>
+        +FindCurrentAsync()
+        +FindCurrentForUpdateAsync()
+        +FindEffectiveAtAsync()
+        +FindByVersionAsync()
+        +ListAsync()
+        +MaxVersionAsync()
+        +AddTable()
+        +AddBands()
+        +AddAuditLog()
+        +SaveChangesAsync()
+    }
+
+    class INotificationStore {
+        <<interface>>
+        +ListAsync()
+        +CountUnreadAsync()
+        +FindOwnedAsync()
+        +MarkAllReadAsync()
+        +SaveChangesAsync()
+    }
+
+    class IInventoryOutboxStore {
+        <<interface>>
+        +ListPendingBatchExpiredMessagesAsync()
+        +ListExpiryNotificationRecipientsAsync()
+        +NotificationExistsAsync()
+        +AddNotification()
+        +SaveChangesAsync()
+    }
+}
+
+%% ==========================================
+%% PERSISTENCE LAYER
+%% ==========================================
+
+namespace Persistence {
+
+    class WarehouseConfigurationStore {
+        <<Repository>>
+        +ListCurrentConfigurationsAsync()
+        +FindCurrentConfigurationAsync()
+        +ListConfigurationHistoryAsync()
+        +AddConfiguration()
+        +ListWarehousesAsync()
+        +FindWarehouseAsync()
+        +AddWarehouse()
+        +FindWarehouseLocationAsync()
+        +AddLocation()
+        +ListTransitRulesAsync()
+        +AddTransitRules()
+        +AddAuditLog()
+        +SaveChangesAsync()
+    }
+
+    class MapStore {
+        <<Repository>>
+        +FindLocationAsync()
+        +AddLocation()
+        +FindActiveDistanceAsync()
+        +ListDistancesAsync()
+        +AddDistance()
+        +WarehouseExistsAsync()
+        +RetailerExistsAsync()
+        +SaveChangesAsync()
+    }
+
+    class TransitTableStore {
+        <<Repository>>
+        +FindCurrentAsync()
+        +FindCurrentForUpdateAsync()
+        +FindEffectiveAtAsync()
+        +FindByVersionAsync()
+        +ListAsync()
+        +MaxVersionAsync()
+        +AddTable()
+        +AddBands()
+        +AddAuditLog()
+        +SaveChangesAsync()
+    }
+
+    class NotificationStore {
+        <<Repository>>
+        +ListAsync()
+        +CountUnreadAsync()
+        +FindOwnedAsync()
+        +MarkAllReadAsync()
+        +SaveChangesAsync()
+    }
+
+    class InventoryOutboxStore {
+        <<Repository>>
+        +ListPendingBatchExpiredMessagesAsync()
+        +ListExpiryNotificationRecipientsAsync()
+        +NotificationExistsAsync()
+        +AddNotification()
+        +SaveChangesAsync()
+    }
+}
+
+%% ==========================================
+%% INFRASTRUCTURE
+%% ==========================================
+
+namespace Infrastructure {
+
+    class InventoryOutboxHostedService {
+        <<BackgroundJob>>
+        +ExecuteAsync()
+    }
+}
+
+%% ==========================================
+%% DOMAIN - SYSTEM CONFIGURATION
+%% ==========================================
+
+namespace Domain_Configuration {
+
+    class SystemConfiguration {
+        +Id: Guid
+        +ConfigKey: string
+        +ConfigValue: string
+        +ValueType: string
+        +Description: string
+        +Version: int
+        +EffectiveFrom: DateTimeOffset
+        +IsActive: bool
+        +UpdatedByUserId: Guid
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - WAREHOUSE
+%% ==========================================
+
+namespace Domain_Warehouse {
+
+    class Warehouse {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +Address: string
+        +RegionId: Guid
+        +MinimumStockThresholdCartons: int
+        +IsActive: bool
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class Region {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +Description: string
+        +IsActive: bool
+    }
+}
+
+%% ==========================================
+%% DOMAIN - MAP AND DISTANCE
+%% ==========================================
+
+namespace Domain_Map {
+
+    class MapLocation {
+        +Id: Guid
+        +WarehouseId: Guid
+        +RetailerId: Guid
+        +FormattedAddress: string
+        +Latitude: decimal
+        +Longitude: decimal
+        +Provider: string
+        +ProviderPlaceId: string
+        +Version: int
+        +NormalizedAt: DateTimeOffset
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class MapDistanceCache {
+        +Id: Guid
+        +OriginLocationId: Guid
+        +DestinationLocationId: Guid
+        +OriginLocationVersion: int
+        +DestinationLocationVersion: int
+        +DistanceMeters: decimal
+        +DurationSeconds: int
+        +Provider: string
+        +ProviderStatus: string
+        +IsActive: bool
+        +CalculatedAt: DateTimeOffset
+        +ExpiresAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - TRANSIT CONFIGURATION
+%% ==========================================
+
+namespace Domain_Transit {
+
+    class TransitTimeRule {
+        +Id: Guid
+        +WarehouseId: Guid
+        +MinDistanceMeters: decimal
+        +MaxDistanceMeters: decimal
+        +MaxServingDistanceMeters: decimal
+        +TransitMinutes: int
+        +HandlingMinutes: int
+        +EstimatedTransportCost: decimal
+        +Version: int
+        +EffectiveFrom: DateTimeOffset
+        +EffectiveTo: DateTimeOffset
+        +IsActive: bool
+    }
+
+    class TransitTable {
+        +Id: Guid
+        +Version: int
+        +MaxServingDistanceMeters: decimal
+        +EffectiveFrom: DateTimeOffset
+        +EffectiveTo: DateTimeOffset
+        +IsActive: bool
+        +CreatedByUserId: Guid
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class TransitTableBand {
+        +Id: Guid
+        +TransitTableId: Guid
+        +MinDistanceMeters: decimal
+        +MaxDistanceMeters: decimal
+        +TransitMinutes: int
+        +HandlingMinutes: int
+        +EstimatedCostAmount: decimal
+        +CreatedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - NOTIFICATIONS
+%% ==========================================
+
+namespace Domain_Notifications {
+
+    class Notification {
+        +Id: Guid
+        +UserAccountId: Guid
+        +OutboxMessageId: Guid
+        +SalesOrderId: Guid
+        +Type: string
+        +Title: string
+        +Message: string
+        +DeepLink: string
+        +RelatedEntityType: string
+        +RelatedEntityId: Guid
+        +IsRead: bool
+        +ReadAt: DateTimeOffset
+        +CreatedAt: DateTimeOffset
+    }
+
+    class OutboxMessage {
+        +Id: Guid
+        +AggregateType: string
+        +AggregateId: Guid
+        +EventType: string
+        +Payload: string
+        +Status: string
+        +RetryCount: int
+        +LastError: string
+        +CreatedAt: DateTimeOffset
+        +ProcessedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - AUDIT AND USER
+%% ==========================================
+
+namespace Domain_References {
+
+    class UserAccount {
+        +Id: Guid
+        +Email: string
+        +FullName: string
+        +Phone: string
+        +Role: string
+        +IsActive: bool
+    }
+
+    class AuditLog {
+        +Id: Guid
+        +UserAccountId: Guid
+        +EntityName: string
+        +EntityId: Guid
+        +Action: string
+        +OldValues: string
+        +NewValues: string
+        +Reason: string
+        +CreatedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% API DEPENDENCIES
+%% ==========================================
+
+BusinessConfigurationsController ..> WarehouseConfigurationService : uses
+
+WarehousesController ..> WarehouseConfigurationService : uses
+
+MapController ..> MapService : uses
+
+TransitTablesController ..> TransitTableService : uses
+
+NotificationsController ..> NotificationService : uses
+
+%% ==========================================
+%% APPLICATION DEPENDENCIES
+%% ==========================================
+
+WarehouseConfigurationService ..> IWarehouseConfigurationStore : uses
+
+MapService ..> IMapStore : uses
+
+TransitTableService ..> ITransitTableStore : uses
+
+NotificationService ..> INotificationStore : uses
+
+InventoryOutboxDispatcher ..> IInventoryOutboxStore : uses
+
+%% ==========================================
+%% BACKGROUND PROCESSING
+%% ==========================================
+
+InventoryOutboxHostedService ..> InventoryOutboxDispatcher : executes
+
+%% ==========================================
+%% INTERFACE REALIZATION
+%% ==========================================
+
+WarehouseConfigurationStore ..|> IWarehouseConfigurationStore : implements
+
+MapStore ..|> IMapStore : implements
+
+TransitTableStore ..|> ITransitTableStore : implements
+
+NotificationStore ..|> INotificationStore : implements
+
+InventoryOutboxStore ..|> IInventoryOutboxStore : implements
+
+%% ==========================================
+%% CONFIGURATION RELATIONSHIPS
+%% ==========================================
+
+UserAccount "0..1" -- "0..*" SystemConfiguration : updated by
+
+UserAccount "0..1" -- "0..*" AuditLog : performed actions
+
+%% ==========================================
+%% REGION AND WAREHOUSE
+%% ==========================================
+
+Region "1" -- "0..*" Warehouse : contains
+
+Warehouse "0..1" -- "0..*" MapLocation : location records
+
+%% ==========================================
+%% MAP DISTANCE RELATIONSHIPS
+%% ==========================================
+
+MapLocation "1" -- "0..*" MapDistanceCache : origin location
+
+MapLocation "1" -- "0..*" MapDistanceCache : destination location
+
+%% ==========================================
+%% TRANSIT CONFIGURATION RELATIONSHIPS
+%% ==========================================
+
+Warehouse "1" -- "0..*" TransitTimeRule : service rules
+
+TransitTable "1" *-- "1..*" TransitTableBand : contains
+
+UserAccount "1" -- "0..*" TransitTable : published by
+
+%% ==========================================
+%% NOTIFICATION RELATIONSHIPS
+%% ==========================================
+
+UserAccount "1" -- "0..*" Notification : receives
+
+OutboxMessage "0..1" -- "0..*" Notification : produces
+
+%% ==========================================
+%% PERSISTENCE DEPENDENCIES
+%% ==========================================
+
+WarehouseConfigurationStore ..> SystemConfiguration : manages
+
+WarehouseConfigurationStore ..> Warehouse : manages
+
+WarehouseConfigurationStore ..> TransitTimeRule : manages
+
+WarehouseConfigurationStore ..> AuditLog : records
+
+MapStore ..> MapLocation : manages
+
+MapStore ..> MapDistanceCache : manages
+
+TransitTableStore ..> TransitTable : manages
+
+TransitTableStore ..> TransitTableBand : manages
+
+NotificationStore ..> Notification : manages
+
+InventoryOutboxStore ..> OutboxMessage : reads
+
+InventoryOutboxStore ..> Notification : creates

@@ -1,0 +1,9 @@
+---
+title: AllocationRunOrder State Machine
+---
+stateDiagram-v2
+    [*] --> Pending : SO entered its real-time allocation attempt
+    Pending --> Fulfilled : every line fully allocated and reserved
+    Pending --> Short : a line cannot be fully allocated, SO rolled back (no carry-over, a new submission is required)
+    Fulfilled --> [*]
+    Short --> [*]

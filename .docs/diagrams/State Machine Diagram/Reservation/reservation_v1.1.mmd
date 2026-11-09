@@ -1,0 +1,11 @@
+---
+title: Reservation State Machine
+---
+stateDiagram-v2
+    [*] --> Tentative : planner selects a warehouse-batch-quantity slice (no stock held yet)
+    Tentative --> Reserved : conditional update succeeds (Version matches, Available >= quantity)
+    Tentative --> Released : SO rolled back (shortage or version conflict)
+    Reserved --> Issued : stock physically issued at dispatch (OnHand decreases)
+    Reserved --> Released : quote rejected, quote/payment expired or SO withdrawn
+    Issued --> [*]
+    Released --> [*]

@@ -1,0 +1,328 @@
+sequenceDiagram
+    autonumber
+
+    actor Operator as Operator / Administrator
+    participant UI as Web Portal
+    participant API as PaymentReceiptsController
+    participant Service as PaymentReceiptService
+    participant Store as PaymentReceiptStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. SUBMIT CONSOLIDATED PAYMENT RECEIPT
+    %% ==========================================
+
+    Operator->>+UI: Record consolidated payment receipt
+
+    Note right of UI: Enter Retailer, received amount and allocations
+
+    Note right of UI: Provide unique OperationKey
+
+    UI->>+API: Confirm(request, operationKey)
+
+    API->>+Service: ConfirmAsync(data, role, actorId, operationKey, ct)
+
+    %% ==========================================
+    %% 2. VALIDATE ACTOR AND REQUEST
+    %% ==========================================
+
+    Service->>+Service: NormalizeKey(operationKey)
+    Service-->>Service: Normalized OperationKey
+    deactivate Service
+
+    Service->>+Service: Validate(data)
+    Service-->>Service: Validation result
+    deactivate Service
+
+    alt Unauthorized actor or invalid receipt data
+
+        Note right of Service: Return Forbidden or Validation error
+
+    else Actor and receipt data are valid
+
+        %% ==========================================
+        %% 3. CHECK IDEMPOTENCY
+        %% ==========================================
+
+        Service->>+Store: FindReceiptByOperationKeyAsync(key, false, ct)
+
+        Store->>+DB: SELECT PaymentReceipt WHERE OperationKey = key
+
+        DB-->>Store: Existing receipt or null
+        deactivate DB
+
+        Store-->>Service: Existing receipt result
+        deactivate Store
+
+        alt Receipt with OperationKey already exists
+
+            %% ==========================================
+            %% 4. VALIDATE REPLAYED REQUEST
+            %% ==========================================
+
+            alt Replayed request matches existing receipt
+
+                Service->>+Service: ToResultAsync(existingReceipt, ct)
+
+                Service->>+Store: ListAllocationsAsync(receiptId, ct)
+
+                Store->>+DB: SELECT PaymentReceiptAllocations
+
+                DB-->>Store: Existing allocations
+                deactivate DB
+
+                Store-->>Service: Allocation records
+                deactivate Store
+
+                Service-->>Service: Existing PaymentReceiptResult
+                deactivate Service
+
+                Note right of Service: Do not create duplicate receipt or allocations
+
+            else OperationKey is reused for different receipt data
+
+                Note right of Service: Return Conflict
+
+            end
+
+        else No receipt with OperationKey exists
+
+            %% ==========================================
+            %% 5. START ATOMIC CONFIRMATION
+            %% ==========================================
+
+            Service->>+Store: ExecuteInTransactionAsync(operation, ct)
+
+            Store->>+DB: BEGIN TRANSACTION
+            DB-->>Store: Transaction started
+            deactivate DB
+
+            Note over Service,DB: All payment allocation updates belong to one transaction
+
+            %% ==========================================
+            %% 6. LOAD PAYMENT OBLIGATIONS
+            %% ==========================================
+
+            Service->>+Store: FindPaymentsForUpdateAsync(paymentIds, ct)
+
+            Store->>+DB: SELECT Payments and related SalesOrder context
+
+            Note right of DB: Load target obligations for transactional update
+
+            DB-->>Store: Payment obligations and order context
+            deactivate DB
+
+            Store-->>Service: Payment collection
+            deactivate Store
+
+            %% ==========================================
+            %% 7. VALIDATE PAYMENT ALLOCATIONS
+            %% ==========================================
+
+            Note right of Service: Check Retailer ownership and Payment eligibility
+
+            Note right of Service: Validate allocation amounts and total received
+
+            alt Payment missing, wrong Retailer or invalid allocation
+
+                Note right of Service: Reject entire consolidated receipt
+
+                Store->>+DB: ROLLBACK
+
+                DB-->>Store: Transaction rolled back
+                deactivate DB
+
+            else All target Payments are valid
+
+                %% ==========================================
+                %% 8. CALCULATE EXISTING ALLOCATIONS
+                %% ==========================================
+
+                loop For each target Payment
+
+                    Service->>+Store: ConfirmedAllocationTotalAsync(paymentId, null, ct)
+
+                    Store->>+DB: SELECT SUM(confirmed receipt allocations)
+
+                    Note right of DB: Exclude reversed receipts from confirmed total
+
+                    DB-->>Store: Existing allocated total
+                    deactivate DB
+
+                    Store-->>Service: Confirmed allocation amount
+                    deactivate Store
+
+                    %% ==========================================
+                    %% 9. CHECK REMAINING OBLIGATION
+                    %% ==========================================
+
+                    Note right of Service: Check new allocation against remaining collectible amount
+
+                end
+
+                %% ==========================================
+                %% 10. CHECK TOTAL ALLOCATION
+                %% ==========================================
+
+                alt Any allocation exceeds remaining obligation
+
+                    Note right of Service: Reject over-allocation
+
+                    Store->>+DB: ROLLBACK
+
+                    DB-->>Store: Transaction rolled back
+                    deactivate DB
+
+                else Every allocation is valid
+
+                    %% ==========================================
+                    %% 11. CALCULATE UNAPPLIED CREDIT
+                    %% ==========================================
+
+                    Note right of Service: TotalAllocated = sum of requested allocations
+
+                    Note right of Service: UnappliedCredit = ReceivedAmount - TotalAllocated
+
+                    %% ==========================================
+                    %% 12. CREATE PAYMENT RECEIPT
+                    %% ==========================================
+
+                    Note right of Service: Prepare confirmed PaymentReceipt
+
+                    Note right of Service: Record Retailer, reference, amount and OperationKey
+
+                    Service->>+Store: AddReceipt(paymentReceipt)
+
+                    Store-->>Service: PaymentReceipt staged
+                    deactivate Store
+
+                    %% ==========================================
+                    %% 13. CREATE RECEIPT ALLOCATIONS
+                    %% ==========================================
+
+                    Note right of Service: Prepare one allocation record per target Payment
+
+                    Service->>+Store: AddAllocations(receiptAllocations)
+
+                    Store-->>Service: PaymentReceiptAllocations staged
+                    deactivate Store
+
+                    %% ==========================================
+                    %% 14. UPDATE DERIVED PAYMENT STATES
+                    %% ==========================================
+
+                    loop For each affected Payment
+
+                        Service->>+Service: ApplyDerivedStatus(payment, confirmedTotal, now)
+
+                        Service-->>Service: Updated Payment state
+                        deactivate Service
+
+                        Note right of Service: Recalculate confirmed amount and settlement status
+
+                    end
+
+                    %% ==========================================
+                    %% 15. RECORD AUDIT LOG
+                    %% ==========================================
+
+                    Service->>+Store: AddAuditLog(auditLog)
+
+                    Store-->>Service: AuditLog staged
+                    deactivate Store
+
+                    %% ==========================================
+                    %% 16. PERSIST ALL FINANCIAL CHANGES
+                    %% ==========================================
+
+                    Service->>+Store: SaveChangesAsync(ct)
+
+                    Store->>+DB: INSERT PaymentReceipt
+
+                    Note right of DB: INSERT PaymentReceiptAllocations and AuditLog
+
+                    Note right of DB: UPDATE affected Payment confirmed amounts and statuses
+
+                    DB-->>Store: Changes saved
+                    deactivate DB
+
+                    Store-->>Service: Save successful
+                    deactivate Store
+
+                    %% ==========================================
+                    %% 17. COMMIT TRANSACTION
+                    %% ==========================================
+
+                    Store->>+DB: COMMIT
+
+                    DB-->>Store: Transaction committed
+                    deactivate DB
+
+                end
+
+            end
+
+            %% ==========================================
+            %% 18. RETURN TRANSACTION RESULT
+            %% ==========================================
+
+            Store-->>Service: Confirmation outcome or business error
+            deactivate Store
+
+            %% ==========================================
+            %% 19. BUILD PAYMENT RECEIPT RESULT
+            %% ==========================================
+
+            opt Payment Receipt confirmed successfully
+
+                Service->>+Service: ToResultAsync(paymentReceipt, ct)
+
+                Service->>+Store: ListAllocationsAsync(receiptId, ct)
+
+                Store->>+DB: SELECT PaymentReceiptAllocations by ReceiptId
+
+                DB-->>Store: Persisted allocations
+                deactivate DB
+
+                Store-->>Service: Allocation details
+                deactivate Store
+
+                Service-->>Service: PaymentReceiptResult
+                deactivate Service
+
+            end
+
+        end
+
+    end
+
+    %% ==========================================
+    %% 20. RETURN CONFIRMATION RESPONSE
+    %% ==========================================
+
+    Service-->>API: PaymentReceiptResult or business error
+    deactivate Service
+
+    API-->>UI: Payment Receipt confirmation response
+    deactivate API
+
+    UI-->>Operator: Display confirmed receipt and allocation details
+    deactivate UI
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over Service,DB: One Receipt can allocate funds to multiple Payment obligations
+
+    Note over Service,DB: Total allocated amount must not exceed ReceivedAmount
+
+    Note over Service,DB: UnappliedCreditAmount retains unallocated received money
+
+    Note over Service,DB: Confirmed Payment balances are recalculated atomically
+
+    Note over Service,DB: Replayed OperationKey must not create duplicate collections
+
+    Note over Service,DB: Receipt confirmation does not change Physical Stock
+
+    Note over Service,DB: Purchase Order and order completion gates are separate workflows

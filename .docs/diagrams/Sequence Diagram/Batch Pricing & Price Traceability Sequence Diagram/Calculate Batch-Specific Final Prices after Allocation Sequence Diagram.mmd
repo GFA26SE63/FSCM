@@ -1,0 +1,264 @@
+sequenceDiagram
+    autonumber
+
+    actor User as Sales / Retailer
+    participant UI as Mobile App
+    participant API as OrdersController
+    participant OrderSvc as OrderService
+    participant AllocSvc as RealTimeAllocationService
+    participant AllocStore as RealTimeAllocationStore
+    participant PricingSvc as AllocationPricingService
+    participant DiscountSvc as ShelfLifeDiscountService
+    participant DiscountStore as ShelfLifeDiscountStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. SUBMIT ORDER
+    %% ==========================================
+
+    User->>+UI: Submit Order
+
+    UI->>+API: Create(orderData)
+    API->>+OrderSvc: CreateAsync(orderData)
+
+    Note over OrderSvc,AllocSvc: Order capture validates selected promotions and pricing context
+
+    %% ==========================================
+    %% 2. START REAL-TIME ALLOCATION
+    %% ==========================================
+
+    OrderSvc->>+AllocSvc: AllocateAsync(salesOrderId)
+
+    %% ==========================================
+    %% 3. LOAD ALLOCATION AND PRICING DATA
+    %% ==========================================
+
+    Note over AllocSvc,DB: Allocation uses a transaction with stock concurrency protection
+
+    AllocSvc->>+AllocStore: LoadForUpdateAsync(salesOrderId)
+
+    AllocStore->>+DB: SELECT order, lines, batches and inventory
+    Note right of DB: Load prices, MLOR, stock and warehouse data
+
+    DB-->>AllocStore: RealTimeAllocationContext
+    deactivate DB
+
+    AllocStore-->>AllocSvc: Allocation context
+    deactivate AllocStore
+
+    %% ==========================================
+    %% 4. SELECT ELIGIBLE BATCHES
+    %% ==========================================
+
+    Note over AllocSvc,AllocStore: Validate expiry, MLOR at ETA and available stock
+
+    Note over AllocSvc,AllocStore: Select warehouse and batch portions using allocation scores
+
+    alt Order cannot be fully allocated
+
+        Note right of AllocSvc: No partial stock reservation is retained
+
+        AllocSvc-->>OrderSvc: Allocation shortage result
+
+    else All order lines can be allocated
+
+        %% ==========================================
+        %% 5. PREPARE BATCH PRICING
+        %% ==========================================
+
+        Note over AllocSvc,PricingSvc: Pricing parts retain the base price after quantity promotion
+
+        AllocSvc->>+PricingSvc: PriceAsync(pricingOrder, selectedParts)
+
+        %% ==========================================
+        %% 6. PRICE EACH SELECTED BATCH PORTION
+        %% ==========================================
+
+        loop For each selected Batch and Warehouse portion
+
+            Note right of PricingSvc: Use the shared pricing moment
+
+            Note right of PricingSvc: Calculate remaining shelf-life percentage
+
+            %% ==========================================
+            %% 7. MATCH SHELF-LIFE DISCOUNT
+            %% ==========================================
+
+            PricingSvc->>+DiscountSvc: MatchAsync(productId, categoryId, remainingPercent, pricingAt)
+
+            DiscountSvc->>+DiscountStore: FindEffectiveAtAsync(pricingAt)
+
+            DiscountStore->>+DB: SELECT effective discount table and tiers
+
+            DB-->>DiscountStore: Effective table and tier records
+            deactivate DB
+
+            DiscountStore-->>DiscountSvc: ShelfLifeDiscountTableView
+            deactivate DiscountStore
+
+            %% ==========================================
+            %% 8. RESOLVE DISCOUNT TIER
+            %% ==========================================
+
+            Note right of DiscountSvc: Resolve one applicable tier by configured scope precedence
+
+            alt Matching discount tier exists
+
+                DiscountSvc-->>PricingSvc: Matched tier, percentage and table version
+
+            else No matching discount tier
+
+                DiscountSvc-->>PricingSvc: No discount tier
+
+            end
+
+            deactivate DiscountSvc
+
+            %% ==========================================
+            %% 9. CALCULATE FINAL BATCH PRICE
+            %% ==========================================
+
+            alt Valid percentage discount applies
+
+                Note right of PricingSvc: Final unit price = promotion-adjusted price x (1 - discount rate)
+
+            else No shelf-life discount applies
+
+                Note right of PricingSvc: Retain promotion-adjusted base price
+
+            end
+
+            Note right of PricingSvc: Calculate portion amount and preserve price breakdown
+
+        end
+
+        %% ==========================================
+        %% 10. AGGREGATE ORDER PRICE
+        %% ==========================================
+
+        Note over PricingSvc,AllocSvc: Sum priced portions for all Batch and Warehouse allocations
+
+        PricingSvc-->>AllocSvc: PricedOrder or pricing validation error
+        deactivate PricingSvc
+
+        alt Price validation failed
+
+            Note right of AllocSvc: Do not commit allocation or partial reservation
+
+            AllocSvc-->>OrderSvc: Pricing validation error
+
+        else All priced portions are valid
+
+            %% ==========================================
+            %% 11. STAGE PRICED ALLOCATIONS
+            %% ==========================================
+
+            loop For each priced Batch portion
+
+                AllocSvc->>+AllocStore: AddAllocation(pricedAllocation)
+
+                AllocStore-->>AllocSvc: Allocation staged
+                deactivate AllocStore
+
+                %% ==========================================
+                %% 12. STAGE STOCK RESERVATION
+                %% ==========================================
+
+                AllocSvc->>+AllocStore: AddReservation(reservation)
+
+                AllocStore-->>AllocSvc: Reservation staged
+                deactivate AllocStore
+
+                %% ==========================================
+                %% 13. RECORD RESERVATION MOVEMENT
+                %% ==========================================
+
+                AllocSvc->>+AllocStore: AddTransaction(reservationTransaction)
+
+                AllocStore-->>AllocSvc: Inventory transaction staged
+                deactivate AllocStore
+
+            end
+
+            %% ==========================================
+            %% 14. CREATE FINAL QUOTATION
+            %% ==========================================
+
+            AllocSvc->>+AllocStore: AddQuote(salesOrderQuote)
+
+            AllocStore-->>AllocSvc: Quotation staged
+            deactivate AllocStore
+
+            %% ==========================================
+            %% 15. SAVE ATOMIC ALLOCATION
+            %% ==========================================
+
+            AllocSvc->>+AllocStore: SaveChangesAsync()
+
+            AllocStore->>+DB: INSERT Allocations, Reservations and SalesOrderQuote
+
+            Note right of DB: UPDATE reserved balances and finalized order pricing
+
+            alt Transaction commits successfully
+
+                DB-->>AllocStore: Allocation and pricing committed
+
+            else Stock version or concurrency conflict
+
+                DB-->>AllocStore: Concurrency exception - transaction rolled back
+
+            end
+
+            deactivate DB
+
+            AllocStore-->>AllocSvc: Save result or concurrency error
+            deactivate AllocStore
+
+            %% ==========================================
+            %% 16. RETURN ALLOCATION RESULT
+            %% ==========================================
+
+            alt Allocation committed
+
+                Note right of AllocSvc: Final quotation is ready for Retailer review
+
+                AllocSvc-->>OrderSvc: Allocation and finalized quotation
+
+            else Allocation commit failed
+
+                Note right of AllocSvc: Revalidate or retry without partial reservation
+
+                AllocSvc-->>OrderSvc: Allocation conflict result
+
+            end
+
+        end
+
+    end
+
+    %% ==========================================
+    %% 17. RETURN ORDER RESPONSE
+    %% ==========================================
+
+    deactivate AllocSvc
+
+    OrderSvc-->>API: Order result with allocation and pricing status
+    deactivate OrderSvc
+
+    API-->>UI: Order creation response
+    deactivate API
+
+    UI-->>User: Display order status and finalized quotation if available
+    deactivate UI
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over AllocSvc,DB: Price calculation occurs after eligible Batch selection
+
+    Note over PricingSvc,DiscountStore: A single Batch portion receives at most one shelf-life discount tier
+
+    Note over AllocSvc,DB: Physical Stock is not deducted during allocation
+
+    Note over OrderSvc,DB: Published quotations retain their finalized prices

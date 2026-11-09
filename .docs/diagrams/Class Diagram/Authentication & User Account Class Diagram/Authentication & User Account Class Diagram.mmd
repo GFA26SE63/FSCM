@@ -1,0 +1,296 @@
+classDiagram
+direction TB
+
+%% ==========================================
+%% API LAYER
+%% ==========================================
+
+namespace API {
+    class AuthController {
+        +Login()
+        +ExchangeGoogle()
+        +Refresh()
+        +RequestRetailerOtp()
+        +VerifyRetailerOtp()
+        +SetRetailerPassword()
+        +Activate()
+        +RequestPasswordReset()
+        +ConfirmPasswordReset()
+        +Logout()
+        +Me()
+    }
+
+    class UsersController {
+        +List()
+        +Get()
+        +Create()
+        +UpdateProfile()
+        +UpdateRole()
+        +UpdateStatus()
+        +AssignWarehouse()
+        +AssignSalesGroup()
+        +AssignRegion()
+        +AssignRetailer()
+    }
+}
+
+%% ==========================================
+%% APPLICATION LAYER
+%% ==========================================
+
+namespace Application {
+    class IdentityService {
+        <<Service>>
+        +LoginAsync()
+        +ExchangeGoogleAsync()
+        +RefreshAsync()
+        +LogoutAsync()
+        +ActivateAsync()
+        +RequestPasswordResetAsync()
+        +ResetPasswordAsync()
+        +GetCurrentUserAsync()
+        +ListUsersAsync()
+        +CreateUserAsync()
+        +UpdateProfileAsync()
+        +UpdateRoleAsync()
+        +SetActiveStatusAsync()
+        +AssignWarehouseAsync()
+        +AssignSalesGroupAsync()
+        +AssignRegionAsync()
+        +AssignRetailerAsync()
+    }
+
+    class RetailerActivationService {
+        <<Service>>
+        +RequestOtpAsync()
+        +VerifyOtpAsync()
+        +SetPasswordAsync()
+    }
+
+    class IIdentityStore {
+        <<Interface>>
+        +FindUserByEmailAsync()
+        +FindUserByPhoneAsync()
+        +FindUserByIdAsync()
+        +FindUserByGoogleSubjectAsync()
+        +FindCredentialAsync()
+        +FindRefreshTokenAsync()
+        +FindAccountTokenAsync()
+        +GetScopeAsync()
+        +AddUser()
+        +AddCredential()
+        +AddRefreshToken()
+        +SaveChangesAsync()
+    }
+
+    class IRetailerActivationStore {
+        <<Interface>>
+        +FindUserByPhoneAsync()
+        +FindCredentialAsync()
+        +FindLatestAsync()
+        +FindBySetupTokenHashAsync()
+        +CountRequestsForAccountAsync()
+        +AddChallenge()
+        +AddCredential()
+        +SaveChangesAsync()
+    }
+
+    class IIdentityTokenProvider {
+        <<Interface>>
+        +CreateAccessToken()
+        +GenerateOpaqueToken()
+        +HashOpaqueToken()
+    }
+
+    class IPasswordHasher {
+        <<Interface>>
+        +Hash()
+        +Verify()
+    }
+}
+
+%% ==========================================
+%% DOMAIN - AUTHENTICATION ENTITIES
+%% ==========================================
+
+namespace Domain_Authentication {
+    class UserAccount {
+        +Guid Id
+        +string GoogleSubject
+        +string IdentityProvider
+        +string Email
+        +string Phone
+        +string FullName
+        +string Role
+        +bool IsActive
+        +DateTimeOffset CreatedAt
+        +DateTimeOffset UpdatedAt
+    }
+
+    class UserCredential {
+        +Guid Id
+        +Guid UserAccountId
+        +string PasswordHash
+        +int FailedLoginCount
+        +DateTimeOffset LockoutEndAt
+        +bool MustChangePassword
+        +DateTimeOffset PasswordChangedAt
+        +DateTimeOffset CreatedAt
+        +DateTimeOffset UpdatedAt
+    }
+
+    class RefreshToken {
+        +Guid Id
+        +Guid UserAccountId
+        +string TokenHash
+        +DateTimeOffset ExpiresAt
+        +DateTimeOffset CreatedAt
+        +DateTimeOffset RevokedAt
+        +Guid ReplacedByTokenId
+        +string CreatedByIpAddress
+        +string RevokedByIpAddress
+    }
+
+    class AccountToken {
+        +Guid Id
+        +Guid UserAccountId
+        +string Purpose
+        +string TokenHash
+        +DateTimeOffset ExpiresAt
+        +DateTimeOffset ConsumedAt
+        +DateTimeOffset CreatedAt
+    }
+
+    class RetailerActivationChallenge {
+        +Guid Id
+        +Guid UserAccountId
+        +string OtpHash
+        +string SetupTokenHash
+        +string RequestedIpAddress
+        +int FailedAttemptCount
+        +DateTimeOffset ExpiresAt
+        +DateTimeOffset VerifiedAt
+        +DateTimeOffset SetupTokenExpiresAt
+        +DateTimeOffset ConsumedAt
+        +DateTimeOffset CreatedAt
+    }
+}
+
+%% ==========================================
+%% DOMAIN - AUTHORIZATION SCOPE
+%% ==========================================
+
+namespace Domain_Authorization {
+    class UserWarehouseAssignment {
+        +Guid Id
+        +Guid UserAccountId
+        +Guid WarehouseId
+        +DateTimeOffset AssignedAt
+        +bool IsActive
+    }
+
+    class UserRegionAssignment {
+        +Guid Id
+        +Guid UserAccountId
+        +Guid RegionId
+        +DateTimeOffset AssignedAt
+        +DateTimeOffset UnassignedAt
+        +bool IsActive
+    }
+
+    class SalesGroupMember {
+        +Guid Id
+        +Guid SalesGroupId
+        +Guid UserAccountId
+        +DateTimeOffset AssignedAt
+        +DateTimeOffset UnassignedAt
+        +bool IsActive
+    }
+
+    class Warehouse {
+        +Guid Id
+        +string Code
+        +string Name
+        +Guid RegionId
+        +bool IsActive
+    }
+
+    class Region {
+        +Guid Id
+        +string Code
+        +string Name
+        +bool IsActive
+    }
+
+    class SalesGroup {
+        +Guid Id
+        +Guid RegionId
+        +string Code
+        +string Name
+        +bool IsActive
+    }
+
+    class Retailer {
+        +Guid Id
+        +Guid UserAccountId
+        +Guid RegionId
+        +string Code
+        +string Name
+        +string Status
+    }
+}
+
+%% ==========================================
+%% API DEPENDENCIES
+%% ==========================================
+
+AuthController ..> IdentityService : uses
+AuthController ..> RetailerActivationService : uses
+UsersController ..> IdentityService : uses
+
+%% ==========================================
+%% APPLICATION DEPENDENCIES
+%% ==========================================
+
+IdentityService ..> IIdentityStore : uses
+IdentityService ..> IIdentityTokenProvider : uses
+IdentityService ..> IPasswordHasher : uses
+
+RetailerActivationService ..> IRetailerActivationStore : uses
+RetailerActivationService ..> IIdentityTokenProvider : uses
+RetailerActivationService ..> IPasswordHasher : uses
+RetailerActivationService ..> IdentityService : uses
+
+%% ==========================================
+%% AUTHENTICATION ASSOCIATIONS
+%% ==========================================
+
+UserAccount "1" -- "0..1" UserCredential : has credential
+
+UserAccount "1" -- "0..*" RefreshToken : has sessions
+
+UserAccount "1" -- "0..*" AccountToken : has account tokens
+
+UserAccount "1" -- "0..*" RetailerActivationChallenge : has OTP challenges
+
+%% ==========================================
+%% AUTHORIZATION ASSOCIATIONS
+%% ==========================================
+
+UserAccount "1" -- "0..*" UserWarehouseAssignment : warehouse access
+
+UserAccount "1" -- "0..*" UserRegionAssignment : region access
+
+UserAccount "1" -- "0..*" SalesGroupMember : group memberships
+
+UserAccount "0..1" -- "0..1" Retailer : retailer account
+
+Warehouse "1" -- "0..*" UserWarehouseAssignment : assigned users
+
+Region "1" -- "0..*" UserRegionAssignment : assigned users
+
+SalesGroup "1" -- "0..*" SalesGroupMember : members
+
+Region "1" -- "0..*" SalesGroup : contains groups
+
+Region "1" -- "0..*" Warehouse : contains warehouses

@@ -1,0 +1,96 @@
+﻿@startuml
+title F1 - Sourcing, Master Data and Inventory Control
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam ActivityBackgroundColor #F5F5F5
+skinparam ActivityBorderColor #333333
+skinparam RoundCorner 15
+skinparam wrapWidth 220
+
+|Admin|
+start
+:Log in to the Portal (Google / FSCM session);
+:Manage users, regions, warehouses and sales groups
+(every Warehouse must belong to exactly one Region);
+
+|Admin/Operator|
+:Create root/child categories
+(block cycles and duplicate codes; only Admin creates a root);
+:Create SKU in Draft (unit, packaging, total shelf life, near-date threshold);
+:Create effective-dated price (EffectiveFrom / EffectiveTo);
+if (Data valid and price period does not overlap?) then (yes)
+  :Publish product;
+else (no)
+  :Fix in Draft;
+  stop
+endif
+:Configure quantity promotions (SKU / SKU-group total threshold)
+and the shelf-life discount table (percentage only);
+
+|Sales|
+:Declare retailer (general information, GPS, Region)
+and MLOR per Category / SKU (never shown to the Retailer);
+:Submit retailer profile for review;
+
+|Admin|
+if (Approve retailer?) then (yes)
+  :Activate retailer account, set credit term / limit if eligible;
+  :Send approval e-mail to the Retailer;
+else (no)
+  :Return rejection reason;
+  stop
+endif
+
+|Warehouse Keeper|
+:Create goods receipt (warehouse, SKU, quantity, production date, expiry);
+
+|Approver|
+:Review the goods receipt;
+if (Receipt valid?) then (yes)
+  |System|
+  :Increase Physical stock exactly ONCE, create/merge batch;
+  :Generate QR labels and write inventory ledger;
+else (no)
+  |Approver|
+  :Reject the receipt;
+  stop
+endif
+
+|Warehouse Keeper|
+:Scan QR to look up batch stock
+(Physical, Reserved, active locks, valid Available);
+:Report damaged / expired / recalled lot (quantity, reason, evidence);
+
+|System|
+:Create Inventory Lock for the batch quantity;
+:Exclude locked quantity from the allocation pool
+(Available = Physical - Reserved - active locks);
+if (Locked quantity overlaps Reserved?) then (yes)
+  :Raise exception for the affected order,
+notify Operator (no silent batch swap);
+else (no)
+  :Reduce Available of the non-reserved portion only;
+endif
+
+|Approver|
+:Approve write-off after reconciling stock and Reserved;
+|System|
+:Reduce Physical ONCE, set lock to WrittenOff, write audit log;
+
+|Admin/Operator|
+:P1: Open cycle-count session (warehouse / SKU / batch) and snapshot versions;
+note right: Cycle count is a new P1 feature, not in the core demo
+|Warehouse Keeper|
+:P1: Count and scan actual quantity (cannot edit stock);
+|System|
+:P1: Compute variance;
+|Approver|
+:P1: Approve variance or request recount;
+|System|
+:P1: Revalidate versions, post AdjustmentIncrease / AdjustmentDecrease
+and audit log;
+
+|System|
+:Hand over published catalog, prices, retailers/MLOR and valid stock pool (batch/QR) to F2/F3;
+stop
+@enduml

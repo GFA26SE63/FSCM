@@ -1,0 +1,467 @@
+sequenceDiagram
+    autonumber
+
+    actor Retailer as Retailer
+    actor Reviewer as Administrator / Operator
+
+    participant Mobile as Retailer Mobile App
+    participant Portal as Web Portal
+
+    participant API as ComplaintsController
+
+    participant Service as ComplaintService
+    participant Completion as OrderCompletionService
+    participant Loyalty as LoyaltyAccrualService
+
+    participant Store as ComplaintStore
+    participant CompletionStore as OrderCompletionStore
+
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% PART 1 - SUBMIT SHIPMENT-LINKED COMPLAINT
+    %% ==========================================
+
+    Note over Retailer,DB: PART 1 - SUBMIT SHIPMENT-LINKED COMPLAINT
+
+    Retailer->>+Mobile: Submit complaint for received goods
+
+    Note right of Mobile: Enter OrderCode, SKU, LabelCode and ActualQty
+    Note right of Mobile: Attach optional Note, EvidenceUrl and ShipmentId
+
+    Mobile->>+API: Create(request)
+
+    Note right of API: Endpoint requires Retailer role
+
+    API->>+Service: CreateAsync(actorId, data, ct)
+
+    Service->>+Store: CreateAsync(actorId, data, now, ct)
+
+    %% ==========================================
+    %% 1. VALIDATE REQUIRED INPUT
+    %% ==========================================
+
+    Note right of Store: Validate OrderCode, SKU and LabelCode
+    Note right of Store: ActualQuantity must not be negative
+
+    alt Required input is invalid
+
+        Note right of Store: Return Validation error
+
+    else Required input is valid
+
+        %% ==========================================
+        %% 2. VERIFY RETAILER AND ORDER
+        %% ==========================================
+
+        Store->>+DB: SELECT active Retailer and owned SalesOrder
+        DB-->>Store: Retailer and SalesOrder or null
+        deactivate DB
+
+        Store->>+DB: SELECT SalesOrderLine JOIN Product by SKU
+        DB-->>Store: Order line and Product or null
+        deactivate DB
+
+        alt Retailer, order or SKU is invalid
+
+            Note right of Store: Return Forbidden or Not Found
+
+        else Retailer owns the order and SKU
+
+            %% ==========================================
+            %% 3. VERIFY CONFIRMED RECEIPT
+            %% ==========================================
+
+            Store->>+DB: SELECT confirmed ReceiptConfirmation by SalesOrderId
+            DB-->>Store: ReceiptConfirmation or null
+            deactivate DB
+
+            Store->>+DB: SELECT Shipment linked to ReceiptConfirmation
+            DB-->>Store: Shipment or null
+            deactivate DB
+
+            alt Receipt or Shipment is invalid
+
+                Note right of Store: Return Conflict
+
+            else Confirmed Receipt and Shipment exist
+
+                %% ==========================================
+                %% 4. VERIFY QR LABEL AND BATCH
+                %% ==========================================
+
+                Store->>+DB: SELECT BatchQrLabel JOIN Batch by LabelCode and Product
+                DB-->>Store: QR Label and Batch or null
+                deactivate DB
+
+                alt QR Label is not valid for the SKU
+
+                    Note right of Store: Return Not Found
+
+                else QR Label matches the SKU
+
+                    %% ==========================================
+                    %% 5. VERIFY RECEIPT ITEM
+                    %% ==========================================
+
+                    Store->>+DB: SELECT ReceiptConfirmationItem by ReceiptId and LabelId
+                    DB-->>Store: Receipt item or null
+                    deactivate DB
+
+                    Note right of Store: Check ActualQuantity and optional ShipmentId
+
+                    alt Receipt item or quantity is invalid
+
+                        Note right of Store: Return Validation error or Conflict
+
+                    else Receipt item is valid
+
+                        %% ==========================================
+                        %% 6. RETRIEVE FINAL BATCH PRICE
+                        %% ==========================================
+
+                        Store->>+DB: SELECT PickingItem JOIN Allocation for received Batch
+                        DB-->>Store: AllocationId, NetAmount and AllocatedQuantity
+                        deactivate DB
+
+                        alt Allocation price is missing or mismatched
+
+                            Note right of Store: Return Conflict or Validation error
+
+                        else Allocation price is valid
+
+                            %% ==========================================
+                            %% 7. CALCULATE COMPLAINT AMOUNT
+                            %% ==========================================
+
+                            Note right of Store: FinalUnitPrice = NetAmount / AllocatedQuantity
+
+                            Note right of Store: Calculate AdjustmentAmount from quantity difference
+
+                            %% ==========================================
+                            %% 8. CHECK DUPLICATE OPEN COMPLAINT
+                            %% ==========================================
+
+                            Store->>+DB: SELECT matching unresolved ReceiptDiscrepancy
+                            DB-->>Store: Duplicate exists or not
+                            deactivate DB
+
+                            alt Matching complaint already exists
+
+                                Note right of Store: Return Conflict
+
+                            else No matching complaint exists
+
+                                %% ==========================================
+                                %% 9. CREATE COMPLAINT
+                                %% ==========================================
+
+                                Note right of Store: Set ReceiptDiscrepancy Status = Open
+
+                                Note right of Store: Record SalesOrderId, ReceiptId and actor
+
+                                %% ==========================================
+                                %% 10. SAVE COMPLAINT AND ITEM
+                                %% ==========================================
+
+                                Store->>+DB: INSERT ReceiptDiscrepancy and ReceiptDiscrepancyItem
+
+                                Note right of DB: Store ShipmentId, BatchId and AllocationId
+
+                                Note right of DB: Store FinalUnitPrice and AdjustmentAmount
+
+                                Note right of DB: Store optional EvidenceBlobUrl
+
+                                DB-->>Store: Complaint records persisted
+                                deactivate DB
+
+                            end
+
+                        end
+
+                    end
+
+                end
+
+            end
+
+        end
+
+    end
+
+    %% ==========================================
+    %% 11. RETURN COMPLAINT CREATION
+    %% ==========================================
+
+    Store-->>Service: ReceiptDiscrepancy or business error
+    deactivate Store
+
+    Service-->>API: Created complaint or error
+    deactivate Service
+
+    %% ==========================================
+    %% 12. BUILD COMPLAINT RESPONSE
+    %% ==========================================
+
+    opt Complaint was created successfully
+
+        API->>+Service: ListAsync(actorId, Retailer, ct)
+
+        Service->>+Store: ListAsync(actorId, Retailer, ct)
+
+        Store->>+DB: SELECT complaints and related order, batch and product data
+
+        Note right of DB: Filter results to the authenticated Retailer
+
+        DB-->>Store: Scoped complaint records
+        deactivate DB
+
+        Store-->>Service: ComplaintResult collection
+        deactivate Store
+
+        Service-->>API: ComplaintResult collection
+        deactivate Service
+
+        Note right of API: Select newly created ComplaintResult
+
+    end
+
+    API-->>Mobile: 201 Created with ComplaintResult or error
+    deactivate API
+
+    Mobile-->>Retailer: Display complaint submission result
+    deactivate Mobile
+
+    %% ==========================================
+    %% PART 2 - REVIEW COMPLAINTS
+    %% ==========================================
+
+    Note over Reviewer,DB: PART 2 - REVIEW SHIPMENT-LINKED COMPLAINTS
+
+    Reviewer->>+Portal: Open Complaint Management
+
+    Portal->>+API: List()
+
+    Note right of API: Endpoint permits Admin and Operator
+
+    API->>+Service: ListAsync(actorId, role, ct)
+
+    Service->>+Store: ListAsync(actorId, role, ct)
+
+    %% ==========================================
+    %% 13. LOAD COMPLAINT DATA
+    %% ==========================================
+
+    Store->>+DB: SELECT complaints JOIN orders, retailers and complaint items
+
+    Note right of DB: Include Batch, Product and QR Label information
+
+    DB-->>Store: Complaint review records
+    deactivate DB
+
+    Store-->>Service: ComplaintResult collection
+    deactivate Store
+
+    Service-->>API: ComplaintResult collection
+    deactivate Service
+
+    API-->>Portal: Complaint list
+    deactivate API
+
+    Portal-->>Reviewer: Display complaint details and evidence references
+    deactivate Portal
+
+    %% ==========================================
+    %% PART 3 - RESOLVE COMPLAINT
+    %% ==========================================
+
+    Note over Reviewer,DB: PART 3 - RECORD COMPLAINT REVIEW DECISION
+
+    Reviewer->>+Portal: Submit complaint resolution
+
+    Note right of Portal: Provide ComplaintId, Result and Approved flag
+
+    Portal->>+API: Resolve(complaintId, request)
+
+    Note right of API: Endpoint permits Admin and Operator
+
+    API->>+Service: ResolveAsync(complaintId, actorId, data, ct)
+
+    Service->>+Store: ResolveAsync(complaintId, actorId, data, now, ct)
+
+    %% ==========================================
+    %% 14. VALIDATE REVIEW RESULT
+    %% ==========================================
+
+    alt Resolution Result is missing
+
+        Note right of Store: Return Validation error
+
+    else Resolution Result is valid
+
+        %% ==========================================
+        %% 15. LOAD COMPLAINT FOR REVIEW
+        %% ==========================================
+
+        Store->>+DB: SELECT complaint JOIN order, retailer, item, batch and product
+        DB-->>Store: Complaint review context or null
+        deactivate DB
+
+        alt Complaint does not exist
+
+            Note right of Store: Return Not Found
+
+        else Complaint already Approved, Rejected or Resolved
+
+            Note right of Store: Return existing decision without another update
+
+        else Complaint is open for review
+
+            %% ==========================================
+            %% 16. APPLY REVIEW DECISION
+            %% ==========================================
+
+            alt Reviewer approves complaint
+
+                Note right of Store: Set Status = Approved
+
+            else Reviewer rejects complaint
+
+                Note right of Store: Set Status = Rejected
+
+            end
+
+            Note right of Store: Set ReviewedByUserId and ReviewedAt
+
+            Note right of Store: Set ResolvedAt and decision Note
+
+            %% ==========================================
+            %% 17. SAVE REVIEW DECISION
+            %% ==========================================
+
+            Store->>+DB: UPDATE ReceiptDiscrepancy review fields
+
+            DB-->>Store: Resolution saved
+            deactivate DB
+
+        end
+
+    end
+
+    %% ==========================================
+    %% 18. RETURN RESOLUTION RESULT
+    %% ==========================================
+
+    Store-->>Service: ComplaintResult or business error
+    deactivate Store
+
+    %% ==========================================
+    %% 19. REEVALUATE ORDER COMPLETION
+    %% ==========================================
+
+    opt Complaint resolution returned successfully
+
+        Service->>+Completion: EvaluateAsync(salesOrderId, actorId, ct)
+
+        Completion->>+CompletionStore: FindAsync(salesOrderId, ct)
+
+        CompletionStore->>+DB: SELECT SalesOrder, Payment and open complaint existence
+
+        Note right of DB: Open complaint means ResolvedAt is null
+
+        DB-->>CompletionStore: OrderCompletionView or null
+        deactivate DB
+
+        CompletionStore-->>Completion: Order completion conditions
+        deactivate CompletionStore
+
+        %% ==========================================
+        %% 20. CHECK ORDER COMPLETION GATE
+        %% ==========================================
+
+        alt Order missing or already Completed
+
+            Note right of Completion: Return current completion result
+
+        else Order is not Delivered or Payment is not settled
+
+            Note right of Completion: Keep order not Completed
+
+            Completion->>+Loyalty: EvaluateAsync(salesOrderId, actorId, ct)
+
+            Loyalty-->>Completion: Loyalty evaluation result
+            deactivate Loyalty
+
+        else Another complaint remains open
+
+            Note right of Completion: Hold order completion
+
+            Completion->>+Loyalty: EvaluateAsync(salesOrderId, actorId, ct)
+
+            Loyalty-->>Completion: Loyalty evaluation result
+            deactivate Loyalty
+
+        else All completion conditions are satisfied
+
+            %% ==========================================
+            %% 21. COMPLETE SALES ORDER
+            %% ==========================================
+
+            Completion->>+CompletionStore: CompleteAsync(salesOrderId, actorId, now, ct)
+
+            CompletionStore->>+DB: UPDATE SalesOrder to Completed
+
+            Note right of DB: INSERT OrderStatusHistory
+
+            DB-->>CompletionStore: Completion persisted
+            deactivate DB
+
+            CompletionStore-->>Completion: Completion saved
+            deactivate CompletionStore
+
+            %% ==========================================
+            %% 22. EVALUATE LOYALTY
+            %% ==========================================
+
+            Completion->>+Loyalty: EvaluateAsync(salesOrderId, actorId, ct)
+
+            Loyalty-->>Completion: Loyalty evaluation result
+            deactivate Loyalty
+
+        end
+
+        %% ==========================================
+        %% 23. RETURN COMPLETION EVALUATION
+        %% ==========================================
+
+        Completion-->>Service: OrderCompletionResult
+        deactivate Completion
+
+    end
+
+    %% ==========================================
+    %% 24. RETURN REVIEW RESPONSE
+    %% ==========================================
+
+    Service-->>API: ComplaintResult or business error
+    deactivate Service
+
+    API-->>Portal: Resolution response
+    deactivate API
+
+    Portal-->>Reviewer: Display complaint resolution result
+    deactivate Portal
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over Store,DB: A complaint must reference the actual received Shipment and Batch
+
+    Note over Store,DB: FinalUnitPrice is derived from the existing Allocation
+
+    Note over Store,DB: Resolving a complaint does not automatically adjust Payment
+
+    Note over Store,DB: Resolving a complaint does not automatically create ManualRefund
+
+    Note over Completion,DB: Order completion requires Delivered, Paid and no open complaint

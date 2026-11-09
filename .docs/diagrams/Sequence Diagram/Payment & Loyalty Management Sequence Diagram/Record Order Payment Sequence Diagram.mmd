@@ -1,0 +1,290 @@
+sequenceDiagram
+    autonumber
+
+    actor Staff as Operator / Authorized Sales
+    actor Retailer
+    actor PayOS as PayOS Payment Gateway
+
+    participant UI as Web Portal / Retailer App
+    participant PaymentAPI as PaymentsController
+    participant PaymentService
+    participant PaymentStore
+    participant ReceiptAPI as PaymentReceiptsController
+    participant ReceiptService as PaymentReceiptService
+    participant ReceiptStore as PaymentReceiptStore
+    participant Gateway as PayOsGateway
+    participant Gate as PurchaseOrderGateService
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. SELECT PAYMENT RECORDING METHOD
+    %% ==========================================
+
+    alt Record Payment for a Single Order
+
+        %% ==========================================
+        %% 2. RECORD SINGLE-ORDER COLLECTION
+        %% ==========================================
+
+        Staff->>+UI: Select order and enter collection details
+
+        Note over Staff,UI: Authorized Sales collects eligible credit cash payments
+        Note over Staff,UI: Operator records authorized collections
+
+        UI->>+PaymentAPI: Collect(orderId, paymentData)
+        PaymentAPI->>+PaymentService: CollectAsync(orderId, paymentData)
+
+        %% ==========================================
+        %% 3. CHECK DUPLICATE REQUEST
+        %% ==========================================
+
+        PaymentService->>+PaymentStore: FindByOperationKeyAsync(operationKey)
+        PaymentStore->>+DB: SELECT existing payment operation
+        DB-->>PaymentStore: Existing operation or null
+        deactivate DB
+
+        PaymentStore-->>PaymentService: Idempotency result
+        deactivate PaymentStore
+
+        alt Same payment already recorded
+
+            PaymentService-->>PaymentAPI: Existing payment result
+
+        else New payment request
+
+            %% ==========================================
+            %% 4. VALIDATE PAYMENT OBLIGATION
+            %% ==========================================
+
+            PaymentService->>+PaymentStore: ExecuteInTransactionAsync(collection)
+
+            PaymentStore->>+DB: SELECT Payment and order conditions FOR UPDATE
+            DB-->>PaymentStore: Current payment and receivable
+            deactivate DB
+
+            Note over PaymentService,PaymentStore: Validate role, collection method and amount
+            Note over PaymentService,PaymentStore: Exclude unresolved disputed amounts
+
+            alt Payment is valid and collectible
+
+                PaymentStore->>+DB: UPDATE Payment amount and settlement status
+                Note right of DB: Record collection and audit information
+
+                DB-->>PaymentStore: Payment committed
+                deactivate DB
+
+                PaymentStore-->>PaymentService: Updated Payment
+
+            else Invalid amount, permission or payment state
+
+                PaymentStore-->>PaymentService: Validation or conflict error
+
+            end
+
+            deactivate PaymentStore
+
+            PaymentService-->>PaymentAPI: Collection result
+
+        end
+
+        deactivate PaymentService
+
+        PaymentAPI-->>UI: Payment result or error
+        deactivate PaymentAPI
+
+        UI-->>Staff: Display payment confirmation
+        deactivate UI
+
+    else Confirm Consolidated Payment Receipt
+
+        %% ==========================================
+        %% 5. RECEIVE PAYMENT FOR MULTIPLE ORDERS
+        %% ==========================================
+
+        Staff->>+UI: Enter received amount and order allocations
+
+        Note over Staff,UI: One receipt may be allocated to multiple payment obligations
+
+        UI->>+ReceiptAPI: Confirm(receiptData)
+        ReceiptAPI->>+ReceiptService: ConfirmAsync(receiptData)
+
+        %% ==========================================
+        %% 6. CHECK RECEIPT IDEMPOTENCY
+        %% ==========================================
+
+        ReceiptService->>+ReceiptStore: FindReceiptByOperationKeyAsync(operationKey)
+        ReceiptStore->>+DB: SELECT existing PaymentReceipt
+        DB-->>ReceiptStore: Existing receipt or null
+        deactivate DB
+
+        ReceiptStore-->>ReceiptService: Existing receipt information
+        deactivate ReceiptStore
+
+        alt Receipt already confirmed with same data
+
+            ReceiptService-->>ReceiptAPI: Existing PaymentReceipt
+
+        else New consolidated receipt
+
+            %% ==========================================
+            %% 7. REVALIDATE PAYMENT ALLOCATIONS
+            %% ==========================================
+
+            ReceiptService->>+ReceiptStore: ExecuteInTransactionAsync(receiptOperation)
+
+            ReceiptStore->>+DB: SELECT target Payments and current allocations FOR UPDATE
+            DB-->>ReceiptStore: Payment obligations and allocated amounts
+            deactivate DB
+
+            Note over ReceiptService,ReceiptStore: Validate Retailer, receipt total and allocations
+            Note over ReceiptService,ReceiptStore: Prevent overpayment and duplicate allocation
+
+            alt Valid receipt and allocation amounts
+
+                %% ==========================================
+                %% 8. CONFIRM CONSOLIDATED RECEIPT
+                %% ==========================================
+
+                ReceiptStore->>+DB: INSERT PaymentReceipt and PaymentReceiptAllocations
+                Note right of DB: UPDATE allocated payment balances
+                Note right of DB: Preserve any unapplied credit
+
+                DB-->>ReceiptStore: Receipt and allocations committed
+                deactivate DB
+
+                ReceiptStore-->>ReceiptService: Confirmed PaymentReceipt
+
+            else Invalid allocations or conflicting balances
+
+                ReceiptStore-->>ReceiptService: Validation or conflict error
+
+            end
+
+            deactivate ReceiptStore
+
+            ReceiptService-->>ReceiptAPI: Receipt confirmation result
+
+        end
+
+        deactivate ReceiptService
+
+        ReceiptAPI-->>UI: Receipt result or error
+        deactivate ReceiptAPI
+
+        UI-->>Staff: Display receipt and allocation summary
+        deactivate UI
+
+    else Prepaid Payment via PayOS QR
+
+        %% ==========================================
+        %% 9. CREATE PAYOS CHECKOUT
+        %% ==========================================
+
+        Retailer->>+UI: Choose prepaid QR payment
+
+        UI->>+PaymentAPI: CreatePayOsCheckout(orderId)
+        PaymentAPI->>+PaymentService: CreatePayOsCheckoutAsync(orderId)
+
+        PaymentService->>+PaymentStore: FindByOrderAsync(orderId)
+        PaymentStore->>+DB: SELECT Payment and accepted quotation
+        DB-->>PaymentStore: Payment obligation and order conditions
+        deactivate DB
+
+        PaymentStore-->>PaymentService: Payment information
+        deactivate PaymentStore
+
+        alt Prepaid order is eligible
+
+            PaymentService->>+Gateway: CreatePaymentLinkAsync(paymentData)
+            Gateway-->>PaymentService: Checkout URL and QR information
+            deactivate Gateway
+
+            PaymentService->>+PaymentStore: Save checkout information
+            PaymentStore->>+DB: UPDATE PayOS payment reference and checkout status
+            DB-->>PaymentStore: Checkout saved
+            deactivate DB
+
+            PaymentStore-->>PaymentService: Checkout details
+            deactivate PaymentStore
+
+            PaymentService-->>PaymentAPI: PayOS checkout result
+
+        else Prepaid payment is not eligible
+
+            PaymentService-->>PaymentAPI: Payment validation error
+
+        end
+
+        deactivate PaymentService
+
+        PaymentAPI-->>UI: Checkout response
+        deactivate PaymentAPI
+
+        UI-->>Retailer: Display payment QR or error
+        deactivate UI
+
+        %% ==========================================
+        %% 10. RECEIVE VERIFIED PAYMENT CALLBACK
+        %% ==========================================
+
+        opt PayOS sends a payment callback
+
+            PayOS->>+PaymentAPI: PayOsWebhook(paymentData)
+            PaymentAPI->>+PaymentService: HandlePayOsWebhookAsync(paymentData)
+
+            PaymentService->>+Gateway: VerifyWebhookAsync(paymentData)
+            Gateway-->>PaymentService: Verification result
+            deactivate Gateway
+
+            alt Verified successful payment
+
+                PaymentService->>+PaymentStore: ExecuteInTransactionAsync(webhookOperation)
+
+                PaymentStore->>+DB: SELECT Payment by PayOsOrderCode FOR UPDATE
+                DB-->>PaymentStore: Payment record and current status
+                deactivate DB
+
+                Note over PaymentService,PaymentStore: Validate amount and prevent duplicate settlement
+
+                PaymentStore->>+DB: UPDATE Payment settlement and confirmation
+                DB-->>PaymentStore: Verified payment recorded
+                deactivate DB
+
+                PaymentStore-->>PaymentService: Updated payment result
+                deactivate PaymentStore
+
+                %% ==========================================
+                %% 11. CHECK PURCHASE ORDER ISSUANCE
+                %% ==========================================
+
+                PaymentService->>+Gate: TryCreateAsync(orderId)
+                Note right of Gate: Check quotation and payment eligibility
+                Gate-->>PaymentService: Purchase Order gate result
+                deactivate Gate
+
+                PaymentService-->>PaymentAPI: Payment confirmation result
+
+            else Invalid or conflicting callback
+
+                PaymentService-->>PaymentAPI: Rejected or existing callback result
+
+            end
+
+            deactivate PaymentService
+
+            PaymentAPI-->>PayOS: Webhook processing response
+            deactivate PaymentAPI
+
+        end
+
+    end
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over PaymentService,DB: Payment recording does not modify physical inventory
+
+    Note over ReceiptService,DB: Consolidated receipts preserve allocations and unapplied credit
+
+    Note over Staff,DB: Loyalty points are not awarded merely because payment is recorded

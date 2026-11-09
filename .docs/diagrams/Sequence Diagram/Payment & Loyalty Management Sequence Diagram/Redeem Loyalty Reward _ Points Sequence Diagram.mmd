@@ -1,0 +1,289 @@
+sequenceDiagram
+    autonumber
+
+    actor Retailer
+    actor Admin as Administrator
+
+    participant RUI as Retailer Mobile App
+    participant WUI as Web Portal
+    participant CreateAPI as LoyaltyRedemptionsController
+    participant CreateService as RedemptionService
+    participant WorkflowAPI as LoyaltyRedemptionWorkflowController
+    participant WorkflowService as RedemptionWorkflowService
+    participant Store as RedemptionStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. REQUEST REWARD REDEMPTION
+    %% ==========================================
+
+    Retailer->>+RUI: Select reward and request redemption
+
+    RUI->>+CreateAPI: Create(rewardId, clientRequestId)
+    CreateAPI->>+CreateService: CreateAsync(redemptionData)
+
+    CreateService->>+Store: CreateAsync(redemptionData)
+
+    %% ==========================================
+    %% 2. CHECK IDEMPOTENCY
+    %% ==========================================
+
+    Store->>+DB: SELECT redemption by ClientRequestId
+    DB-->>Store: Existing redemption or null
+    deactivate DB
+
+    alt Identical request already processed
+
+        Note right of Store: Reuse the existing redemption
+
+    else ClientRequestId reused with different data
+
+        Note right of Store: Reject conflicting request
+
+    else New redemption request
+
+        %% ==========================================
+        %% 3. VALIDATE POINTS AND REWARD
+        %% ==========================================
+
+        Store->>+DB: SELECT RetailerLoyalty and LoyaltyReward FOR UPDATE
+        DB-->>Store: Current balance and reward availability
+        deactivate DB
+
+        Note over Store,DB: AvailablePoints = CurrentPoints - HeldPoints
+
+        alt Insufficient points or negative balance
+
+            Note right of Store: Reject redemption without changing balances
+
+        else Reward unavailable or out of stock
+
+            Note right of Store: Reject redemption without holding points
+
+        else Valid redemption request
+
+            %% ==========================================
+            %% 4. HOLD POINTS AND REWARD STOCK
+            %% ==========================================
+
+            Store->>+DB: UPDATE HeldPoints and reward availability
+            Note right of DB: INSERT RewardRedemption and Hold ledger entry
+            Note right of DB: Status = PendingApproval
+
+            DB-->>Store: Redemption request committed
+            deactivate DB
+
+        end
+
+    end
+
+    Store-->>CreateService: Redemption result or business error
+    deactivate Store
+
+    CreateService-->>CreateAPI: RedemptionResult
+    deactivate CreateService
+
+    CreateAPI-->>RUI: Redemption response
+    deactivate CreateAPI
+
+    RUI-->>Retailer: Display pending request or error
+    deactivate RUI
+
+    %% ==========================================
+    %% 5. ADMINISTRATOR REVIEWS REQUEST
+    %% ==========================================
+
+    opt Redemption request is pending approval
+
+        Admin->>+WUI: Review redemption and choose decision
+
+        alt Approve redemption
+
+            %% ==========================================
+            %% 6. APPROVE REDEMPTION
+            %% ==========================================
+
+            WUI->>+WorkflowAPI: Approve(redemptionId)
+            WorkflowAPI->>+WorkflowService: ApproveAsync(redemptionId)
+
+            WorkflowService->>+Store: TransitionAsync(redemptionId, Approve)
+
+            Store->>+DB: SELECT redemption and held balances FOR UPDATE
+            DB-->>Store: Current redemption and hold information
+            deactivate DB
+
+            alt Request is PendingApproval
+
+                Store->>+DB: UPDATE redemption status to AwaitingDelivery
+                Note right of DB: Retain held points and reserved reward stock
+
+                DB-->>Store: Approval committed
+                deactivate DB
+
+            else Request already processed or invalid
+
+                Note right of Store: Reject invalid status transition
+
+            end
+
+            Store-->>WorkflowService: Approval result or conflict
+            deactivate Store
+
+            WorkflowService-->>WorkflowAPI: RedemptionResult
+            deactivate WorkflowService
+
+            WorkflowAPI-->>WUI: Approval response
+            deactivate WorkflowAPI
+
+        else Reject redemption
+
+            %% ==========================================
+            %% 7. REJECT AND RELEASE HOLDS
+            %% ==========================================
+
+            WUI->>+WorkflowAPI: Reject(redemptionId)
+            WorkflowAPI->>+WorkflowService: RejectAsync(redemptionId)
+
+            WorkflowService->>+Store: TransitionAsync(redemptionId, Reject)
+
+            Store->>+DB: SELECT redemption and held balances FOR UPDATE
+            DB-->>Store: Current redemption and hold information
+            deactivate DB
+
+            alt Request is PendingApproval
+
+                Store->>+DB: UPDATE HeldPoints and restore reward availability
+                Note right of DB: UPDATE redemption status to Rejected
+                Note right of DB: INSERT Release ledger entry
+
+                DB-->>Store: Rejection and release committed
+                deactivate DB
+
+            else Request already processed or not rejectable
+
+                Note right of Store: Do not release points or reward stock twice
+
+            end
+
+            Store-->>WorkflowService: Rejection result or conflict
+            deactivate Store
+
+            WorkflowService-->>WorkflowAPI: RedemptionResult
+            deactivate WorkflowService
+
+            WorkflowAPI-->>WUI: Rejection response
+            deactivate WorkflowAPI
+
+        end
+
+        WUI-->>Admin: Display decision result
+        deactivate WUI
+
+    end
+
+    %% ==========================================
+    %% 8. RECORD REWARD DELIVERY
+    %% ==========================================
+
+    opt Approved reward has been handed over
+
+        Admin->>+WUI: Confirm reward delivery
+
+        WUI->>+WorkflowAPI: Deliver(redemptionId)
+        WorkflowAPI->>+WorkflowService: DeliverAsync(redemptionId)
+
+        WorkflowService->>+Store: TransitionAsync(redemptionId, Deliver)
+
+        Store->>+DB: SELECT redemption and fulfillment status
+        DB-->>Store: Current redemption status
+        deactivate DB
+
+        alt Status is AwaitingDelivery
+
+            Store->>+DB: UPDATE redemption status to Delivered
+            DB-->>Store: Delivery recorded
+            deactivate DB
+
+        else Invalid delivery transition
+
+            Note right of Store: Keep existing redemption state
+
+        end
+
+        Store-->>WorkflowService: Delivery result or conflict
+        deactivate Store
+
+        WorkflowService-->>WorkflowAPI: RedemptionResult
+        deactivate WorkflowService
+
+        WorkflowAPI-->>WUI: Delivery response
+        deactivate WorkflowAPI
+
+        WUI-->>Admin: Display delivery status
+        deactivate WUI
+
+    end
+
+    %% ==========================================
+    %% 9. COMPLETE REWARD REDEMPTION
+    %% ==========================================
+
+    opt Actual delivery is confirmed for completion
+
+        Admin->>+WUI: Complete fulfilled redemption
+
+        WUI->>+WorkflowAPI: Complete(redemptionId)
+        WorkflowAPI->>+WorkflowService: CompleteAsync(redemptionId)
+
+        WorkflowService->>+Store: TransitionAsync(redemptionId, Complete)
+
+        Store->>+DB: SELECT redemption and loyalty balance FOR UPDATE
+        DB-->>Store: Redemption and held-point information
+        deactivate DB
+
+        alt Status is Delivered and completion is valid
+
+            %% ==========================================
+            %% 10. CONSUME HELD POINTS
+            %% ==========================================
+
+            Store->>+DB: UPDATE HeldPoints and CurrentPoints
+            Note right of DB: INSERT Redeem ledger entry
+            Note right of DB: UPDATE redemption status to Completed
+
+            DB-->>Store: Redemption completed once
+            deactivate DB
+
+        else Already completed
+
+            Note right of Store: Return existing result without consuming points again
+
+        else Delivery incomplete or transition invalid
+
+            Note right of Store: Reject completion request
+
+        end
+
+        Store-->>WorkflowService: Completion result or conflict
+        deactivate Store
+
+        WorkflowService-->>WorkflowAPI: RedemptionResult
+        deactivate WorkflowService
+
+        WorkflowAPI-->>WUI: Completion response
+        deactivate WorkflowAPI
+
+        WUI-->>Admin: Display completed redemption
+        deactivate WUI
+
+    end
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over Store,DB: Point and reward updates must be atomic
+
+    Note over Store,DB: Hold, Release and Redeem movements must be idempotent
+
+    Note over Retailer,DB: Reward redemption does not create new purchase loyalty points

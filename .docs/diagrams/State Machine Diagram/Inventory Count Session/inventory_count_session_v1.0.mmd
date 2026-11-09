@@ -1,0 +1,14 @@
+---
+title: InventoryCountSession State Machine
+---
+stateDiagram-v2
+    [*] --> Draft : count session created by warehouse, zone or SKU scope
+    Draft --> Counting : session started, system quantities snapshotted
+    Draft --> Cancelled : cancel before counting
+    Counting --> Counting : Warehouse Keeper scans and enters actual quantities
+    Counting --> PendingApproval : count submitted, variances calculated
+    PendingApproval --> Approved : authorized approver accepts variances
+    PendingApproval --> Counting : approver requests recount
+    Approved --> Posted : AdjustmentIncrease/AdjustmentDecrease transactions posted with reason and audit log
+    Posted --> [*]
+    Cancelled --> [*]

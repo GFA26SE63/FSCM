@@ -1,0 +1,157 @@
+sequenceDiagram
+    autonumber
+
+    actor Sales as Sales Representative
+    participant App as Sales Mobile App
+    participant API as RetailersController
+    participant Service as RetailerService
+    participant Store as RetailerStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. ENTER RETAILER DECLARATION
+    %% ==========================================
+
+    Sales->>+App: Open Declare Retailer
+
+    App-->>Sales: Display registration form
+    deactivate App
+
+    Note over Sales,App: General Information and Shelf-life Requirements
+
+    Sales->>+App: Enter retailer information and assessment
+
+    Note right of App: Store details, contact, GPS location,<br/>storefront photo, sales group,<br/>business potential and optional MLOR
+
+    %% ==========================================
+    %% 2. CREATE RETAILER DECLARATION
+    %% ==========================================
+
+    App->>+API: Declare(retailerData, mlorRules)
+
+    API->>+Service: DeclareAsync(retailerData, mlorRules)
+
+    Service->>+Store: Check territory access and duplicate retailer
+
+    Store->>+DB: SELECT sales group and existing retailers
+
+    DB-->>Store: Access and duplicate check results
+    deactivate DB
+
+    Store-->>Service: Validation data
+    deactivate Store
+
+    alt Valid declaration and no duplicate
+
+        Service->>+Store: Save retailer, assessment and MLOR
+
+        Store->>+DB: INSERT retailer, contact, location,<br/>sales assignment and MLOR records
+
+        DB-->>Store: Saved retailer record
+        deactivate DB
+
+        Store-->>Service: Declaration created
+        deactivate Store
+
+        Service-->>API: Retailer declaration result
+
+    else Invalid data, duplicate or unauthorized
+
+        Service-->>API: Validation / Conflict / Forbidden error
+
+    end
+
+    deactivate Service
+
+    API-->>App: Declaration response
+    deactivate API
+
+    App-->>Sales: Display declaration result
+    deactivate App
+
+    %% ==========================================
+    %% 3. UPDATE DECLARATION IF NECESSARY
+    %% ==========================================
+
+    opt Sales updates declaration before review
+
+        Sales->>+App: Edit retailer information or MLOR
+
+        App->>+API: UpdateDeclaration(retailerId, updatedData)
+
+        API->>+Service: UpdateDeclarationAsync(retailerId, updatedData)
+
+        Service->>+Store: Validate and update declaration
+
+        Store->>+DB: SELECT declaration / UPDATE retailer and MLOR
+
+        DB-->>Store: Updated records or error
+        deactivate DB
+
+        Store-->>Service: Update result
+        deactivate Store
+
+        Service-->>API: Updated declaration or error
+        deactivate Service
+
+        API-->>App: Update response
+        deactivate API
+
+        App-->>Sales: Display updated declaration
+        deactivate App
+
+    end
+
+    %% ==========================================
+    %% 4. SUBMIT FOR REVIEW
+    %% ==========================================
+
+    opt Declaration successfully created
+
+        Sales->>+App: Submit declaration for review
+
+        App->>+API: SubmitForReview(retailerId)
+
+        API->>+Service: SubmitForReviewAsync(retailerId)
+
+        Service->>+Store: Retrieve declaration for review validation
+
+        Store->>+DB: SELECT retailer, contact,<br/>assessment and MLOR requirements
+
+        DB-->>Store: Declaration details
+        deactivate DB
+
+        Store-->>Service: Declaration information
+        deactivate Store
+
+        alt Complete and eligible for review
+
+            Service->>+Store: Update retailer status to Pending Review
+
+            Store->>+DB: UPDATE retailer status and audit record
+
+            DB-->>Store: Status updated
+            deactivate DB
+
+            Store-->>Service: Submission completed
+            deactivate Store
+
+            Service-->>API: Submitted successfully
+
+        else Missing information or invalid status
+
+            Service-->>API: Submission rejected
+
+        end
+
+        deactivate Service
+
+        API-->>App: Submission response
+        deactivate API
+
+        App-->>Sales: Display Pending Review or error
+        deactivate App
+
+    end
+
+    Note over Sales,DB: Administrator review and approval are handled in Figure 3.2.3

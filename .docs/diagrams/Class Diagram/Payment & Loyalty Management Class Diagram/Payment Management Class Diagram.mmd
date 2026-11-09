@@ -1,0 +1,369 @@
+classDiagram
+direction TB
+
+%% ==========================================
+%% API LAYER
+%% ==========================================
+
+namespace API {
+
+    class PaymentsController {
+        <<Controller>>
+        +List()
+        +GetByOrder()
+        +Collect()
+        +Adjust()
+        +CreatePayOsCheckout()
+        +PayOsWebhook()
+    }
+
+    class PaymentReceiptsController {
+        <<Controller>>
+        +Confirm()
+        +Reverse()
+    }
+
+    class RetailerReceivablesController {
+        <<Controller>>
+        +List()
+        +GetByOrder()
+    }
+
+    class RefundsController {
+        <<Controller>>
+        +List()
+        +Get()
+        +Create()
+        +Evidence()
+        +Verify()
+    }
+}
+
+%% ==========================================
+%% APPLICATION SERVICES
+%% ==========================================
+
+namespace Application_Services {
+
+    class PaymentService {
+        <<Service>>
+        +ListAsync()
+        +GetByOrderAsync()
+        +CollectAsync()
+        +AdjustReceivableAsync()
+        +CreatePayOsCheckoutAsync()
+        +HandlePayOsWebhookAsync()
+    }
+
+    class PaymentReceiptService {
+        <<Service>>
+        +ConfirmAsync()
+        +ReverseAsync()
+    }
+
+    class RetailerReceivableService {
+        <<Service>>
+        +ListAsync()
+        +GetByOrderAsync()
+    }
+
+    class RefundService {
+        <<Service>>
+        +ListAsync()
+        +GetAsync()
+        +CreateAsync()
+        +SubmitEvidenceAsync()
+        +VerifyAsync()
+    }
+
+    class PurchaseOrderGateService {
+        <<Service>>
+        +TryCreateAsync()
+    }
+}
+
+%% ==========================================
+%% APPLICATION INTERFACES
+%% ==========================================
+
+namespace Application_Interfaces {
+
+    class IPaymentStore {
+        <<interface>>
+        +ListAsync()
+        +FindByOrderAsync()
+        +FindByOperationKeyAsync()
+        +FindByPayOsOrderCodeAsync()
+        +ExecuteInTransactionAsync()
+        +SaveChangesAsync()
+    }
+
+    class IPaymentReceiptStore {
+        <<interface>>
+        +FindReceiptAsync()
+        +FindReceiptByOperationKeyAsync()
+        +FindPaymentsForUpdateAsync()
+        +ConfirmedAllocationTotalAsync()
+        +AddReceipt()
+        +AddAllocations()
+        +ExecuteInTransactionAsync()
+        +SaveChangesAsync()
+    }
+
+    class IRetailerReceivableStore {
+        <<interface>>
+        +ListAsync()
+        +FindByOrderAsync()
+    }
+
+    class IRefundStore {
+        <<interface>>
+        +ListAsync()
+        +FindAsync()
+        +FindByOperationKeyAsync()
+        +TotalsAsync()
+        +Add()
+        +SaveChangesAsync()
+    }
+
+    class IPayOsGateway {
+        <<interface>>
+        +CreatePaymentLinkAsync()
+        +VerifyWebhookAsync()
+    }
+}
+
+%% ==========================================
+%% PERSISTENCE LAYER
+%% ==========================================
+
+namespace Persistence {
+
+    class PaymentStore {
+        <<Repository>>
+        +ListAsync()
+        +FindByOrderAsync()
+        +FindByOperationKeyAsync()
+        +FindByPayOsOrderCodeAsync()
+        +ExecuteInTransactionAsync()
+        +SaveChangesAsync()
+    }
+
+    class PaymentReceiptStore {
+        <<Repository>>
+        +FindReceiptAsync()
+        +FindReceiptByOperationKeyAsync()
+        +FindPaymentsForUpdateAsync()
+        +ConfirmedAllocationTotalAsync()
+        +AddReceipt()
+        +AddAllocations()
+        +ExecuteInTransactionAsync()
+        +SaveChangesAsync()
+    }
+
+    class RetailerReceivableStore {
+        <<Repository>>
+        +ListAsync()
+        +FindByOrderAsync()
+    }
+
+    class RefundStore {
+        <<Repository>>
+        +ListAsync()
+        +FindAsync()
+        +FindByOperationKeyAsync()
+        +TotalsAsync()
+        +Add()
+        +SaveChangesAsync()
+    }
+}
+
+%% ==========================================
+%% INFRASTRUCTURE LAYER
+%% ==========================================
+
+namespace Infrastructure {
+
+    class PayOsGateway {
+        <<Service>>
+        +CreatePaymentLinkAsync()
+        +VerifyWebhookAsync()
+    }
+}
+
+%% ==========================================
+%% DOMAIN - PAYMENT
+%% ==========================================
+
+namespace Domain_Payment {
+
+    class Payment {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +Amount: decimal
+        +AdjustedAmount: decimal
+        +ConfirmedAmount: decimal
+        +Method: string
+        +CollectionMethod: string
+        +Status: string
+        +DueDate: DateTimeOffset
+        +PaidDate: DateTimeOffset
+        +PayOsOrderCode: string
+        +OperationKey: string
+        +Version: int
+        +CreatedAt: DateTimeOffset
+    }
+
+    class PaymentReceipt {
+        +Id: Guid
+        +ReceiptCode: string
+        +RetailerId: Guid
+        +ReceivedAmount: decimal
+        +UnappliedCreditAmount: decimal
+        +Reference: string
+        +Status: string
+        +OperationKey: string
+        +ConfirmedAt: DateTimeOffset
+        +ConfirmedByUserId: Guid
+        +ReversedAt: DateTimeOffset
+        +Version: int
+    }
+
+    class PaymentReceiptAllocation {
+        +Id: Guid
+        +PaymentReceiptId: Guid
+        +PaymentId: Guid
+        +Amount: decimal
+        +CreatedAt: DateTimeOffset
+    }
+
+    class ManualRefund {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +PaymentId: Guid
+        +Amount: decimal
+        +Reason: string
+        +Recipient: string
+        +Status: string
+        +TransactionReference: string
+        +EvidenceReference: string
+        +VerifiedAt: DateTimeOffset
+        +VerifiedByUserId: Guid
+        +Version: int
+    }
+}
+
+%% ==========================================
+%% DOMAIN - REFERENCES
+%% ==========================================
+
+namespace Domain_References {
+
+    class Retailer {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +Status: string
+        +CreditTermDays: int
+    }
+
+    class SalesOrder {
+        +Id: Guid
+        +OrderCode: string
+        +RetailerId: Guid
+        +FinalAmount: decimal
+        +PaymentMethod: string
+        +Status: string
+    }
+
+    class PurchaseOrder {
+        +Id: Guid
+        +PurchaseOrderCode: string
+        +SalesOrderId: Guid
+        +PaymentMethod: string
+        +Status: string
+        +IssuedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% API DEPENDENCIES
+%% ==========================================
+
+PaymentsController ..> PaymentService : uses
+
+PaymentReceiptsController ..> PaymentReceiptService : uses
+
+RetailerReceivablesController ..> RetailerReceivableService : uses
+
+RefundsController ..> RefundService : uses
+
+%% ==========================================
+%% APPLICATION DEPENDENCIES
+%% ==========================================
+
+PaymentService ..> IPaymentStore : uses
+
+PaymentService ..> IPayOsGateway : uses
+
+PaymentService ..> PurchaseOrderGateService : checks issuance
+
+PaymentReceiptService ..> IPaymentReceiptStore : uses
+
+RetailerReceivableService ..> IRetailerReceivableStore : uses
+
+RefundService ..> IRefundStore : uses
+
+%% ==========================================
+%% INTERFACE REALIZATION
+%% ==========================================
+
+PaymentStore ..|> IPaymentStore : implements
+
+PaymentReceiptStore ..|> IPaymentReceiptStore : implements
+
+RetailerReceivableStore ..|> IRetailerReceivableStore : implements
+
+RefundStore ..|> IRefundStore : implements
+
+PayOsGateway ..|> IPayOsGateway : implements
+
+%% ==========================================
+%% PAYMENT RELATIONSHIPS
+%% ==========================================
+
+Retailer "1" -- "0..*" SalesOrder : places
+
+SalesOrder "1" -- "0..1" Payment : payment obligation
+
+SalesOrder "1" -- "0..1" PurchaseOrder : generates
+
+Retailer "1" -- "0..*" PaymentReceipt : makes payments
+
+%% ==========================================
+%% CONSOLIDATED PAYMENT RECEIPTS
+%% ==========================================
+
+PaymentReceipt "1" *-- "0..*" PaymentReceiptAllocation : contains
+
+Payment "1" -- "0..*" PaymentReceiptAllocation : receives allocations
+
+%% ==========================================
+%% MANUAL REFUND RELATIONSHIPS
+%% ==========================================
+
+SalesOrder "1" -- "0..*" ManualRefund : refund obligations
+
+Payment "0..1" -- "0..*" ManualRefund : related payment
+
+%% ==========================================
+%% BUSINESS CONSTRAINTS
+%% ==========================================
+
+note for PaymentReceipt "One receipt can fund multiple payment obligations."
+
+note for PaymentReceiptAllocation "Each allocation applies a portion of the received amount."
+
+note for ManualRefund "Refunds require manual transfer and evidence verification."
+
+note for PurchaseOrder "Prepaid orders require verified full payment before issuance."

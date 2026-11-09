@@ -1,0 +1,608 @@
+classDiagram
+direction TB
+
+%% ==========================================
+%% API LAYER
+%% ==========================================
+
+namespace API {
+
+    class ProductsController {
+        <<Controller>>
+        +SetPrice()
+        +ListPrices()
+        +GetPriceSuggestion()
+    }
+
+    class ShelfLifeDiscountsController {
+        <<Controller>>
+        +Current()
+        +History()
+        +Version()
+        +Match()
+        +Publish()
+    }
+
+    class PricingController {
+        <<Controller>>
+        +Snapshot()
+        +CartSnapshot()
+    }
+
+    class QuotesController {
+        <<Controller>>
+        +ForOrder()
+        +ForRun()
+        +Accept()
+        +Reject()
+    }
+}
+
+%% ==========================================
+%% APPLICATION SERVICES
+%% ==========================================
+
+namespace Application_Services {
+
+    class CatalogService {
+        <<Service>>
+        +SetPriceAsync()
+        +ListPriceHistoryAsync()
+        +GetPriceSuggestionAsync()
+        -ValidatePrice()
+    }
+
+    class ShelfLifeDiscountService {
+        <<Service>>
+        +GetCurrentAsync()
+        +GetVersionAsync()
+        +ListHistoryAsync()
+        +MatchAsync()
+        +PublishAsync()
+        -Validate()
+    }
+
+    class PromotionService {
+        <<Service>>
+        +CalculatePriceAsync()
+        +CalculateIndicativePriceAsync()
+        +CalculateIndicativePricesAsync()
+        +ApplyBatchDiscountAsync()
+        +ListEligibleCampaignsAsync()
+    }
+
+    class OrderService {
+        <<Service>>
+        +CreateAsync()
+        +GetAsync()
+        +GetByCodeAsync()
+        +SubmitOfflineAsync()
+    }
+
+    class OrderPricingService {
+        <<Service>>
+        +CalculateAsync()
+        -ToSnapshot()
+    }
+
+    class AllocationPricingService {
+        <<Service>>
+        +PriceAsync()
+    }
+
+    class RealTimeAllocationService {
+        <<Service>>
+        +AllocateAsync()
+        +AllocateOnceAsync()
+    }
+
+    class AllocationPriceLookupService {
+        <<Service>>
+        +GetByOrderAsync()
+        +GetByOrderLineAsync()
+        -EnsureLinesReconcile()
+        -Round()
+    }
+
+    class QuoteService {
+        <<Service>>
+        +ListForOrderAsync()
+        +ListForRunAsync()
+        +AcceptAsync()
+        +RejectAsync()
+    }
+}
+
+%% ==========================================
+%% APPLICATION INTERFACES
+%% ==========================================
+
+namespace Application_Interfaces {
+
+    class ICatalogStore {
+        <<interface>>
+        +FindActivePriceAsync()
+        +ListPricesAsync()
+        +AddPrice()
+        +RemovePrices()
+        +SaveChangesAsync()
+    }
+
+    class IShelfLifeDiscountStore {
+        <<interface>>
+        +FindCurrentAsync()
+        +FindByVersionAsync()
+        +FindEffectiveAtAsync()
+        +FindCurrentForUpdateAsync()
+        +MaxVersionAsync()
+        +AddTable()
+        +AddTiers()
+        +AddAuditLog()
+        +SaveChangesAsync()
+    }
+
+    class IPromotionStore {
+        <<interface>>
+        +ListEligibleCampaignsAsync()
+        +ListEligibleBatchDiscountsAsync()
+        +FindBatchDiscountAsync()
+        +FindPriceProductAsync()
+        +FindPriceBatchAsync()
+        +SaveChangesAsync()
+    }
+
+    class IOrderPricingService {
+        <<interface>>
+        +CalculateAsync()
+    }
+
+    class IRealTimeAllocationStore {
+        <<interface>>
+        +LoadForUpdateAsync()
+        +AddRun()
+        +AddAllocation()
+        +AddReservation()
+        +AddQuote()
+        +ExecuteInTransactionAsync()
+        +SaveChangesAsync()
+    }
+
+    class IQuoteStore {
+        <<interface>>
+        +FindAsync()
+        +ListForOrderAsync()
+        +ListForRunAsync()
+        +CanRetailerAccessAsync()
+        +SaveChangesAsync()
+    }
+
+    class IAllocationRunStore {
+        <<interface>>
+        +FindOrderPriceAsync()
+        +FindOrderTraceAsync()
+        +AddPlanPrices()
+        +FindPlanVersionViewAsync()
+    }
+}
+
+%% ==========================================
+%% PERSISTENCE LAYER
+%% ==========================================
+
+namespace Persistence {
+
+    class CatalogStore {
+        <<Repository>>
+        +FindActivePriceAsync()
+        +ListPricesAsync()
+        +AddPrice()
+        +RemovePrices()
+        +SaveChangesAsync()
+    }
+
+    class ShelfLifeDiscountStore {
+        <<Repository>>
+        +FindCurrentAsync()
+        +FindByVersionAsync()
+        +FindEffectiveAtAsync()
+        +FindCurrentForUpdateAsync()
+        +MaxVersionAsync()
+        +AddTable()
+        +AddTiers()
+        +AddAuditLog()
+        +SaveChangesAsync()
+    }
+
+    class PromotionStore {
+        <<Repository>>
+        +ListEligibleCampaignsAsync()
+        +ListEligibleBatchDiscountsAsync()
+        +FindBatchDiscountAsync()
+        +FindPriceProductAsync()
+        +FindPriceBatchAsync()
+        +SaveChangesAsync()
+    }
+
+    class RealTimeAllocationStore {
+        <<Repository>>
+        +LoadForUpdateAsync()
+        +AddRun()
+        +AddAllocation()
+        +AddReservation()
+        +AddQuote()
+        +ExecuteInTransactionAsync()
+        +SaveChangesAsync()
+    }
+
+    class QuoteStore {
+        <<Repository>>
+        +FindAsync()
+        +ListForOrderAsync()
+        +ListForRunAsync()
+        +CanRetailerAccessAsync()
+        +SaveChangesAsync()
+    }
+
+    class AllocationRunStore {
+        <<Repository>>
+        +FindOrderPriceAsync()
+        +FindOrderTraceAsync()
+        +AddPlanPrices()
+        +FindPlanVersionViewAsync()
+    }
+}
+
+%% ==========================================
+%% DOMAIN - PRODUCT PRICING
+%% ==========================================
+
+namespace Domain_ProductPricing {
+
+    class ProductCategory {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +ParentCategoryId: Guid
+        +IsActive: bool
+    }
+
+    class Product {
+        +Id: Guid
+        +ProductCategoryId: Guid
+        +Sku: string
+        +Name: string
+        +ShelfLifeHours: int
+        +Status: string
+        +PublishedAt: DateTimeOffset
+    }
+
+    class ProductPrice {
+        +Id: Guid
+        +ProductId: Guid
+        +UnitPrice: decimal
+        +EffectiveFrom: DateTimeOffset
+        +EffectiveTo: DateTimeOffset
+        +IsActive: bool
+        +CreatedAt: DateTimeOffset
+    }
+
+    class Batch {
+        +Id: Guid
+        +ProductId: Guid
+        +WarehouseId: Guid
+        +BatchCode: string
+        +ProductionDate: DateOnly
+        +ExpirationDate: DateOnly
+        +StockStatus: string
+        +ExpiryStatus: string
+    }
+}
+
+%% ==========================================
+%% DOMAIN - SHELF LIFE DISCOUNT
+%% ==========================================
+
+namespace Domain_ShelfLifeDiscount {
+
+    class ShelfLifeDiscountTable {
+        +Id: Guid
+        +Version: int
+        +EffectiveFrom: DateTimeOffset
+        +EffectiveTo: DateTimeOffset
+        +IsActive: bool
+        +Note: string
+        +CreatedAt: DateTimeOffset
+    }
+
+    class ShelfLifeDiscountTier {
+        +Id: Guid
+        +ShelfLifeDiscountTableId: Guid
+        +Scope: string
+        +ProductId: Guid
+        +ProductCategoryId: Guid
+        +MinRemainingPercent: decimal
+        +MaxRemainingPercent: decimal
+        +DiscountType: string
+        +DiscountValue: decimal
+    }
+}
+
+%% ==========================================
+%% DOMAIN - PROMOTION
+%% ==========================================
+
+namespace Domain_Promotion {
+
+    class Promotion {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +PromotionType: string
+        +MinimumQuantity: int
+        +DiscountPercent: decimal
+        +StartAt: DateTimeOffset
+        +EndAt: DateTimeOffset
+        +IsActive: bool
+    }
+
+    class BatchPromotion {
+        +Id: Guid
+        +BatchId: Guid
+        +PromotionId: Guid
+        +IsActive: bool
+        +AssignedAt: DateTimeOffset
+        +RemovedAt: DateTimeOffset
+    }
+
+    class OrderPromotion {
+        +Id: Guid
+        +SalesOrderLineId: Guid
+        +PromotionId: Guid
+        +PromotionCodeSnapshot: string
+        +PromotionNameSnapshot: string
+        +DiscountPercent: decimal
+        +DiscountAmount: decimal
+        +IsServerFinal: bool
+        +AppliedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - REAL TIME PRICING
+%% ==========================================
+
+namespace Domain_RealTimePricing {
+
+    class SalesOrder {
+        +Id: Guid
+        +OrderCode: string
+        +RetailerId: Guid
+        +SubtotalAmount: decimal
+        +DiscountAmount: decimal
+        +FinalAmount: decimal
+        +FinalPricePendingAllocation: bool
+        +Status: string
+        +Version: int
+    }
+
+    class SalesOrderLine {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +ProductId: Guid
+        +OrderedQuantity: int
+        +ProductPriceId: Guid
+        +UnitPrice: decimal
+        +GrossAmount: decimal
+        +DiscountAmount: decimal
+        +NetAmount: decimal
+        +DiscountSourceType: string
+        +DiscountSourceCode: string
+        +PricedAt: DateTimeOffset
+    }
+
+    class Allocation {
+        +Id: Guid
+        +SalesOrderLineId: Guid
+        +BatchId: Guid
+        +WarehouseId: Guid
+        +AllocatedQuantity: int
+        +EstimatedArrivalAt: DateTimeOffset
+        +RemainingLifeHoursAtArrival: decimal
+        +UnitPrice: decimal
+        +GrossAmount: decimal
+        +DiscountPercent: decimal
+        +DiscountAmount: decimal
+        +DiscountSourceType: string
+        +DiscountSourceCode: string
+        +NetAmount: decimal
+        +Status: string
+    }
+
+    class SalesOrderQuote {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +AllocationRunId: Guid
+        +AllocationPlanVersionId: Guid
+        +RevisionNumber: int
+        +TotalAmount: decimal
+        +Status: string
+        +IssuedAt: DateTimeOffset
+        +ExpiresAt: DateTimeOffset
+        +AcceptedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - LEGACY PRICE TRACE
+%% ==========================================
+
+namespace Domain_Legacy_PriceTrace {
+
+    class AllocationPlanVersion {
+        +Id: Guid
+        +AllocationRunId: Guid
+        +VersionNumber: int
+        +Status: string
+        +PricedAt: DateTimeOffset
+        +TotalFinalAmount: decimal
+        +CreatedAt: DateTimeOffset
+    }
+
+    class AllocationRunLine {
+        +Id: Guid
+        +SalesOrderLineId: Guid
+        +ProductId: Guid
+        +OrderedQuantity: int
+        +AllocatedQuantity: int
+        +ListUnitPrice: decimal
+        +BaseNetUnitPrice: decimal
+        +TotalShelfLifeHours: decimal
+    }
+
+    class AllocationPlanPrice {
+        +Id: Guid
+        +AllocationPlanVersionId: Guid
+        +AllocationRunLineId: Guid
+        +BatchId: Guid
+        +WarehouseId: Guid
+        +Quantity: int
+        +ListUnitPrice: decimal
+        +BaseNetUnitPrice: decimal
+        +RemainingShelfLifePercent: decimal
+        +DiscountTableVersion: int
+        +ShelfLifeDiscountTierId: Guid
+        +DiscountType: string
+        +DiscountValue: decimal
+        +ShelfLifeDiscountPerUnit: decimal
+        +FinalNetUnitPrice: decimal
+        +Amount: decimal
+        +PricedAt: DateTimeOffset
+        +Explanation: string
+    }
+}
+
+%% ==========================================
+%% API DEPENDENCIES
+%% ==========================================
+
+ProductsController ..> CatalogService : uses
+
+ShelfLifeDiscountsController ..> ShelfLifeDiscountService : uses
+
+PricingController ..> OrderService : uses
+
+PricingController ..> PromotionService : uses
+
+QuotesController ..> QuoteService : uses
+
+%% ==========================================
+%% APPLICATION DEPENDENCIES
+%% ==========================================
+
+CatalogService ..> ICatalogStore : uses
+
+ShelfLifeDiscountService ..> IShelfLifeDiscountStore : uses
+
+PromotionService ..> IPromotionStore : uses
+
+OrderService ..> IOrderPricingService : uses
+
+OrderPricingService ..> PromotionService : uses
+
+RealTimeAllocationService ..> AllocationPricingService : prices batches
+
+RealTimeAllocationService ..> IRealTimeAllocationStore : uses
+
+AllocationPricingService ..> ShelfLifeDiscountService : matches discount tiers
+
+QuoteService ..> IQuoteStore : uses
+
+AllocationPriceLookupService ..> IAllocationRunStore : reads legacy traces
+
+%% ==========================================
+%% INTERFACE REALIZATION
+%% ==========================================
+
+CatalogStore ..|> ICatalogStore : implements
+
+ShelfLifeDiscountStore ..|> IShelfLifeDiscountStore : implements
+
+PromotionStore ..|> IPromotionStore : implements
+
+OrderPricingService ..|> IOrderPricingService : implements
+
+RealTimeAllocationStore ..|> IRealTimeAllocationStore : implements
+
+QuoteStore ..|> IQuoteStore : implements
+
+AllocationRunStore ..|> IAllocationRunStore : implements
+
+%% ==========================================
+%% PRODUCT AND PRICE HISTORY
+%% ==========================================
+
+ProductCategory "1" -- "0..*" Product : classifies
+
+Product "1" -- "0..*" ProductPrice : price history
+
+Product "1" -- "0..*" Batch : has batches
+
+%% ==========================================
+%% SHELF LIFE DISCOUNT RULES
+%% ==========================================
+
+ShelfLifeDiscountTable "1" *-- "0..*" ShelfLifeDiscountTier : contains
+
+Product "0..1" -- "0..*" ShelfLifeDiscountTier : SKU scope
+
+ProductCategory "0..1" -- "0..*" ShelfLifeDiscountTier : category scope
+
+%% ==========================================
+%% PROMOTION RELATIONSHIPS
+%% ==========================================
+
+Promotion "1" -- "0..*" BatchPromotion : batch assignments
+
+Batch "1" -- "0..*" BatchPromotion : eligible promotions
+
+%% ==========================================
+%% SALES ORDER PRICING
+%% ==========================================
+
+SalesOrder "1" *-- "1..*" SalesOrderLine : contains
+
+Product "1" -- "0..*" SalesOrderLine : ordered product
+
+ProductPrice "0..1" -- "0..*" SalesOrderLine : selected price
+
+SalesOrderLine "1" *-- "0..*" OrderPromotion : promotion snapshots
+
+Promotion "0..1" -- "0..*" OrderPromotion : source promotion
+
+%% ==========================================
+%% REAL TIME BATCH PRICING
+%% ==========================================
+
+SalesOrderLine "1" -- "0..*" Allocation : allocated portions
+
+Batch "1" -- "0..*" Allocation : allocated batch
+
+Promotion "0..1" -- "0..*" Allocation : applied promotion
+
+SalesOrder "1" -- "0..*" SalesOrderQuote : issued quotations
+
+%% ==========================================
+%% LEGACY PRICE TRACE RELATIONSHIPS
+%% ==========================================
+
+SalesOrderLine "1" -- "0..*" AllocationRunLine : historical run line
+
+AllocationRunLine "1" -- "0..*" AllocationPlanPrice : historical price rows
+
+AllocationPlanVersion "1" *-- "0..*" AllocationPlanPrice : versioned price trace
+
+Batch "1" -- "0..*" AllocationPlanPrice : priced batch
+
+ShelfLifeDiscountTier "0..1" -- "0..*" AllocationPlanPrice : applied tier
+
+AllocationPlanVersion "0..1" -- "0..*" SalesOrderQuote : historical plan reference

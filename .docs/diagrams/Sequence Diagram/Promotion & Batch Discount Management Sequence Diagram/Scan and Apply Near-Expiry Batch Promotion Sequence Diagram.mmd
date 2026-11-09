@@ -1,0 +1,120 @@
+sequenceDiagram
+    autonumber
+
+    actor Admin as Administrator
+    participant UI as Web Portal
+    participant BatchAPI as BatchDiscountsController
+    participant Promotion as PromotionService
+    participant PromoStore as PromotionStore
+    participant RuleAPI as ShelfLifeDiscountsController
+    participant RuleService as ShelfLifeDiscountService
+    participant RuleStore as ShelfLifeDiscountStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. SCAN NEAR-EXPIRY BATCHES
+    %% ==========================================
+
+    Admin->>+UI: Open Shelf-Life Discount Management
+
+    UI->>+BatchAPI: Suggestions(filters)
+    BatchAPI->>+Promotion: ListBatchSuggestionsAsync(filters)
+
+    Promotion->>+PromoStore: ListBatchDiscountCandidatesAsync(filters)
+    PromoStore->>+DB: SELECT eligible batches, expiry dates and stock balances
+    DB-->>PromoStore: Batch and inventory records
+    deactivate DB
+
+    PromoStore-->>Promotion: Candidate batch list
+    deactivate PromoStore
+
+    Promotion-->>BatchAPI: Batch discount suggestions
+    deactivate Promotion
+
+    BatchAPI-->>UI: Candidate batch results
+    deactivate BatchAPI
+
+    %% ==========================================
+    %% 2. VIEW CURRENT DISCOUNT CONFIGURATION
+    %% ==========================================
+
+    UI->>+RuleAPI: Current()
+    RuleAPI->>+RuleService: GetCurrentAsync()
+
+    RuleService->>+RuleStore: FindCurrentAsync()
+    RuleStore->>+DB: SELECT current discount table and tiers
+    DB-->>RuleStore: Active configuration
+    deactivate DB
+
+    RuleStore-->>RuleService: Current discount table
+    deactivate RuleStore
+
+    RuleService-->>RuleAPI: Current discount configuration
+    deactivate RuleService
+
+    RuleAPI-->>UI: Discount rules response
+    deactivate RuleAPI
+
+    UI-->>Admin: Display near-expiry batches and current rules
+    deactivate UI
+
+    %% ==========================================
+    %% 3. CONFIGURE SHELF-LIFE DISCOUNT RULES
+    %% ==========================================
+
+    opt Administrator creates or updates discount configuration
+
+        Admin->>+UI: Enter discount tiers and effective period
+
+        Note over Admin,UI: Configure Category or SKU, remaining-life range and discount percentage
+
+        UI->>+RuleAPI: Publish(discountTableData)
+        RuleAPI->>+RuleService: PublishAsync(discountTableData)
+
+        Note right of RuleService: Validate target, percentage and non-overlapping ranges
+
+        RuleService->>+RuleStore: FindCurrentForUpdateAsync()
+        RuleStore->>+DB: SELECT current configuration and version
+        DB-->>RuleStore: Current table and tiers
+        deactivate DB
+
+        RuleStore-->>RuleService: Existing configuration
+        deactivate RuleStore
+
+        alt Valid configuration and no version conflict
+
+            RuleService->>+RuleStore: MaxVersionAsync()
+            RuleStore->>+DB: SELECT latest discount table version
+            DB-->>RuleStore: Latest version number
+            deactivate DB
+
+            RuleStore-->>RuleService: Version information
+            deactivate RuleStore
+
+            RuleService->>+RuleStore: AddTable(), AddTiers(), SaveChangesAsync()
+
+            RuleStore->>+DB: INSERT new discount table, tiers and audit record
+            DB-->>RuleStore: Configuration committed
+            deactivate DB
+
+            RuleStore-->>RuleService: Published discount version
+            deactivate RuleStore
+
+        else Invalid discount rules or conflicting version
+
+            Note right of RuleService: Reject overlapping ranges, invalid percentages or conflicting updates
+
+        end
+
+        RuleService-->>RuleAPI: Published configuration or business error
+        deactivate RuleService
+
+        RuleAPI-->>UI: Publication response
+        deactivate RuleAPI
+
+        UI-->>Admin: Display published rules or validation errors
+        deactivate UI
+
+    end
+
+    Note over RuleService,DB: Published rules are applied during allocation pricing after MLOR filtering

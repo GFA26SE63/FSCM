@@ -1,0 +1,140 @@
+sequenceDiagram
+    autonumber
+
+    actor Admin as Administrator
+    participant UI as Web Portal
+    participant API as UsersController
+    participant Service as IdentityService
+    participant Store as IdentityStore
+    participant DB as PostgreSQL Database
+
+    Admin->>+UI: Open User Management
+
+    UI->>+API: List users(filters)
+    API->>+Service: ListUsersAsync(query)
+
+    Service->>+Store: Retrieve user accounts
+    Store->>+DB: SELECT users with role and status filters
+    DB-->>Store: User records
+    deactivate DB
+
+    Store-->>Service: User list
+    deactivate Store
+
+    Service-->>API: Paged user results
+    deactivate Service
+
+    API-->>UI: User accounts
+    deactivate API
+
+    UI-->>Admin: Display user list
+    deactivate UI
+
+    opt Administrator manages an account
+
+        Admin->>+UI: Select management action
+
+        alt Create User Account
+
+            UI->>+API: Create(userData)
+            API->>+Service: CreateUserAsync(userData)
+
+            Service->>+Store: Validate and create user
+            Store->>+DB: SELECT duplicate identity / INSERT user
+            DB-->>Store: Created account or validation error
+            deactivate DB
+
+            Store-->>Service: Creation result
+            deactivate Store
+
+            Service-->>API: Created user or error
+            deactivate Service
+
+            API-->>UI: Success or error response
+            deactivate API
+
+        else Update User Profile
+
+            UI->>+API: UpdateProfile(userId, profileData)
+            API->>+Service: UpdateProfileAsync(userId, profileData)
+
+            Service->>+Store: Update user information
+            Store->>+DB: SELECT target account / UPDATE profile
+            DB-->>Store: Updated account or error
+            deactivate DB
+
+            Store-->>Service: Profile update result
+            deactivate Store
+
+            Service-->>API: Updated profile or error
+            deactivate Service
+
+            API-->>UI: Success or error response
+            deactivate API
+
+        else Update User Role
+
+            UI->>+API: UpdateRole(userId, role)
+            API->>+Service: UpdateRoleAsync(userId, role)
+
+            Service->>+Store: Validate and update user role
+            Store->>+DB: SELECT target account / UPDATE role
+            DB-->>Store: Updated role or error
+            deactivate DB
+
+            Store-->>Service: Role update result
+            deactivate Store
+
+            Service-->>API: Updated role or error
+            deactivate Service
+
+            API-->>UI: Success or error response
+            deactivate API
+
+        else Activate or Deactivate Account
+
+            UI->>+API: UpdateStatus(userId, isActive)
+            API->>+Service: SetActiveStatusAsync(userId, isActive)
+
+            Service->>+Store: Update account status
+            Store->>+DB: UPDATE account status and revoke sessions if needed
+            DB-->>Store: Updated status or error
+            deactivate DB
+
+            Store-->>Service: Status update result
+            deactivate Store
+
+            Service-->>API: Updated status or error
+            deactivate Service
+
+            API-->>UI: Success or error response
+            deactivate API
+
+        else Assign or Unassign Access Scope
+
+            UI->>+API: Assign or Unassign user scope
+
+            Note over API,Service: Warehouse, Region, Sales Group or Retailer
+
+            API->>+Service: Assign or Unassign scope
+
+            Service->>+Store: Validate and update user assignment
+            Store->>+DB: SELECT scope / INSERT or UPDATE assignment
+            DB-->>Store: Assignment result or error
+            deactivate DB
+
+            Store-->>Service: Assignment result
+            deactivate Store
+
+            Service-->>API: Updated scope or error
+            deactivate Service
+
+            API-->>UI: Success or error response
+            deactivate API
+
+        end
+
+        UI-->>Admin: Display operation result
+        deactivate UI
+
+    end

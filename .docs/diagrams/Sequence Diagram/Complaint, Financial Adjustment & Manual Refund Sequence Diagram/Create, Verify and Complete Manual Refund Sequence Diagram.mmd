@@ -1,0 +1,665 @@
+sequenceDiagram
+    autonumber
+
+    actor Operator as Operator
+    actor Admin as Administrator
+
+    participant UI as Web Portal
+    participant API as RefundsController
+    participant Service as RefundService
+    participant RefundStore as RefundStore
+    participant PaymentStore as PaymentStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% PART 1 - CREATE MANUAL REFUND
+    %% ==========================================
+
+    Note over Operator,DB: PART 1 - CREATE MANUAL REFUND
+
+    Operator->>+UI: Create manual refund request
+
+    Note right of UI: Enter SalesOrderId, Amount, Recipient and Reason
+
+    UI->>+API: Create(request, Idempotency-Key)
+
+    API->>+Service: CreateAsync(data, key, actorId, role, ct)
+
+    %% ==========================================
+    %% 1. VALIDATE CREATE REQUEST
+    %% ==========================================
+
+    Service->>+Service: EnsureOperator(role)
+    Service-->>Service: Authorization result
+    deactivate Service
+
+    Note right of Service: Validate positive Amount and decimal precision
+
+    Note right of Service: Validate Recipient, Reason and OperationKey
+
+    alt Actor is unauthorized or request is invalid
+
+        Note right of Service: Return Forbidden or Validation error
+
+    else Create request is valid
+
+        %% ==========================================
+        %% 2. CHECK CREATE IDEMPOTENCY
+        %% ==========================================
+
+        Service->>+RefundStore: FindByOperationKeyAsync(key, ct)
+
+        RefundStore->>+DB: SELECT ManualRefund by operation keys
+        DB-->>RefundStore: Existing RefundView or null
+        deactivate DB
+
+        RefundStore-->>Service: Existing RefundView or null
+        deactivate RefundStore
+
+        alt OperationKey already exists
+
+            Service->>+Service: Replay(existingView, requestHash, storedHash)
+            Service-->>Service: Existing RefundResult or Conflict
+            deactivate Service
+
+            Note right of Service: Matching replay does not create another refund
+
+        else No previous operation exists
+
+            %% ==========================================
+            %% 3. START CREATE TRANSACTION
+            %% ==========================================
+
+            Service->>+PaymentStore: ExecuteInTransactionAsync(operation, ct)
+
+            PaymentStore->>+DB: BEGIN TRANSACTION
+            DB-->>PaymentStore: Transaction started
+            deactivate DB
+
+            %% ==========================================
+            %% 4. LOAD PAYMENT OBLIGATION
+            %% ==========================================
+
+            Service->>+PaymentStore: FindByOrderAsync(orderId, true, ct)
+
+            PaymentStore->>+DB: SELECT Payment, SalesOrder and Retailer
+            DB-->>PaymentStore: PaymentView or null
+            deactivate DB
+
+            PaymentStore-->>Service: PaymentView or null
+            deactivate PaymentStore
+
+            alt Payment obligation does not exist
+
+                Note right of Service: Return Not Found
+
+                PaymentStore->>+DB: ROLLBACK
+                DB-->>PaymentStore: Transaction rolled back
+                deactivate DB
+
+            else Payment obligation exists
+
+                %% ==========================================
+                %% 5. CALCULATE REFUND TOTALS
+                %% ==========================================
+
+                Service->>+RefundStore: TotalsAsync(paymentId, ct)
+
+                RefundStore->>+DB: SELECT SUM of Pending and AwaitingVerification refunds
+                DB-->>RefundStore: PendingRefundAmount
+                deactivate DB
+
+                RefundStore->>+DB: SELECT SUM of Refunded amounts
+                DB-->>RefundStore: RefundedAmount
+                deactivate DB
+
+                RefundStore-->>Service: Pending and Refunded totals
+                deactivate RefundStore
+
+                %% ==========================================
+                %% 6. VALIDATE REFUND LIMIT
+                %% ==========================================
+
+                Note right of Service: RefundDue = max(0, ConfirmedAmount - AdjustedAmount - Refunded)
+
+                alt Requested Amount plus Pending exceeds RefundDue
+
+                    Note right of Service: Reject excessive refund obligation
+
+                    PaymentStore->>+DB: ROLLBACK
+                    DB-->>PaymentStore: Transaction rolled back
+                    deactivate DB
+
+                else Refund amount is permitted
+
+                    %% ==========================================
+                    %% 7. CREATE REFUND ENTITY
+                    %% ==========================================
+
+                    Note right of Service: Create ManualRefund with PendingRefund status
+
+                    Note right of Service: Store CreateOperationKey and CreateRequestHash
+
+                    Note right of Service: Set CreatedByUserId and CreatedAt
+
+                    Service->>+RefundStore: Add(manualRefund)
+
+                    RefundStore-->>Service: ManualRefund staged
+                    deactivate RefundStore
+
+                    %% ==========================================
+                    %% 8. RECORD AUDIT
+                    %% ==========================================
+
+                    Service->>+Service: Audit(refund, actorId, RefundRequested, now)
+
+                    Service->>+RefundStore: AddAuditLog(auditLog)
+
+                    RefundStore-->>Service: AuditLog staged
+                    deactivate RefundStore
+
+                    Service-->>Service: Audit prepared
+                    deactivate Service
+
+                    %% ==========================================
+                    %% 9. PERSIST REFUND OBLIGATION
+                    %% ==========================================
+
+                    Note right of Service: Increment Payment.Version
+
+                    Service->>+RefundStore: SaveChangesAsync(ct)
+
+                    RefundStore->>+DB: INSERT ManualRefund and AuditLog
+
+                    Note right of DB: UPDATE Payment.Version and UpdatedAt
+
+                    DB-->>RefundStore: Changes saved
+                    deactivate DB
+
+                    RefundStore-->>Service: Save successful
+                    deactivate RefundStore
+
+                    %% ==========================================
+                    %% 10. COMMIT CREATE TRANSACTION
+                    %% ==========================================
+
+                    PaymentStore->>+DB: COMMIT
+                    DB-->>PaymentStore: Transaction committed
+                    deactivate DB
+
+                end
+
+            end
+
+            PaymentStore-->>Service: Transaction outcome or exception
+            deactivate PaymentStore
+
+            %% ==========================================
+            %% 11. RELOAD CREATED REFUND
+            %% ==========================================
+
+            opt Create transaction committed successfully
+
+                Service->>+PaymentStore: ClearTracking()
+                PaymentStore-->>Service: Tracking cleared
+                deactivate PaymentStore
+
+                Service->>+RefundStore: FindAsync(refundId, false, ct)
+
+                RefundStore->>+DB: SELECT Refund and related Payment data
+                DB-->>RefundStore: RefundView
+                deactivate DB
+
+                RefundStore-->>Service: RefundView
+                deactivate RefundStore
+
+                Service->>+Service: ToResult(refundView)
+                Service-->>Service: RefundResult
+                deactivate Service
+
+            end
+
+        end
+
+    end
+
+    %% ==========================================
+    %% 12. RETURN CREATE RESULT
+    %% ==========================================
+
+    Service-->>API: RefundResult or business error
+    deactivate Service
+
+    API-->>UI: Create response
+    deactivate API
+
+    UI-->>Operator: Display refund request status
+    deactivate UI
+
+    %% ==========================================
+    %% PART 2 - SUBMIT TRANSFER EVIDENCE
+    %% ==========================================
+
+    Note over Operator,DB: PART 2 - SUBMIT EXTERNAL TRANSFER EVIDENCE
+
+    Note over Operator,UI: Operator performs the transfer outside FSCM
+
+    Operator->>+UI: Submit refund transfer details
+
+    Note right of UI: Enter TransactionReference and EvidenceReference
+
+    Note right of UI: Enter TransferredAt and ExpectedVersion
+
+    UI->>+API: Evidence(refundId, request, Idempotency-Key)
+
+    API->>+Service: SubmitEvidenceAsync(refundId, data, key, actorId, role, ct)
+
+    %% ==========================================
+    %% 13. VALIDATE EVIDENCE REQUEST
+    %% ==========================================
+
+    Service->>+Service: EnsureOperator(role)
+    Service-->>Service: Authorization result
+    deactivate Service
+
+    Note right of Service: Validate OperationKey and transfer references
+
+    Note right of Service: TransferredAt must not be in the future
+
+    alt Actor unauthorized or evidence data invalid
+
+        Note right of Service: Return Forbidden or Validation error
+
+    else Evidence request is valid
+
+        %% ==========================================
+        %% 14. CHECK EVIDENCE IDEMPOTENCY
+        %% ==========================================
+
+        Service->>+RefundStore: FindByOperationKeyAsync(key, ct)
+
+        RefundStore->>+DB: SELECT ManualRefund by operation keys
+        DB-->>RefundStore: Existing RefundView or null
+        deactivate DB
+
+        RefundStore-->>Service: Existing RefundView or null
+        deactivate RefundStore
+
+        alt Evidence OperationKey already exists
+
+            Service->>+Service: Replay(existingView, requestHash, storedHash)
+            Service-->>Service: Existing RefundResult or Conflict
+            deactivate Service
+
+        else Evidence operation is new
+
+            %% ==========================================
+            %% 15. MUTATE REFUND WITH TRANSACTION
+            %% ==========================================
+
+            Service->>+Service: MutateAsync(refundId, expectedVersion, actorId, change, action, ct)
+
+            Service->>+PaymentStore: ExecuteInTransactionAsync(operation, ct)
+
+            PaymentStore->>+DB: BEGIN TRANSACTION
+            DB-->>PaymentStore: Transaction started
+            deactivate DB
+
+            %% ==========================================
+            %% 16. LOAD REFUND FOR UPDATE
+            %% ==========================================
+
+            Service->>+RefundStore: FindAsync(refundId, true, ct)
+
+            RefundStore->>+DB: SELECT ManualRefund and related Payment context
+            DB-->>RefundStore: RefundView or null
+            deactivate DB
+
+            RefundStore-->>Service: RefundView or null
+            deactivate RefundStore
+
+            %% ==========================================
+            %% 17. VALIDATE REFUND STATE
+            %% ==========================================
+
+            alt Refund not found or Version mismatch
+
+                Note right of Service: Return Not Found or Conflict
+
+                PaymentStore->>+DB: ROLLBACK
+                DB-->>PaymentStore: Transaction rolled back
+                deactivate DB
+
+            else Refund Status is not PendingRefund
+
+                Note right of Service: Return Conflict
+
+                PaymentStore->>+DB: ROLLBACK
+                DB-->>PaymentStore: Transaction rolled back
+                deactivate DB
+
+            else Refund is ready for evidence submission
+
+                %% ==========================================
+                %% 18. RECORD TRANSFER EVIDENCE
+                %% ==========================================
+
+                Note right of Service: Set Status = AwaitingVerification
+
+                Note right of Service: Set TransactionReference and EvidenceReference
+
+                Note right of Service: Set TransferredAt and SubmittedAt
+
+                Note right of Service: Set SubmittedByUserId
+
+                Note right of Service: Store EvidenceOperationKey and RequestHash
+
+                Note right of Service: Increment ManualRefund.Version
+
+                %% ==========================================
+                %% 19. RECORD EVIDENCE AUDIT
+                %% ==========================================
+
+                Service->>+Service: Audit(refund, actorId, RefundEvidenceSubmitted, now)
+
+                Service->>+RefundStore: AddAuditLog(auditLog)
+
+                RefundStore-->>Service: AuditLog staged
+                deactivate RefundStore
+
+                Service-->>Service: Audit prepared
+                deactivate Service
+
+                %% ==========================================
+                %% 20. SAVE REFUND EVIDENCE
+                %% ==========================================
+
+                Service->>+RefundStore: SaveChangesAsync(ct)
+
+                RefundStore->>+DB: UPDATE ManualRefund evidence and status fields
+
+                Note right of DB: INSERT AuditLog
+
+                DB-->>RefundStore: Changes saved
+                deactivate DB
+
+                RefundStore-->>Service: Save successful
+                deactivate RefundStore
+
+                %% ==========================================
+                %% 21. COMMIT EVIDENCE TRANSACTION
+                %% ==========================================
+
+                PaymentStore->>+DB: COMMIT
+                DB-->>PaymentStore: Transaction committed
+                deactivate DB
+
+            end
+
+            PaymentStore-->>Service: Transaction outcome or exception
+            deactivate PaymentStore
+
+            Service-->>Service: Mutation outcome
+            deactivate Service
+
+            %% ==========================================
+            %% 22. RELOAD UPDATED REFUND
+            %% ==========================================
+
+            opt Evidence transaction committed successfully
+
+                Service->>+Service: Reload(refundId, ct)
+
+                Service->>+RefundStore: FindAsync(refundId, false, ct)
+
+                RefundStore->>+DB: SELECT updated ManualRefund and Payment context
+                DB-->>RefundStore: RefundView
+                deactivate DB
+
+                RefundStore-->>Service: RefundView
+                deactivate RefundStore
+
+                Service-->>Service: RefundResult
+                deactivate Service
+
+            end
+
+        end
+
+    end
+
+    %% ==========================================
+    %% 23. RETURN EVIDENCE RESULT
+    %% ==========================================
+
+    Service-->>API: RefundResult or business error
+    deactivate Service
+
+    API-->>UI: Evidence submission response
+    deactivate API
+
+    UI-->>Operator: Display AwaitingVerification or error
+    deactivate UI
+
+    %% ==========================================
+    %% PART 3 - VERIFY AND COMPLETE REFUND
+    %% ==========================================
+
+    Note over Admin,DB: PART 3 - ADMINISTRATOR REFUND VERIFICATION
+
+    Admin->>+UI: Review transferred refund evidence
+
+    Note right of UI: Review transfer reference and submitted evidence
+
+    UI->>+API: Verify(refundId, request, Idempotency-Key)
+
+    API->>+Service: VerifyAsync(refundId, data, key, actorId, role, ct)
+
+    %% ==========================================
+    %% 24. VALIDATE ADMINISTRATOR
+    %% ==========================================
+
+    Note right of Service: Verify requires Administrator role
+
+    alt Actor is not Administrator
+
+        Note right of Service: Return Forbidden
+
+    else Actor is Administrator
+
+        Note right of Service: Validate OperationKey and optional Note
+
+        %% ==========================================
+        %% 25. CHECK VERIFICATION IDEMPOTENCY
+        %% ==========================================
+
+        Service->>+RefundStore: FindByOperationKeyAsync(key, ct)
+
+        RefundStore->>+DB: SELECT ManualRefund by operation keys
+        DB-->>RefundStore: Existing RefundView or null
+        deactivate DB
+
+        RefundStore-->>Service: Existing RefundView or null
+        deactivate RefundStore
+
+        alt Verification OperationKey already exists
+
+            Service->>+Service: Replay(existingView, requestHash, storedHash)
+            Service-->>Service: Existing RefundResult or Conflict
+            deactivate Service
+
+        else Verification operation is new
+
+            %% ==========================================
+            %% 26. MUTATE REFUND WITH TRANSACTION
+            %% ==========================================
+
+            Service->>+Service: MutateAsync(refundId, expectedVersion, actorId, change, action, ct)
+
+            Service->>+PaymentStore: ExecuteInTransactionAsync(operation, ct)
+
+            PaymentStore->>+DB: BEGIN TRANSACTION
+            DB-->>PaymentStore: Transaction started
+            deactivate DB
+
+            %% ==========================================
+            %% 27. LOAD REFUND
+            %% ==========================================
+
+            Service->>+RefundStore: FindAsync(refundId, true, ct)
+
+            RefundStore->>+DB: SELECT ManualRefund and related Payment context
+            DB-->>RefundStore: RefundView or null
+            deactivate DB
+
+            RefundStore-->>Service: RefundView or null
+            deactivate RefundStore
+
+            %% ==========================================
+            %% 28. VALIDATE REFUND VERSION
+            %% ==========================================
+
+            alt Refund not found or Version mismatch
+
+                Note right of Service: Return Not Found or Conflict
+
+                PaymentStore->>+DB: ROLLBACK
+                DB-->>PaymentStore: Transaction rolled back
+                deactivate DB
+
+            else Refund is not AwaitingVerification
+
+                Note right of Service: Return Conflict
+
+                PaymentStore->>+DB: ROLLBACK
+                DB-->>PaymentStore: Transaction rolled back
+                deactivate DB
+
+            else Submitter and verifier are the same user
+
+                Note right of Service: Return Forbidden
+
+                PaymentStore->>+DB: ROLLBACK
+                DB-->>PaymentStore: Transaction rolled back
+                deactivate DB
+
+            else Refund is eligible for verification
+
+                %% ==========================================
+                %% 29. VERIFY COMPLETED TRANSFER
+                %% ==========================================
+
+                Note right of Service: Set Status = Refunded
+
+                Note right of Service: Set VerifiedByUserId and VerifiedAt
+
+                Note right of Service: Store VerificationNote
+
+                Note right of Service: Store VerificationOperationKey and RequestHash
+
+                Note right of Service: Increment ManualRefund.Version
+
+                %% ==========================================
+                %% 30. AUDIT REFUND VERIFICATION
+                %% ==========================================
+
+                Service->>+Service: Audit(refund, actorId, RefundVerified, now)
+
+                Service->>+RefundStore: AddAuditLog(auditLog)
+
+                RefundStore-->>Service: AuditLog staged
+                deactivate RefundStore
+
+                Service-->>Service: Audit prepared
+                deactivate Service
+
+                %% ==========================================
+                %% 31. PERSIST VERIFIED REFUND
+                %% ==========================================
+
+                Service->>+RefundStore: SaveChangesAsync(ct)
+
+                RefundStore->>+DB: UPDATE ManualRefund status and verification fields
+
+                Note right of DB: INSERT AuditLog
+
+                DB-->>RefundStore: Changes saved
+                deactivate DB
+
+                RefundStore-->>Service: Save successful
+                deactivate RefundStore
+
+                %% ==========================================
+                %% 32. COMMIT VERIFICATION
+                %% ==========================================
+
+                PaymentStore->>+DB: COMMIT
+                DB-->>PaymentStore: Transaction committed
+                deactivate DB
+
+            end
+
+            PaymentStore-->>Service: Transaction outcome or exception
+            deactivate PaymentStore
+
+            Service-->>Service: Mutation outcome
+            deactivate Service
+
+            %% ==========================================
+            %% 33. RELOAD VERIFIED REFUND
+            %% ==========================================
+
+            opt Verification transaction committed successfully
+
+                Service->>+Service: Reload(refundId, ct)
+
+                Service->>+RefundStore: FindAsync(refundId, false, ct)
+
+                RefundStore->>+DB: SELECT verified ManualRefund and Payment context
+                DB-->>RefundStore: RefundView
+                deactivate DB
+
+                RefundStore-->>Service: RefundView
+                deactivate RefundStore
+
+                Service-->>Service: RefundResult
+                deactivate Service
+
+            end
+
+        end
+
+    end
+
+    %% ==========================================
+    %% 34. RETURN VERIFICATION RESULT
+    %% ==========================================
+
+    Service-->>API: RefundResult or business error
+    deactivate Service
+
+    API-->>UI: Verification response
+    deactivate API
+
+    UI-->>Admin: Display Refunded status or error
+    deactivate UI
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over Service,DB: Each operation has its own idempotency key and request hash
+
+    Note over Service,DB: Create Refund must not exceed available refundable amount
+
+    Note over Service,DB: Evidence submission requires PendingRefund
+
+    Note over Service,DB: Verification requires AwaitingVerification
+
+    Note over Service,DB: The evidence submitter cannot verify the same refund
+
+    Note over Service,DB: Refunded amounts are calculated from verified ManualRefund records
+
+    Note over Service,DB: No inventory adjustment is performed during refund processing
+
+    Note over Service,DB: Refund verification does not directly invoke OrderCompletionService

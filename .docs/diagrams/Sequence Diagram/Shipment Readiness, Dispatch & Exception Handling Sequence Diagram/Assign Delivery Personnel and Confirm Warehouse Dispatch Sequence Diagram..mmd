@@ -1,0 +1,472 @@
+sequenceDiagram
+    autonumber
+
+    actor Operator as Operator
+    actor Keeper as Warehouse Keeper
+
+    participant UI as Web Portal
+    participant API as ShipmentsController
+    participant Service as ShipmentService
+    participant Store as ShipmentStore
+    participant PaymentStore as PaymentStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. ASSIGN DELIVERY PERSONNEL
+    %% ==========================================
+
+    Operator->>+UI: Select Shipment and assign Driver / Vehicle
+
+    UI->>+API: Assign(shipmentId, request)
+    API->>+Service: AssignAsync(shipmentId, data, actorRole)
+
+    Service->>+Service: EnsureOperator(actorRole)
+    Service-->>Service: Authorization result
+    deactivate Service
+
+    alt User is not authorized
+
+        Note right of Service: Return Forbidden
+
+    else Operator is authorized
+
+        Service->>+Store: FindByIdAsync(shipmentId)
+
+        Store->>+DB: SELECT Shipment by Id
+        DB-->>Store: Shipment or null
+        deactivate DB
+
+        Store-->>Service: Shipment result
+        deactivate Store
+
+        alt Shipment not found or not assignable
+
+            Note right of Service: Return Not Found or Conflict
+
+        else Shipment can be assigned
+
+            %% ==========================================
+            %% 2. VALIDATE DRIVER
+            %% ==========================================
+
+            Service->>+Store: FindDriverAsync(driverId)
+
+            Store->>+DB: SELECT Driver by Id
+            DB-->>Store: Driver details or null
+            deactivate DB
+
+            Store-->>Service: Driver result
+            deactivate Store
+
+            %% ==========================================
+            %% 3. VALIDATE VEHICLE
+            %% ==========================================
+
+            Service->>+Store: FindVehicleAsync(vehicleId)
+
+            Store->>+DB: SELECT Vehicle by Id
+            DB-->>Store: Vehicle details or null
+            deactivate DB
+
+            Store-->>Service: Vehicle result
+            deactivate Store
+
+            alt Invalid Driver / Vehicle or Warehouse mismatch
+
+                Note right of Service: Reject invalid transport assignment
+
+            else Driver and Vehicle are valid
+
+                %% ==========================================
+                %% 4. SAVE TRANSPORT ASSIGNMENT
+                %% ==========================================
+
+                Note right of Service: Set DriverId and VehicleId
+
+                Note right of Service: Store Driver and Vehicle snapshots
+
+                Service->>+Store: SaveChangesAsync()
+
+                Store->>+DB: UPDATE Shipment assignment and snapshots
+                DB-->>Store: Assignment saved
+                deactivate DB
+
+                Store-->>Service: Save successful
+                deactivate Store
+
+                Note right of Service: Assignment does not dispatch Shipment
+
+            end
+
+        end
+
+    end
+
+    %% ==========================================
+    %% 5. RETURN ASSIGNMENT RESULT
+    %% ==========================================
+
+    Service-->>API: ShipmentResult or business error
+    deactivate Service
+
+    API-->>UI: Assignment response
+    deactivate API
+
+    UI-->>Operator: Display assignment status
+    deactivate UI
+
+    %% ==========================================
+    %% 6. CONFIRM WAREHOUSE ISSUE
+    %% ==========================================
+
+    Keeper->>+UI: Confirm warehouse issue for Shipment
+
+    UI->>+API: ConfirmIssue(shipmentId, request)
+    API->>+Service: ConfirmIssueAsync(shipmentId, data, actorContext)
+
+    Note over Service,DB: ConfirmIssue uses ExecuteInTransactionAsync
+
+    %% ==========================================
+    %% 7. LOAD SHIPMENT AND ORDER
+    %% ==========================================
+
+    Service->>+Store: FindByIdAsync(shipmentId)
+
+    Store->>+DB: SELECT Shipment and current status
+    DB-->>Store: Shipment or null
+    deactivate DB
+
+    Store-->>Service: Shipment result
+    deactivate Store
+
+    alt Shipment not found or already processed incorrectly
+
+        Note right of Service: Return existing result or business error
+
+    else Shipment is eligible for issue checks
+
+        Service->>+Store: FindOrderForUpdateAsync(orderId)
+
+        Store->>+DB: SELECT SalesOrder for transactional update
+        DB-->>Store: Current SalesOrder
+        deactivate DB
+
+        Store-->>Service: SalesOrder
+        deactivate Store
+
+        %% ==========================================
+        %% 8. VALIDATE WAREHOUSE ACCESS
+        %% ==========================================
+
+        Service->>+Store: CanAccessWarehouseAsync(actorId, warehouseId)
+
+        Store->>+DB: SELECT Warehouse access scope
+        DB-->>Store: Access result
+        deactivate DB
+
+        Store-->>Service: Authorized or Forbidden
+        deactivate Store
+
+        alt Keeper cannot access Shipment Warehouse
+
+            Note right of Service: Return Forbidden
+
+        else Warehouse access is valid
+
+            %% ==========================================
+            %% 9. CHECK WHOLE-ORDER READINESS
+            %% ==========================================
+
+            Service->>+Store: ListExpectedWarehousesAsync(orderId)
+
+            Store->>+DB: SELECT all expected Warehouse portions
+            DB-->>Store: ExpectedWarehouseParts
+            deactivate DB
+
+            Store-->>Service: Expected Warehouse list
+            deactivate Store
+
+            Note over Service,DB: Every required Warehouse must complete Picking
+
+            %% ==========================================
+            %% 10. CHECK PAYMENT READINESS
+            %% ==========================================
+
+            Service->>+PaymentStore: FindByOrderAsync(orderId)
+
+            PaymentStore->>+DB: SELECT Payment status for SalesOrder
+            DB-->>PaymentStore: Payment information
+            deactivate DB
+
+            PaymentStore-->>Service: Payment result
+            deactivate PaymentStore
+
+            %% ==========================================
+            %% 11. LOAD ISSUABLE INVENTORY
+            %% ==========================================
+
+            Service->>+Store: ListIssuableAsync(shipmentId)
+
+            Store->>+DB: SELECT allocations, reservations and Batch stock
+            DB-->>Store: ShipmentIssueRows
+            deactivate DB
+
+            Store-->>Service: Issuable inventory details
+            deactivate Store
+
+            %% ==========================================
+            %% 12. VALIDATE ISSUE CONDITIONS
+            %% ==========================================
+
+            alt Another Warehouse is still picking
+
+                Note right of Service: Reject issue for the entire order
+
+            else Open exception or stock eligibility conflict
+
+                Note right of Service: Reject issue and require resolution
+
+            else Payment or Credit condition is not satisfied
+
+                Note right of Service: Do not issue stock
+
+            else Shipment is ready for issue
+
+                %% ==========================================
+                %% 13. CONSUME RESERVED STOCK
+                %% ==========================================
+
+                Note over Service,Store: Validate current inventory before changing quantities
+
+                loop For each issued Batch portion
+
+                    Note right of Service: Decrease PhysicalQuantity
+
+                    Note right of Service: Decrease ReservedQuantity
+
+                    Note right of Service: Set Reservation to Consumed
+
+                    Service->>+Store: AddInventoryTransaction(issueTransaction)
+
+                    Store-->>Service: Stock movement staged
+                    deactivate Store
+
+                end
+
+                %% ==========================================
+                %% 14. UPDATE SHIPMENT ISSUE STATUS
+                %% ==========================================
+
+                Note right of Service: Set Shipment status to Issued
+
+                Note right of Service: Record IssuedAt
+
+                Note right of Service: Update order status when issue conditions are met
+
+                Service->>+Store: AddOrderHistory(orderHistory)
+
+                Store-->>Service: Order history staged
+                deactivate Store
+
+                %% ==========================================
+                %% 15. COMMIT INVENTORY ISSUE
+                %% ==========================================
+
+                Service->>+Store: SaveChangesAsync()
+
+                Store->>+DB: UPDATE InventoryBalance and Reservations
+
+                Note right of DB: UPDATE Shipment and SalesOrder statuses
+
+                Note right of DB: INSERT InventoryTransactions and OrderStatusHistory
+
+                DB-->>Store: Transaction outcome
+                deactivate DB
+
+                Store-->>Service: Save result
+                deactivate Store
+
+                alt Issue transaction committed
+
+                    Note right of Service: Physical and Reserved Stock decreased once
+
+                else Concurrency or stock conflict
+
+                    Note right of Service: Roll back issue changes
+
+                    Note right of Service: Do not retain partial stock deductions
+
+                end
+
+            end
+
+        end
+
+    end
+
+    %% ==========================================
+    %% 16. RETURN ISSUE RESULT
+    %% ==========================================
+
+    Service-->>API: ShipmentResult or issue error
+    deactivate Service
+
+    API-->>UI: ConfirmIssue response
+    deactivate API
+
+    UI-->>Keeper: Display issue status
+    deactivate UI
+
+    %% ==========================================
+    %% 17. DISPATCH ISSUED SHIPMENT
+    %% ==========================================
+
+    Operator->>+UI: Confirm Shipment Dispatch
+
+    UI->>+API: Dispatch(shipmentId, request)
+    API->>+Service: DispatchAsync(shipmentId, data, actorRole)
+
+    Service->>+Service: EnsureOperator(actorRole)
+    Service-->>Service: Authorization result
+    deactivate Service
+
+    alt User is not Operator
+
+        Note right of Service: Return Forbidden
+
+    else Operator is authorized
+
+        %% ==========================================
+        %% 18. LOAD SHIPMENT FOR DISPATCH
+        %% ==========================================
+
+        Service->>+Store: FindByIdAsync(shipmentId)
+
+        Store->>+DB: SELECT Shipment, status and transport assignment
+        DB-->>Store: Shipment details
+        deactivate DB
+
+        Store-->>Service: Shipment result
+        deactivate Store
+
+        alt Shipment not issued or transport assignment missing
+
+            Note right of Service: Return Conflict
+
+        else Shipment is issued and assigned
+
+            %% ==========================================
+            %% 19. LOAD SHIPMENT QR LABELS
+            %% ==========================================
+
+            Service->>+Store: ListLabelsAsync(shipmentId)
+
+            Store->>+DB: SELECT QR Labels linked to Shipment
+            DB-->>Store: ShipmentLabelViews
+            deactivate DB
+
+            Store-->>Service: Shipment QR Labels
+            deactivate Store
+
+            %% ==========================================
+            %% 20. STAGE QR LABEL EVENTS
+            %% ==========================================
+
+            loop For each Shipment QR Label
+
+                Note right of Service: Prepare transition to InTransit
+
+                Service->>+Store: AddLabelEvent(qrLabelEvent)
+
+                Store-->>Service: QR Label event staged
+                deactivate Store
+
+            end
+
+            %% ==========================================
+            %% 21. CHECK ORDER SHIPMENTS
+            %% ==========================================
+
+            Service->>+Store: ListByOrderAsync(orderId)
+
+            Store->>+DB: SELECT Shipments belonging to SalesOrder
+            DB-->>Store: Order Shipment list
+            deactivate DB
+
+            Store-->>Service: Shipment collection
+            deactivate Store
+
+            Service->>+Store: FindOrderForUpdateAsync(orderId)
+
+            Store->>+DB: SELECT SalesOrder for transactional update
+            DB-->>Store: Current SalesOrder
+            deactivate DB
+
+            Store-->>Service: SalesOrder
+            deactivate Store
+
+            %% ==========================================
+            %% 22. UPDATE DISPATCH STATUS
+            %% ==========================================
+
+            Note right of Service: Set Shipment status to Dispatched
+
+            Note right of Service: Record DispatchedAt
+
+            Note right of Service: Update order status when applicable
+
+            Service->>+Store: AddOrderHistory(orderHistory)
+
+            Store-->>Service: Order history staged
+            deactivate Store
+
+            %% ==========================================
+            %% 23. COMMIT SHIPMENT DISPATCH
+            %% ==========================================
+
+            Note over Service,DB: Dispatch uses ExecuteInTransactionAsync
+
+            Service->>+Store: SaveChangesAsync()
+
+            Store->>+DB: UPDATE Shipment and QR Label statuses
+
+            Note right of DB: INSERT QrLabelEvents and OrderStatusHistory
+
+            Note right of DB: No second Physical Stock deduction
+
+            DB-->>Store: Dispatch transaction outcome
+            deactivate DB
+
+            Store-->>Service: Save result
+            deactivate Store
+
+        end
+
+    end
+
+    %% ==========================================
+    %% 24. RETURN DISPATCH RESULT
+    %% ==========================================
+
+    Service-->>API: ShipmentResult or dispatch error
+    deactivate Service
+
+    API-->>UI: Dispatch response
+    deactivate API
+
+    UI-->>Operator: Display Shipment dispatch status
+    deactivate UI
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over Service,DB: Assigning transport does not change inventory
+
+    Note over Service,DB: No Shipment may be issued before whole-order Picking readiness
+
+    Note over Service,DB: ConfirmIssue consumes stock and reservations exactly once
+
+    Note over Service,DB: Dispatch must not deduct Physical Stock again
+
+    Note over Service,DB: All status changes must respect concurrency and idempotency

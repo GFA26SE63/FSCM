@@ -1,0 +1,11 @@
+---
+title: SalesOrderQuote State Machine
+---
+stateDiagram-v2
+    [*] --> PendingRetailerAcceptance : quote issued when allocation commits the reservation (expiry deadline set)
+    PendingRetailerAcceptance --> Accepted : Retailer accepts and chooses Prepaid or Credit
+    PendingRetailerAcceptance --> Rejected : Retailer rejects (reason required, reservation released)
+    PendingRetailerAcceptance --> Expired : deadline passed (reservation released)
+    Accepted --> [*]
+    Rejected --> [*]
+    Expired --> [*]

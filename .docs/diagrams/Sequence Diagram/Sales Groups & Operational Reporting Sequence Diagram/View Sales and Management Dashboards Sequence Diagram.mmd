@@ -1,0 +1,278 @@
+sequenceDiagram
+    autonumber
+
+    actor User as Administrator / Sales Manager / Sales
+    participant UI as Web Portal / Sales Mobile App
+    participant API as ReportsController
+    participant Service as ReportService
+    participant Store as ReportStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. OPEN DASHBOARD
+    %% ==========================================
+
+    User->>+UI: Open Dashboard
+
+    UI-->>User: Display reporting filters
+
+    User->>UI: Select period, Region and Sales Group
+
+    %% ==========================================
+    %% 2. REQUEST SALES KPI
+    %% ==========================================
+
+    UI->>+API: SalesKpis(filters)
+
+    API->>+Service: GetSalesKpiAsync(filters, actorContext)
+
+    %% ==========================================
+    %% 3. VALIDATE REPORTING PERIOD
+    %% ==========================================
+
+    Note over Service,Store: Validate reporting period and requested scope
+
+    alt Invalid reporting period
+
+        Note right of Service: Return validation error
+
+    else Reporting period is valid
+
+        %% ==========================================
+        %% 4. RESOLVE ACCESS SCOPE
+        %% ==========================================
+
+        opt Sales Manager requires group scope resolution
+
+            Service->>+Store: ListActiveGroupIdsAsync(actorId)
+
+            Store->>+DB: SELECT active Sales Group assignments
+            DB-->>Store: Authorized group identifiers
+            deactivate DB
+
+            Store-->>Service: Allowed group IDs
+            deactivate Store
+
+        end
+
+        alt Requested scope is unauthorized
+
+            Note right of Service: Do not expose another group's data
+
+        else Requested scope is authorized
+
+            %% ==========================================
+            %% 5. LOAD KPI CONFIGURATION
+            %% ==========================================
+
+            Service->>+Store: FindSalesKpiConfigurationAsync(period)
+
+            Store->>+DB: SELECT active KPI configuration
+            DB-->>Store: KPI targets and weights
+            deactivate DB
+
+            Store-->>Service: SalesKpiConfiguration
+            deactivate Store
+
+            %% ==========================================
+            %% 6. LOAD RECOGNIZED ORDERS
+            %% ==========================================
+
+            Service->>+Store: ListRecognizedOrdersAsync(filters, scope)
+
+            Store->>+DB: SELECT recognized SalesOrders and net values
+            Note right of DB: Apply period and authorized scope
+            DB-->>Store: Recognized order data
+            deactivate DB
+
+            Store-->>Service: SalesKpiOrderRows
+            deactivate Store
+
+            %% ==========================================
+            %% 7. CALCULATE KPI
+            %% ==========================================
+
+            Note over Service,Store: Aggregate net revenue, order count and new retailers
+
+            Note over Service,Store: Apply configured targets and KPI weights
+
+            Note right of Service: Build KPI entries and achievement status
+
+        end
+
+    end
+
+    %% ==========================================
+    %% 8. RETURN KPI RESULT
+    %% ==========================================
+
+    Service-->>API: SalesKpiResult or business error
+    deactivate Service
+
+    API-->>UI: KPI response
+    deactivate API
+
+    UI-->>User: Display KPI dashboard or error
+    deactivate UI
+
+    %% ==========================================
+    %% 9. VIEW SALES RANKING
+    %% ==========================================
+
+    opt User opens Sales Ranking
+
+        User->>+UI: Open Sales Ranking
+
+        UI->>+API: SalesRanking(filters)
+
+        API->>+Service: GetSalesRankingAsync(filters, actorContext)
+
+        %% ==========================================
+        %% 10. CHECK RANKING ACCESS
+        %% ==========================================
+
+        Note over Service,Store: Validate ranking filters and role scope
+
+        opt Sales Manager needs active group scope
+
+            Service->>+Store: ListActiveGroupIdsAsync(actorId)
+
+            Store->>+DB: SELECT authorized Sales Groups
+            DB-->>Store: Active group identifiers
+            deactivate DB
+
+            Store-->>Service: Allowed group IDs
+            deactivate Store
+
+        end
+
+        alt Ranking scope is unauthorized
+
+            Note right of Service: Return Forbidden error
+
+        else Ranking scope is authorized
+
+            %% ==========================================
+            %% 11. AGGREGATE SALES REVENUE
+            %% ==========================================
+
+            Service->>+Store: AggregateSalesRevenueAsync(filters, scope)
+
+            Store->>+DB: SELECT grouped recognized sales revenue
+            Note right of DB: Aggregate by Sales and preserve historical attribution
+            DB-->>Store: Aggregated Sales results
+            deactivate DB
+
+            Store-->>Service: Sales revenue summary
+            deactivate Store
+
+            %% ==========================================
+            %% 12. BUILD RANKING
+            %% ==========================================
+
+            Note right of Service: Sort performance and calculate rank
+
+            Note right of Service: Limit details to authorized visibility
+
+        end
+
+        %% ==========================================
+        %% 13. RETURN SALES RANKING
+        %% ==========================================
+
+        Service-->>API: SalesRankingResult or error
+        deactivate Service
+
+        API-->>UI: Ranking response
+        deactivate API
+
+        UI-->>User: Display Sales Ranking or error
+        deactivate UI
+
+    end
+
+    %% ==========================================
+    %% 14. VIEW BEST-SELLING PRODUCTS
+    %% ==========================================
+
+    opt User opens Best-Selling Products
+
+        User->>+UI: Open Best-Selling Products
+
+        UI->>+API: BestSellingProducts(filters)
+
+        API->>+Service: GetProductRankingAsync(filters, actorContext)
+
+        %% ==========================================
+        %% 15. VALIDATE PRODUCT REPORT SCOPE
+        %% ==========================================
+
+        Note over Service,Store: Validate period and authorized report scope
+
+        opt Sales Manager needs active group scope
+
+            Service->>+Store: ListActiveGroupIdsAsync(actorId)
+
+            Store->>+DB: SELECT active Sales Group assignments
+            DB-->>Store: Authorized group identifiers
+            deactivate DB
+
+            Store-->>Service: Allowed group IDs
+            deactivate Store
+
+        end
+
+        alt Invalid period or unauthorized scope
+
+            Note right of Service: Return validation or Forbidden error
+
+        else Product report scope is valid
+
+            %% ==========================================
+            %% 16. AGGREGATE PRODUCT SALES
+            %% ==========================================
+
+            Service->>+Store: AggregateProductSalesAsync(filters, scope)
+
+            Store->>+DB: SELECT aggregated product sales
+            Note right of DB: Apply reporting period and scope
+            DB-->>Store: Product sales totals
+            deactivate DB
+
+            Store-->>Service: Product sales summary
+            deactivate Store
+
+            %% ==========================================
+            %% 17. BUILD PRODUCT RANKING
+            %% ==========================================
+
+            Note right of Service: Calculate product ranking
+
+        end
+
+        %% ==========================================
+        %% 18. RETURN PRODUCT REPORT
+        %% ==========================================
+
+        Service-->>API: ProductRankingResult or error
+        deactivate Service
+
+        API-->>UI: Product ranking response
+        deactivate API
+
+        UI-->>User: Display Best-Selling Products or error
+        deactivate UI
+
+    end
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over User,DB: Dashboard queries must respect role and Sales Group scope
+
+    Note over Service,DB: Revenue uses recognized net order values after applicable adjustments
+
+    Note over Service,DB: One SalesOrder is counted once regardless of shipment count
+
+    Note over Service,DB: Dashboard operations are read-only

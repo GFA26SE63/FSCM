@@ -1,0 +1,192 @@
+sequenceDiagram
+    autonumber
+
+    actor User as Warehouse Keeper / Administrator
+    participant UI as Web Portal
+    participant API as InventoryController
+    participant Service as InventoryService
+    participant Store as InventoryStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. VIEW WAREHOUSE INVENTORY
+    %% ==========================================
+
+    User->>+UI: Open Warehouse Inventory
+
+    UI->>+API: List(filters)
+    API->>+Service: ListInventoryAsync(filters)
+
+    %% ==========================================
+    %% 2. VALIDATE WAREHOUSE ACCESS
+    %% ==========================================
+
+    Service->>+Store: CanAccessWarehouseAsync(userId, warehouseId)
+
+    Store->>+DB: SELECT warehouse assignments and permissions
+    DB-->>Store: Warehouse access information
+    deactivate DB
+
+    Store-->>Service: Authorization result
+    deactivate Store
+
+    alt Warehouse access allowed and filters valid
+
+        %% ==========================================
+        %% 3. RETRIEVE INVENTORY BALANCES
+        %% ==========================================
+
+        Service->>+Store: ListInventoryAsync(filters)
+
+        Store->>+DB: SELECT batches, products and stock balances
+        Note right of DB: Include warehouse, expiry status<br/>and unavailable stock information
+
+        DB-->>Store: Inventory records
+        deactivate DB
+
+        Store-->>Service: Inventory list
+        deactivate Store
+
+        Note right of Service: Present Physical, Reserved,<br/>Available and expiry status
+
+        Service-->>API: Inventory results
+
+    else Warehouse access denied
+
+        Service-->>API: 403 Forbidden
+
+    else Invalid inventory filters
+
+        Service-->>API: 400 Validation Error
+
+    end
+
+    deactivate Service
+
+    API-->>UI: Inventory list or error
+    deactivate API
+
+    UI-->>User: Display warehouse inventory
+    deactivate UI
+
+    %% ==========================================
+    %% 4. VIEW BATCH DETAILS
+    %% ==========================================
+
+    opt User selects a Batch
+
+        User->>+UI: Select Batch to view details
+
+        UI->>+API: GetBatch(batchId)
+        API->>+Service: GetBatchAsync(batchId)
+
+        %% ==========================================
+        %% 5. RETRIEVE BATCH INFORMATION
+        %% ==========================================
+
+        Service->>+Store: FindBatchInventoryAsync(batchId)
+
+        Store->>+DB: SELECT Batch, Product, Warehouse and InventoryBalance
+        DB-->>Store: Batch details or null
+        deactivate DB
+
+        Store-->>Service: Batch inventory information
+        deactivate Store
+
+        alt Batch exists
+
+            %% ==========================================
+            %% 6. CHECK BATCH ACCESS SCOPE
+            %% ==========================================
+
+            Service->>+Store: CanAccessWarehouseAsync(userId, batchWarehouseId)
+
+            Store->>+DB: SELECT user's warehouse permissions
+            DB-->>Store: Authorization result
+            deactivate DB
+
+            Store-->>Service: Access allowed or denied
+            deactivate Store
+
+            alt User is authorized
+
+                Note right of Service: Include SKU, batch code,<br/>production and expiry dates,<br/>stock balance and batch status
+
+                Service-->>API: BatchDetailResult
+
+            else User is not authorized
+
+                Service-->>API: 403 Forbidden
+
+            end
+
+        else Batch not found
+
+            Service-->>API: 404 Not Found
+
+        end
+
+        deactivate Service
+
+        API-->>UI: Batch details or error
+        deactivate API
+
+        UI-->>User: Display Batch information
+        deactivate UI
+
+    end
+
+    %% ==========================================
+    %% 7. VIEW INVENTORY MOVEMENT HISTORY
+    %% ==========================================
+
+    opt User views Batch inventory history
+
+        User->>+UI: Open Inventory History
+
+        UI->>+API: History(batchId)
+        API->>+Service: ListHistoryAsync(batchId)
+
+        Service->>+Store: CanAccessWarehouseAsync(userId, warehouseId)
+
+        Store->>+DB: SELECT warehouse access permissions
+        DB-->>Store: Authorization result
+        deactivate DB
+
+        Store-->>Service: Access allowed or denied
+        deactivate Store
+
+        alt User is authorized
+
+            %% ==========================================
+            %% 8. RETRIEVE INVENTORY TRANSACTIONS
+            %% ==========================================
+
+            Service->>+Store: ListHistoryAsync(batchId)
+
+            Store->>+DB: SELECT InventoryTransaction records by Batch
+            DB-->>Store: Inventory movement history
+            deactivate DB
+
+            Store-->>Service: Transaction history
+            deactivate Store
+
+            Service-->>API: InventoryHistoryResult
+
+        else User is not authorized
+
+            Service-->>API: 403 Forbidden
+
+        end
+
+        deactivate Service
+
+        API-->>UI: Inventory history or error
+        deactivate API
+
+        UI-->>User: Display chronological stock movements
+        deactivate UI
+
+    end
+
+    Note over User,DB: Inventory viewing is read-only and does not modify stock balances

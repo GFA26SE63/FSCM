@@ -1,0 +1,90 @@
+sequenceDiagram
+    autonumber
+
+    actor User as Authorized User
+    participant UI as Web Portal / Mobile App
+    participant ProductAPI as ProductsController
+    participant Catalog as CatalogService
+    participant CatalogStore as CatalogStore
+    participant ReportAPI as ReportsController
+    participant Report as ReportService
+    participant ReportStore as ReportStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. VIEW PRODUCT CATALOG
+    %% ==========================================
+
+    alt View Product Catalog
+
+        User->>+UI: Open Product Catalog
+
+        UI->>+ProductAPI: List(search, category, filters)
+        ProductAPI->>+Catalog: ListProductsAsync(filters)
+
+        Catalog->>+CatalogStore: ListProductsAsync(filters)
+        CatalogStore->>+DB: SELECT products, categories and prices
+        DB-->>CatalogStore: Product records
+        deactivate DB
+
+        CatalogStore-->>Catalog: Product list
+        deactivate CatalogStore
+
+        Catalog-->>ProductAPI: Filtered Product results
+        deactivate Catalog
+
+        ProductAPI-->>UI: Product catalog response
+        deactivate ProductAPI
+
+        UI-->>User: Display available products and prices
+        deactivate UI
+
+    %% ==========================================
+    %% 2. VIEW BEST-SELLING PRODUCTS
+    %% ==========================================
+
+    else View Best-Selling Products
+
+        User->>+UI: Open Best-Selling Products and select period
+
+        UI->>+ReportAPI: BestSellingProducts(period, filters)
+        ReportAPI->>+Report: GetProductRankingAsync(query)
+
+        Report->>+ReportStore: Retrieve authorized sales scope
+        ReportStore->>+DB: SELECT permitted regions and sales groups
+        DB-->>ReportStore: Authorized scope
+        deactivate DB
+
+        ReportStore-->>Report: Scope information
+        deactivate ReportStore
+
+        alt Valid period and authorized scope
+
+            Report->>+ReportStore: AggregateProductSalesAsync(period, scope)
+
+            ReportStore->>+DB: SELECT delivered quantities and net revenue by SKU
+            DB-->>ReportStore: Aggregated sales data
+            deactivate DB
+
+            ReportStore-->>Report: Product sales summary
+            deactivate ReportStore
+
+            Note right of Report: Rank by quantity, net revenue, then SKU
+
+            Report-->>ReportAPI: ProductRankingResult
+
+        else Invalid period or unauthorized scope
+
+            Report-->>ReportAPI: Validation or forbidden error
+
+        end
+
+        deactivate Report
+
+        ReportAPI-->>UI: Ranking result or error
+        deactivate ReportAPI
+
+        UI-->>User: Display best-selling products or error
+        deactivate UI
+
+    end

@@ -1,0 +1,271 @@
+@startchen F2_physical
+
+title F2 – Physical ERD (Chen) – Retailer/Sales Sales-Order Creation and Real-time Validation
+
+entity SALES_ORDER {
+  "Id : uuid PK" as Id <<key>>
+  "OrderCode : varchar(40) UQ NN" as OrderCode
+  "RetailerId : uuid FK→RETAILER NN" as RetailerId
+  "SalesGroupId : uuid FK→SALES_GROUP NN" as SalesGroupId
+  "CreatedByUserId : uuid FK→USER_ACCOUNT NN" as CreatedByUserId
+  "Source : varchar(30) NN" as Source
+  "Status : smallint NN" as Status
+  "PaymentMethod : smallint NULL" as PaymentMethod
+  "DeliveryAddress : text NN" as DeliveryAddress
+  "DeliveryLatitude : numeric(10,7) NN" as DeliveryLatitude
+  "DeliveryLongitude : numeric(10,7) NN" as DeliveryLongitude
+  "RequestedDeliveryDate : date NULL" as RequestedDeliveryDate
+  "Note : text NULL" as Note
+  "SubtotalAmount : numeric(18,2) NN" as SubtotalAmount
+  "PromotionDiscountAmount : numeric(18,2) NN" as PromotionDiscountAmount
+  "ShelfLifeDiscountAmount : numeric(18,2) NN" as ShelfLifeDiscountAmount
+  "FinalAmount : numeric(18,2) NN" as FinalAmount
+  "CreditEligibleAtSubmit : boolean NN" as CreditEligibleAtSubmit
+  "ClientOrderKey : uuid NN" as ClientOrderKey
+  "RequestHash : varchar(64) NN" as RequestHash
+  "ServerReceivedAt : timestamptz NN" as ServerReceivedAt
+  "AcceptedAt : timestamptz NN" as AcceptedAt
+  "WithdrawnAt : timestamptz NULL" as WithdrawnAt
+  "CompletedAt : timestamptz NULL" as CompletedAt
+  "Version : integer NN" as Version
+  "CreatedAt : timestamptz NN" as CreatedAt
+}
+entity SALES_ORDER_LINE {
+  "Id : uuid PK" as Id <<key>>
+  "SalesOrderId : uuid FK→SALES_ORDER NN" as SalesOrderId
+  "LineNumber : integer NN" as LineNumber
+  "ProductId : uuid FK→PRODUCT NN" as ProductId
+  "ProductPriceId : uuid FK→PRODUCT_PRICE NN" as ProductPriceId
+  "SkuSnapshot : varchar(50) NN" as SkuSnapshot
+  "ProductNameSnapshot : varchar(200) NN" as ProductNameSnapshot
+  "OrderedQuantity : numeric(18,3) NN" as OrderedQuantity
+  "ListUnitPrice : numeric(18,2) NN" as ListUnitPrice
+  "PromotionDiscountPercent : numeric(5,2) NN" as PromotionDiscountPercent
+  "PromotionDiscountAmount : numeric(18,2) NN" as PromotionDiscountAmount
+  "BaseNetUnitPrice : numeric(18,2) NN" as BaseNetUnitPrice
+  "GrossAmount : numeric(18,2) NN" as GrossAmount
+  "NetAmount : numeric(18,2) NULL" as NetAmount
+  "MlorMinimumLifeRatio : numeric(5,4) NN" as MlorMinimumLifeRatio
+  "MlorSourceScope : varchar(20) NN" as MlorSourceScope
+  "RetailerProductMlorId : uuid FK→RETAILER_PRODUCT_MLOR NULL" as RetailerProductMlorId
+  "RetailerCategoryMlorId : uuid FK→RETAILER_CATEGORY_MLOR NULL" as RetailerCategoryMlorId
+}
+entity ORDER_PROMOTION {
+  "Id : uuid PK" as Id <<key>>
+  "SalesOrderId : uuid FK→SALES_ORDER UQ NN" as SalesOrderId
+  "PromotionId : uuid FK→PROMOTION NN" as PromotionId
+  "PromotionCodeSnapshot : varchar(40) NN" as PromotionCodeSnapshot
+  "PromotionTypeSnapshot : varchar(30) NN" as PromotionTypeSnapshot
+  "MinimumQuantitySnapshot : numeric(18,3) NN" as MinimumQuantitySnapshot
+  "EligibleQuantity : numeric(18,3) NN" as EligibleQuantity
+  "DiscountPercent : numeric(5,2) NN" as DiscountPercent
+  "DiscountAmount : numeric(18,2) NN" as DiscountAmount
+  "AppliedAt : timestamptz NN" as AppliedAt
+}
+entity ORDER_STATUS_HISTORY {
+  "Id : uuid PK" as Id <<key>>
+  "SalesOrderId : uuid FK→SALES_ORDER NN" as SalesOrderId
+  "FromStatus : smallint NULL" as FromStatus
+  "ToStatus : smallint NN" as ToStatus
+  "Reason : text NULL" as Reason
+  "ChangedByUserId : uuid FK→USER_ACCOUNT NULL" as ChangedByUserId
+  "ChangedAt : timestamptz NN" as ChangedAt
+}
+entity IDEMPOTENCY_KEY {
+  "Id : uuid PK" as Id <<key>>
+  "UserAccountId : uuid FK→USER_ACCOUNT NN" as UserAccountId
+  "SalesOrderId : uuid FK→SALES_ORDER UQ NULL" as SalesOrderId
+  "Status : varchar(30) NN" as Status
+}
+entity OUTBOX_MESSAGE {
+  "Id : uuid PK" as Id <<key>>
+  "Status : varchar(30) NN" as Status
+}
+entity MAP_DISTANCE_CACHE {
+  "Id : uuid PK" as Id <<key>>
+  "WarehouseId : uuid FK→WAREHOUSE NN" as WarehouseId
+  "RetailerId : uuid FK→RETAILER NN" as RetailerId
+}
+entity RETAILER {
+  "Id : uuid PK" as Id <<key>>
+  "Code : varchar(30) UQ NN" as Code
+  "Latitude : numeric(10,7) NN" as Latitude
+  "Longitude : numeric(10,7) NN" as Longitude
+  "RegionId : uuid FK→REGION NN" as RegionId
+  "Status : varchar(30) NN" as Status
+}
+entity SALES_GROUP {
+  "Id : uuid PK" as Id <<key>>
+  "Code : varchar(30) UQ NN" as Code
+  "RegionId : uuid FK→REGION NN" as RegionId
+}
+entity USER_ACCOUNT {
+  "Id : uuid PK" as Id <<key>>
+  "Email : varchar(150) UQ NN" as Email
+}
+entity REGION {
+  "Id : uuid PK" as Id <<key>>
+  "Code : varchar(30) UQ NN" as Code
+}
+entity WAREHOUSE {
+  "Id : uuid PK" as Id <<key>>
+  "Code : varchar(30) UQ NN" as Code
+  "RegionId : uuid FK→REGION NN" as RegionId
+  "Latitude : numeric(10,7) NN" as Latitude
+  "Longitude : numeric(10,7) NN" as Longitude
+  "ServiceRadiusMeters : integer NN" as ServiceRadiusMeters
+  "Status : varchar(30) NN" as Status
+}
+entity PRODUCT_CATEGORY {
+  "Id : uuid PK" as Id <<key>>
+  "Code : varchar(30) UQ NN" as Code
+}
+entity PRODUCT {
+  "Id : uuid PK" as Id <<key>>
+  "Sku : varchar(50) UQ NN" as Sku
+  "ProductCategoryId : uuid FK→PRODUCT_CATEGORY NN" as ProductCategoryId
+  "Status : varchar(30) NN" as Status
+}
+entity PRODUCT_PRICE {
+  "Id : uuid PK" as Id <<key>>
+  "ProductId : uuid FK→PRODUCT NN" as ProductId
+  "UnitPrice : numeric(18,2) NN" as UnitPrice
+  "EffectiveFrom : timestamptz NN" as EffectiveFrom
+  "EffectiveTo : timestamptz NULL" as EffectiveTo
+}
+entity PROMOTION {
+  "Id : uuid PK" as Id <<key>>
+  "Code : varchar(40) UQ NN" as Code
+  "PromotionType : varchar(30) NN" as PromotionType
+  "MinimumQuantity : numeric(18,3) NN" as MinimumQuantity
+  "DiscountPercent : numeric(5,2) NN" as DiscountPercent
+  "StartAt : timestamptz NN" as StartAt
+  "EndAt : timestamptz NN" as EndAt
+}
+entity RETAILER_PRODUCT_MLOR {
+  "Id : uuid PK" as Id <<key>>
+  "RetailerId : uuid FK→RETAILER NN" as RetailerId
+  "ProductId : uuid FK→PRODUCT NN" as ProductId
+  "MinimumLifeRatio : numeric(5,4) NN" as MinimumLifeRatio
+}
+entity RETAILER_CATEGORY_MLOR {
+  "Id : uuid PK" as Id <<key>>
+  "RetailerId : uuid FK→RETAILER NN" as RetailerId
+  "ProductCategoryId : uuid FK→PRODUCT_CATEGORY NN" as ProductCategoryId
+  "MinimumLifeRatio : numeric(5,4) NN" as MinimumLifeRatio
+}
+entity RETAILER_CREDIT_PROFILE {
+  "Id : uuid PK" as Id <<key>>
+  "RetailerId : uuid FK→RETAILER UQ NN" as RetailerId
+  "CreditLimitAmount : numeric(18,2) NN" as CreditLimitAmount
+  "AllowedTermDays : integer NN" as AllowedTermDays
+  "EligibilityStatus : varchar(30) NN" as EligibilityStatus
+}
+
+relationship "places order\n(RetailerId)" as R_SALES_ORDER_RetailerId {
+}
+relationship "handles order\n(SalesGroupId)" as R_SALES_ORDER_SalesGroupId {
+}
+relationship "creates order\n(CreatedByUserId)" as R_SALES_ORDER_CreatedByUserId {
+}
+relationship "has order line\n(SalesOrderId)" as R_SALES_ORDER_LINE_SalesOrderId {
+}
+relationship "is ordered\n(ProductId)" as R_SALES_ORDER_LINE_ProductId {
+}
+relationship "prices\n(ProductPriceId)" as R_SALES_ORDER_LINE_ProductPriceId {
+}
+relationship "is SKU MLOR source\n(RetailerProductMlorId)" as R_SALES_ORDER_LINE_RetailerProductMlorId {
+}
+relationship "is category MLOR source\n(RetailerCategoryMlorId)" as R_SALES_ORDER_LINE_RetailerCategoryMlorId {
+}
+relationship "applies promotion\n(SalesOrderId)" as R_ORDER_PROMOTION_SalesOrderId {
+}
+relationship "is selected\n(PromotionId)" as R_ORDER_PROMOTION_PromotionId {
+}
+relationship "records status history\n(SalesOrderId)" as R_ORDER_STATUS_HISTORY_SalesOrderId {
+}
+relationship "changes status\n(ChangedByUserId)" as R_ORDER_STATUS_HISTORY_ChangedByUserId {
+}
+relationship "submits request\n(UserAccountId)" as R_IDEMPOTENCY_KEY_UserAccountId {
+}
+relationship "is result of\n(SalesOrderId)" as R_IDEMPOTENCY_KEY_SalesOrderId {
+}
+relationship "computes distance from\n(WarehouseId)" as R_MAP_DISTANCE_CACHE_WarehouseId {
+}
+relationship "computes distance to\n(RetailerId)" as R_MAP_DISTANCE_CACHE_RetailerId {
+}
+relationship "serves retailer\n(RegionId)" as R_RETAILER_RegionId {
+}
+relationship "has sales group\n(RegionId)" as R_SALES_GROUP_RegionId {
+}
+relationship "contains warehouse\n(RegionId)" as R_WAREHOUSE_RegionId {
+}
+relationship "classifies\n(ProductCategoryId)" as R_PRODUCT_ProductCategoryId {
+}
+relationship "has price\n(ProductId)" as R_PRODUCT_PRICE_ProductId {
+}
+relationship "declares SKU MLOR\n(RetailerId)" as R_RETAILER_PRODUCT_MLOR_RetailerId {
+}
+relationship "is declared SKU MLOR\n(ProductId)" as R_RETAILER_PRODUCT_MLOR_ProductId {
+}
+relationship "declares category MLOR\n(RetailerId)" as R_RETAILER_CATEGORY_MLOR_RetailerId {
+}
+relationship "is declared MLOR\n(ProductCategoryId)" as R_RETAILER_CATEGORY_MLOR_ProductCategoryId {
+}
+relationship "has credit profile\n(RetailerId)" as R_RETAILER_CREDIT_PROFILE_RetailerId {
+}
+
+R_SALES_ORDER_RetailerId -1- RETAILER
+R_SALES_ORDER_RetailerId =N= SALES_ORDER
+R_SALES_ORDER_SalesGroupId -1- SALES_GROUP
+R_SALES_ORDER_SalesGroupId =N= SALES_ORDER
+R_SALES_ORDER_CreatedByUserId -1- USER_ACCOUNT
+R_SALES_ORDER_CreatedByUserId =N= SALES_ORDER
+R_SALES_ORDER_LINE_SalesOrderId =1= SALES_ORDER
+R_SALES_ORDER_LINE_SalesOrderId =N= SALES_ORDER_LINE
+R_SALES_ORDER_LINE_ProductId -1- PRODUCT
+R_SALES_ORDER_LINE_ProductId =N= SALES_ORDER_LINE
+R_SALES_ORDER_LINE_ProductPriceId -1- PRODUCT_PRICE
+R_SALES_ORDER_LINE_ProductPriceId =N= SALES_ORDER_LINE
+R_SALES_ORDER_LINE_RetailerProductMlorId -1- RETAILER_PRODUCT_MLOR
+R_SALES_ORDER_LINE_RetailerProductMlorId -N- SALES_ORDER_LINE
+R_SALES_ORDER_LINE_RetailerCategoryMlorId -1- RETAILER_CATEGORY_MLOR
+R_SALES_ORDER_LINE_RetailerCategoryMlorId -N- SALES_ORDER_LINE
+R_ORDER_PROMOTION_SalesOrderId -1- SALES_ORDER
+R_ORDER_PROMOTION_SalesOrderId =1= ORDER_PROMOTION
+R_ORDER_PROMOTION_PromotionId -1- PROMOTION
+R_ORDER_PROMOTION_PromotionId =N= ORDER_PROMOTION
+R_ORDER_STATUS_HISTORY_SalesOrderId -1- SALES_ORDER
+R_ORDER_STATUS_HISTORY_SalesOrderId =N= ORDER_STATUS_HISTORY
+R_ORDER_STATUS_HISTORY_ChangedByUserId -1- USER_ACCOUNT
+R_ORDER_STATUS_HISTORY_ChangedByUserId -N- ORDER_STATUS_HISTORY
+R_IDEMPOTENCY_KEY_UserAccountId -1- USER_ACCOUNT
+R_IDEMPOTENCY_KEY_UserAccountId =N= IDEMPOTENCY_KEY
+R_IDEMPOTENCY_KEY_SalesOrderId -1- SALES_ORDER
+R_IDEMPOTENCY_KEY_SalesOrderId -1- IDEMPOTENCY_KEY
+R_MAP_DISTANCE_CACHE_WarehouseId -1- WAREHOUSE
+R_MAP_DISTANCE_CACHE_WarehouseId =N= MAP_DISTANCE_CACHE
+R_MAP_DISTANCE_CACHE_RetailerId -1- RETAILER
+R_MAP_DISTANCE_CACHE_RetailerId =N= MAP_DISTANCE_CACHE
+R_RETAILER_RegionId -1- REGION
+R_RETAILER_RegionId =N= RETAILER
+R_SALES_GROUP_RegionId -1- REGION
+R_SALES_GROUP_RegionId =N= SALES_GROUP
+R_WAREHOUSE_RegionId -1- REGION
+R_WAREHOUSE_RegionId =N= WAREHOUSE
+R_PRODUCT_ProductCategoryId -1- PRODUCT_CATEGORY
+R_PRODUCT_ProductCategoryId =N= PRODUCT
+R_PRODUCT_PRICE_ProductId -1- PRODUCT
+R_PRODUCT_PRICE_ProductId =N= PRODUCT_PRICE
+R_RETAILER_PRODUCT_MLOR_RetailerId -1- RETAILER
+R_RETAILER_PRODUCT_MLOR_RetailerId =N= RETAILER_PRODUCT_MLOR
+R_RETAILER_PRODUCT_MLOR_ProductId -1- PRODUCT
+R_RETAILER_PRODUCT_MLOR_ProductId =N= RETAILER_PRODUCT_MLOR
+R_RETAILER_CATEGORY_MLOR_RetailerId -1- RETAILER
+R_RETAILER_CATEGORY_MLOR_RetailerId =N= RETAILER_CATEGORY_MLOR
+R_RETAILER_CATEGORY_MLOR_ProductCategoryId -1- PRODUCT_CATEGORY
+R_RETAILER_CATEGORY_MLOR_ProductCategoryId =N= RETAILER_CATEGORY_MLOR
+R_RETAILER_CREDIT_PROFILE_RetailerId -1- RETAILER
+R_RETAILER_CREDIT_PROFILE_RetailerId =1= RETAILER_CREDIT_PROFILE
+
+@endchen

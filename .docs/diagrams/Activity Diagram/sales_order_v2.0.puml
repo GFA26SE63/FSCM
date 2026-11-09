@@ -1,0 +1,66 @@
+﻿@startuml
+title F2 - Sales Order Submission and Real-time Validation
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam ActivityBackgroundColor #F5F5F5
+skinparam ActivityBorderColor #333333
+skinparam RoundCorner 15
+skinparam wrapWidth 220
+
+|Retailer / Sales|
+start
+:Sign in with Google
+(Sales selects an assigned Retailer, Retailer orders by itself);
+
+|System|
+:Verify Google token, account Active and access scope;
+if (Account and scope valid?) then (yes)
+else (no)
+  :Reject (401/403);
+  stop
+endif
+
+|Retailer / Sales|
+:Open catalog (Published SKUs, current price, reference availability - MLOR hidden);
+:Add SKUs with whole quantities to the cart;
+:Choose one eligible quantity promotion (optional);
+
+|System|
+:Recompute promotion on server
+(SKU-group promotion sums member quantities);
+
+|Retailer / Sales|
+:Enter delivery address and expected delivery date;
+:Review order - payment method is NOT chosen yet
+(only a reference credit eligibility is shown);
+:Submit SO with client order key (idempotency key);
+
+|System|
+if (Same key and same payload already accepted?) then (yes)
+  :Return the existing SO;
+  stop
+else (no)
+endif
+:Validate account, assignment, SKU, effective price and promotion;
+:Check Region and service radius per SKU against candidate warehouses;
+if (All validations passed?) then (yes)
+  :Snapshot price and promotion into SO lines;
+  :Compute reference credit eligibility (does NOT block the SO);
+  :Assign AcceptedAt (server time), status = Allocating;
+  :Enqueue allocation for this SO only (ordered by AcceptedAt, tie-break by SO code);
+  :Notify client - SO is Allocating;
+else (no)
+  :Return field-level error (no SO, no reservation);
+  note right: User corrects the input and resubmits
+  stop
+endif
+
+if (Withdrawn before reservation is committed?) then (yes)
+  :Cancel queued attempt, SO = Withdrawn, no stock held;
+  stop
+else (no)
+endif
+
+:Hand over SalesOrderId + AcceptedAt + input snapshot to F3;
+stop
+@enduml

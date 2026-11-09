@@ -1,0 +1,503 @@
+classDiagram
+direction TB
+
+%% ==========================================
+%% API LAYER
+%% ==========================================
+
+namespace API {
+
+    class ComplaintsController {
+        <<Controller>>
+        +List()
+        +Create()
+        +Resolve()
+        -ActorId()
+        -Role()
+    }
+
+    class PaymentsController {
+        <<Controller>>
+        +List()
+        +GetByOrder()
+        +Collect()
+        +Adjust()
+    }
+
+    class RefundsController {
+        <<Controller>>
+        +List()
+        +Get()
+        +Create()
+        +Evidence()
+        +Verify()
+        -UserId()
+        -Role()
+    }
+}
+
+%% ==========================================
+%% APPLICATION SERVICES
+%% ==========================================
+
+namespace Application_Services {
+
+    class ComplaintService {
+        <<Service>>
+        +CreateAsync()
+        +ListAsync()
+        +ResolveAsync()
+    }
+
+    class PaymentService {
+        <<Service>>
+        +ListAsync()
+        +GetByOrderAsync()
+        +CollectAsync()
+        +AdjustReceivableAsync()
+        -ValidateReadRole()
+        -NormalizeOperationKey()
+        -ValidateAmount()
+        -ToResult()
+    }
+
+    class RefundService {
+        <<Service>>
+        +CreateAsync()
+        +ListAsync()
+        +GetAsync()
+        +SubmitEvidenceAsync()
+        +VerifyAsync()
+        -EnsureOperator()
+        -EnsureRead()
+        -ValidateAmount()
+        -MutateAsync()
+        -Reload()
+        -Audit()
+        -ToResult()
+    }
+
+    class OrderCompletionService {
+        <<Service>>
+        +EvaluateAsync()
+        -HoldAsync()
+    }
+
+    class LoyaltyAccrualService {
+        <<Service>>
+        +EvaluateAsync()
+    }
+}
+
+%% ==========================================
+%% APPLICATION INTERFACES
+%% ==========================================
+
+namespace Application_Interfaces {
+
+    class IComplaintStore {
+        <<interface>>
+        +CreateAsync()
+        +ListAsync()
+        +ResolveAsync()
+    }
+
+    class IPaymentStore {
+        <<interface>>
+        +FindByOrderAsync()
+        +FindByOperationKeyAsync()
+        +ListAsync()
+        +CanViewAsync()
+        +AddAuditLog()
+        +SaveChangesAsync()
+        +ExecuteInTransactionAsync()
+        +ClearTracking()
+    }
+
+    class IRefundStore {
+        <<interface>>
+        +FindAsync()
+        +FindByOperationKeyAsync()
+        +ListAsync()
+        +TotalsAsync()
+        +Add()
+        +AddAuditLog()
+        +SaveChangesAsync()
+    }
+
+    class IOrderCompletionStore {
+        <<interface>>
+        +FindAsync()
+        +CompleteAsync()
+    }
+}
+
+%% ==========================================
+%% PERSISTENCE LAYER
+%% ==========================================
+
+namespace Persistence {
+
+    class ComplaintStore {
+        <<Repository>>
+        +CreateAsync()
+        +ListAsync()
+        +ResolveAsync()
+        -ToResult()
+    }
+
+    class PaymentStore {
+        <<Repository>>
+        +FindByOrderAsync()
+        +FindByOperationKeyAsync()
+        +ListAsync()
+        +CanViewAsync()
+        +AddAuditLog()
+        +SaveChangesAsync()
+        +ExecuteInTransactionAsync()
+        +ClearTracking()
+    }
+
+    class RefundStore {
+        <<Repository>>
+        +FindAsync()
+        +FindByOperationKeyAsync()
+        +ListAsync()
+        +TotalsAsync()
+        +Add()
+        +AddAuditLog()
+        +SaveChangesAsync()
+        -LoadAsync()
+    }
+
+    class OrderCompletionStore {
+        <<Repository>>
+        +FindAsync()
+        +CompleteAsync()
+    }
+}
+
+%% ==========================================
+%% DOMAIN - COMPLAINT
+%% ==========================================
+
+namespace Domain_Complaints {
+
+    class ReceiptDiscrepancy {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +ReceiptConfirmationId: Guid
+        +ReportedByRetailerUserId: Guid
+        +ReviewedByUserId: Guid?
+        +Status: string
+        +ResolutionType: string?
+        +Note: string?
+        +ReportedAt: DateTimeOffset
+        +ReviewedAt: DateTimeOffset?
+        +ResolvedAt: DateTimeOffset?
+    }
+
+    class ReceiptDiscrepancyItem {
+        +Id: Guid
+        +ReceiptDiscrepancyId: Guid
+        +BatchId: Guid?
+        +ShipmentId: Guid?
+        +AllocationId: Guid?
+        +AllocationPlanPriceId: Guid?
+        +IssueType: string
+        +ExpectedQuantity: decimal
+        +ActualReceivedQuantity: decimal
+        +FinalUnitPrice: decimal
+        +AdjustmentAmount: decimal
+        +EvidenceBlobUrl: string?
+        +Note: string?
+    }
+}
+
+%% ==========================================
+%% DOMAIN - FINANCIAL OBLIGATION
+%% ==========================================
+
+namespace Domain_Finance {
+
+    class Payment {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +Method: string
+        +Status: string
+        +Amount: decimal
+        +AdjustedAmount: decimal
+        +ConfirmedAmount: decimal
+        +DeliveredDate: DateOnly?
+        +DueDate: DateOnly?
+        +PaidDate: DateOnly?
+        +OperationKey: string?
+        +RequestHash: string?
+        +Note: string?
+        +Version: int
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class ManualRefund {
+        +Id: Guid
+        +PaymentId: Guid
+        +SalesOrderId: Guid
+        +Amount: decimal
+        +Recipient: string
+        +Reason: string
+        +Status: string
+        +CreateOperationKey: string
+        +CreateRequestHash: string
+        +EvidenceOperationKey: string?
+        +EvidenceRequestHash: string?
+        +TransferredAt: DateTimeOffset?
+        +TransactionReference: string?
+        +EvidenceReference: string?
+        +SubmittedByUserId: Guid?
+        +SubmittedAt: DateTimeOffset?
+        +VerificationOperationKey: string?
+        +VerificationRequestHash: string?
+        +VerifiedByUserId: Guid?
+        +VerifiedAt: DateTimeOffset?
+        +VerificationNote: string?
+        +CreatedByUserId: Guid
+        +Version: int
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - ORDER AND SHIPMENT
+%% ==========================================
+
+namespace Domain_Orders {
+
+    class SalesOrder {
+        +Id: Guid
+        +OrderCode: string
+        +RetailerId: Guid
+        +PaymentMethod: string
+        +FinalAmount: decimal
+        +Status: string
+        +Version: int
+        +CreatedAt: DateTimeOffset
+    }
+
+    class Shipment {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +PickingListId: Guid?
+        +WarehouseId: Guid
+        +Status: string
+        +TotalQuantity: decimal
+        +ReceivedQuantity: decimal
+        +ReceivedAt: DateTimeOffset?
+        +Version: int
+    }
+
+    class ReceiptConfirmation {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +ShipmentId: Guid?
+        +ConfirmedByRetailerUserId: Guid
+        +Status: string
+        +OperationKey: string
+        +RequestHash: string
+        +ConfirmedAt: DateTimeOffset
+    }
+
+    class ReceiptConfirmationItem {
+        +Id: Guid
+        +ReceiptConfirmationId: Guid
+        +SalesOrderLineId: Guid
+        +BatchId: Guid
+        +ExpectedQuantity: decimal
+        +ReceivedQuantity: decimal
+        +MissingQuantity: decimal
+        +DamagedQuantity: decimal
+    }
+}
+
+%% ==========================================
+%% DOMAIN - BATCH PRICE TRACE
+%% ==========================================
+
+namespace Domain_Pricing {
+
+    class Allocation {
+        +Id: Guid
+        +SalesOrderLineId: Guid
+        +BatchId: Guid
+        +AllocatedQuantity: decimal
+        +GrossAmount: decimal
+        +DiscountAmount: decimal
+        +NetAmount: decimal
+        +UnitPrice: decimal
+        +Status: string
+    }
+
+    class Batch {
+        +Id: Guid
+        +ProductId: Guid
+        +WarehouseId: Guid
+        +BatchCode: string
+        +ExpirationDate: DateOnly
+        +StockStatus: string
+        +ExpiryStatus: string
+    }
+}
+
+%% ==========================================
+%% DOMAIN - AUDIT AND USER
+%% ==========================================
+
+namespace Domain_Audit {
+
+    class AuditLog {
+        +Id: Guid
+        +UserAccountId: Guid?
+        +EntityName: string
+        +EntityId: Guid
+        +Action: string
+        +OldValues: string?
+        +NewValues: string?
+        +Reason: string?
+        +CreatedAt: DateTimeOffset
+    }
+
+    class UserAccount {
+        +Id: Guid
+        +FullName: string
+        +Email: string?
+        +Role: string
+        +IsActive: bool
+    }
+}
+
+%% ==========================================
+%% API DEPENDENCIES
+%% ==========================================
+
+ComplaintsController ..> ComplaintService : uses
+
+PaymentsController ..> PaymentService : uses
+
+RefundsController ..> RefundService : uses
+
+%% ==========================================
+%% APPLICATION DEPENDENCIES
+%% ==========================================
+
+ComplaintService ..> IComplaintStore : uses
+
+ComplaintService ..> OrderCompletionService : evaluates completion
+
+PaymentService ..> IPaymentStore : uses
+
+RefundService ..> IRefundStore : uses
+
+RefundService ..> IPaymentStore : checks payment and transaction
+
+OrderCompletionService ..> IOrderCompletionStore : uses
+
+OrderCompletionService ..> LoyaltyAccrualService : evaluates loyalty
+
+%% ==========================================
+%% INTERFACE REALIZATION
+%% ==========================================
+
+ComplaintStore ..|> IComplaintStore : implements
+
+PaymentStore ..|> IPaymentStore : implements
+
+RefundStore ..|> IRefundStore : implements
+
+OrderCompletionStore ..|> IOrderCompletionStore : implements
+
+%% ==========================================
+%% PERSISTENCE DEPENDENCIES
+%% ==========================================
+
+ComplaintStore ..> ReceiptDiscrepancy : creates and resolves
+
+ComplaintStore ..> ReceiptDiscrepancyItem : manages
+
+ComplaintStore ..> ReceiptConfirmation : validates receipt
+
+ComplaintStore ..> ReceiptConfirmationItem : validates actual quantity
+
+ComplaintStore ..> Allocation : retrieves final batch price
+
+PaymentStore ..> Payment : manages
+
+PaymentStore ..> AuditLog : records adjustment audit
+
+RefundStore ..> ManualRefund : manages
+
+RefundStore ..> Payment : reads refund obligation
+
+RefundStore ..> AuditLog : records refund audit
+
+OrderCompletionStore ..> SalesOrder : evaluates and completes
+
+%% ==========================================
+%% ORDER RELATIONSHIPS
+%% ==========================================
+
+SalesOrder "1" -- "0..1" Payment : payment obligation
+
+SalesOrder "1" -- "0..*" Shipment : warehouse shipments
+
+SalesOrder "1" -- "0..*" ReceiptConfirmation : received portions
+
+SalesOrder "1" -- "0..*" ReceiptDiscrepancy : complaints
+
+SalesOrder "1" -- "0..*" ManualRefund : refund obligations
+
+%% ==========================================
+%% RECEIPT RELATIONSHIPS
+%% ==========================================
+
+Shipment "0..1" -- "0..*" ReceiptConfirmation : receipt records
+
+ReceiptConfirmation "1" *-- "0..*" ReceiptConfirmationItem : contains
+
+ReceiptConfirmation "1" -- "0..*" ReceiptDiscrepancy : reported issues
+
+%% ==========================================
+%% COMPLAINT COMPOSITION
+%% ==========================================
+
+ReceiptDiscrepancy "1" *-- "1..*" ReceiptDiscrepancyItem : contains
+
+%% ==========================================
+%% BATCH AND ALLOCATION TRACEABILITY
+%% ==========================================
+
+Batch "1" -- "0..*" Allocation : allocated portions
+
+Batch "0..1" -- "0..*" ReceiptDiscrepancyItem : affected batch
+
+Shipment "0..1" -- "0..*" ReceiptDiscrepancyItem : affected shipment
+
+Allocation "0..1" -- "0..*" ReceiptDiscrepancyItem : final price source
+
+%% ==========================================
+%% REFUND RELATIONSHIPS
+%% ==========================================
+
+Payment "1" -- "0..*" ManualRefund : refund obligations
+
+%% ==========================================
+%% USER RELATIONSHIPS
+%% ==========================================
+
+UserAccount "1" -- "0..*" ReceiptDiscrepancy : reports
+
+UserAccount "0..1" -- "0..*" ReceiptDiscrepancy : reviews
+
+UserAccount "1" -- "0..*" ManualRefund : creates
+
+UserAccount "0..1" -- "0..*" ManualRefund : verifies

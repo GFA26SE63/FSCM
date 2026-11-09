@@ -1,0 +1,229 @@
+@startchen F2_logical
+
+title F2 – Logical ERD (Chen) – Retailer/Sales Sales-Order Creation and Real-time Validation
+
+entity SalesOrder {
+  OrderCode <<key>>
+  Source
+  Status
+  PaymentMethod
+  DeliveryAddress
+  DeliveryLatitude
+  DeliveryLongitude
+  RequestedDeliveryDate
+  Note
+  SubtotalAmount
+  PromotionDiscountAmount
+  ShelfLifeDiscountAmount
+  FinalAmount <<derived>>
+  CreditEligibleAtSubmit
+  ServerReceivedAt
+  AcceptedAt
+  WithdrawnAt
+  CompletedAt
+  CreatedAt
+}
+entity SalesOrderLine <<weak>> {
+  LineNumber <<key>>
+  SkuSnapshot
+  ProductNameSnapshot
+  OrderedQuantity
+  ListUnitPrice
+  PromotionDiscountPercent
+  PromotionDiscountAmount
+  BaseNetUnitPrice
+  GrossAmount
+  NetAmount <<derived>>
+  MlorMinimumLifeRatio
+  MlorSourceScope
+}
+entity OrderPromotion {
+  PromotionCodeSnapshot
+  PromotionTypeSnapshot
+  MinimumQuantitySnapshot
+  EligibleQuantity
+  DiscountPercent
+  DiscountAmount
+  AppliedAt
+}
+entity OrderStatusHistory {
+  Id <<key>>
+  FromStatus
+  ToStatus
+  Reason
+  ChangedAt
+}
+entity IdempotencyRecord {
+  Id <<key>>
+  Status
+}
+entity OutboxMessage {
+  Id <<key>>
+  Status
+}
+entity DistanceCache {
+  Id <<key>>
+}
+entity Retailer {
+  Code <<key>>
+  Latitude
+  Longitude
+  Status
+}
+entity SalesGroup {
+  Code <<key>>
+}
+entity UserAccount {
+  Email <<key>>
+}
+entity Region {
+  Code <<key>>
+}
+entity Warehouse {
+  Code <<key>>
+  Latitude
+  Longitude
+  ServiceRadiusMeters
+  Status
+}
+entity ProductCategory {
+  Code <<key>>
+}
+entity Product {
+  Sku <<key>>
+  Status
+}
+entity ProductPrice {
+  Id <<key>>
+  UnitPrice
+  EffectiveFrom
+  EffectiveTo
+}
+entity Promotion {
+  Code <<key>>
+  PromotionType
+  MinimumQuantity
+  DiscountPercent
+  StartAt
+  EndAt
+}
+entity RetailerProductMlor {
+  MinimumLifeRatio
+}
+entity RetailerCategoryMlor {
+  MinimumLifeRatio
+}
+entity RetailerCreditProfile {
+  Id <<key>>
+  CreditLimitAmount
+  AllowedTermDays
+  EligibilityStatus
+}
+
+relationship "places order" as R_SALES_ORDER_RetailerId {
+}
+relationship "handles order" as R_SALES_ORDER_SalesGroupId {
+}
+relationship "creates order" as R_SALES_ORDER_CreatedByUserId {
+}
+relationship "has order line" as R_SALES_ORDER_LINE_SalesOrderId <<identifying>> {
+}
+relationship "is ordered" as R_SALES_ORDER_LINE_ProductId {
+}
+relationship "prices" as R_SALES_ORDER_LINE_ProductPriceId {
+}
+relationship "is SKU MLOR source" as R_SALES_ORDER_LINE_RetailerProductMlorId {
+}
+relationship "is category MLOR source" as R_SALES_ORDER_LINE_RetailerCategoryMlorId {
+}
+relationship "applies promotion" as R_ORDER_PROMOTION_SalesOrderId {
+}
+relationship "is selected" as R_ORDER_PROMOTION_PromotionId {
+}
+relationship "records status history" as R_ORDER_STATUS_HISTORY_SalesOrderId {
+}
+relationship "changes status" as R_ORDER_STATUS_HISTORY_ChangedByUserId {
+}
+relationship "submits request" as R_IDEMPOTENCY_KEY_UserAccountId {
+}
+relationship "is result of" as R_IDEMPOTENCY_KEY_SalesOrderId {
+}
+relationship "computes distance from" as R_MAP_DISTANCE_CACHE_WarehouseId {
+}
+relationship "computes distance to" as R_MAP_DISTANCE_CACHE_RetailerId {
+}
+relationship "serves retailer" as R_RETAILER_RegionId {
+}
+relationship "has sales group" as R_SALES_GROUP_RegionId {
+}
+relationship "contains warehouse" as R_WAREHOUSE_RegionId {
+}
+relationship "classifies" as R_PRODUCT_ProductCategoryId {
+}
+relationship "has price" as R_PRODUCT_PRICE_ProductId {
+}
+relationship "declares SKU MLOR" as R_RETAILER_PRODUCT_MLOR_RetailerId {
+}
+relationship "is declared SKU MLOR" as R_RETAILER_PRODUCT_MLOR_ProductId {
+}
+relationship "declares category MLOR" as R_RETAILER_CATEGORY_MLOR_RetailerId {
+}
+relationship "is declared MLOR" as R_RETAILER_CATEGORY_MLOR_ProductCategoryId {
+}
+relationship "has credit profile" as R_RETAILER_CREDIT_PROFILE_RetailerId {
+}
+
+R_SALES_ORDER_RetailerId -1- Retailer
+R_SALES_ORDER_RetailerId =N= SalesOrder
+R_SALES_ORDER_SalesGroupId -1- SalesGroup
+R_SALES_ORDER_SalesGroupId =N= SalesOrder
+R_SALES_ORDER_CreatedByUserId -1- UserAccount
+R_SALES_ORDER_CreatedByUserId =N= SalesOrder
+R_SALES_ORDER_LINE_SalesOrderId =1= SalesOrder
+R_SALES_ORDER_LINE_SalesOrderId =N= SalesOrderLine
+R_SALES_ORDER_LINE_ProductId -1- Product
+R_SALES_ORDER_LINE_ProductId =N= SalesOrderLine
+R_SALES_ORDER_LINE_ProductPriceId -1- ProductPrice
+R_SALES_ORDER_LINE_ProductPriceId =N= SalesOrderLine
+R_SALES_ORDER_LINE_RetailerProductMlorId -1- RetailerProductMlor
+R_SALES_ORDER_LINE_RetailerProductMlorId -N- SalesOrderLine
+R_SALES_ORDER_LINE_RetailerCategoryMlorId -1- RetailerCategoryMlor
+R_SALES_ORDER_LINE_RetailerCategoryMlorId -N- SalesOrderLine
+R_ORDER_PROMOTION_SalesOrderId -1- SalesOrder
+R_ORDER_PROMOTION_SalesOrderId =1= OrderPromotion
+R_ORDER_PROMOTION_PromotionId -1- Promotion
+R_ORDER_PROMOTION_PromotionId =N= OrderPromotion
+R_ORDER_STATUS_HISTORY_SalesOrderId -1- SalesOrder
+R_ORDER_STATUS_HISTORY_SalesOrderId =N= OrderStatusHistory
+R_ORDER_STATUS_HISTORY_ChangedByUserId -1- UserAccount
+R_ORDER_STATUS_HISTORY_ChangedByUserId -N- OrderStatusHistory
+R_IDEMPOTENCY_KEY_UserAccountId -1- UserAccount
+R_IDEMPOTENCY_KEY_UserAccountId =N= IdempotencyRecord
+R_IDEMPOTENCY_KEY_SalesOrderId -1- SalesOrder
+R_IDEMPOTENCY_KEY_SalesOrderId -1- IdempotencyRecord
+R_MAP_DISTANCE_CACHE_WarehouseId -1- Warehouse
+R_MAP_DISTANCE_CACHE_WarehouseId =N= DistanceCache
+R_MAP_DISTANCE_CACHE_RetailerId -1- Retailer
+R_MAP_DISTANCE_CACHE_RetailerId =N= DistanceCache
+R_RETAILER_RegionId -1- Region
+R_RETAILER_RegionId =N= Retailer
+R_SALES_GROUP_RegionId -1- Region
+R_SALES_GROUP_RegionId =N= SalesGroup
+R_WAREHOUSE_RegionId -1- Region
+R_WAREHOUSE_RegionId =N= Warehouse
+R_PRODUCT_ProductCategoryId -1- ProductCategory
+R_PRODUCT_ProductCategoryId =N= Product
+R_PRODUCT_PRICE_ProductId -1- Product
+R_PRODUCT_PRICE_ProductId =N= ProductPrice
+R_RETAILER_PRODUCT_MLOR_RetailerId -1- Retailer
+R_RETAILER_PRODUCT_MLOR_RetailerId =N= RetailerProductMlor
+R_RETAILER_PRODUCT_MLOR_ProductId -1- Product
+R_RETAILER_PRODUCT_MLOR_ProductId =N= RetailerProductMlor
+R_RETAILER_CATEGORY_MLOR_RetailerId -1- Retailer
+R_RETAILER_CATEGORY_MLOR_RetailerId =N= RetailerCategoryMlor
+R_RETAILER_CATEGORY_MLOR_ProductCategoryId -1- ProductCategory
+R_RETAILER_CATEGORY_MLOR_ProductCategoryId =N= RetailerCategoryMlor
+R_RETAILER_CREDIT_PROFILE_RetailerId -1- Retailer
+R_RETAILER_CREDIT_PROFILE_RetailerId =1= RetailerCreditProfile
+
+@endchen

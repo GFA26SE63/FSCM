@@ -1,0 +1,422 @@
+classDiagram
+direction TB
+
+%% ==========================================
+%% API LAYER
+%% ==========================================
+
+namespace API {
+
+    class OrdersController {
+        <<Controller>>
+        +Create()
+        +SubmitOffline()
+    }
+
+    class InventoryController {
+        <<Controller>>
+        +List()
+        +GetBatch()
+        +ExpiryHealth()
+    }
+}
+
+%% ==========================================
+%% APPLICATION LAYER
+%% ==========================================
+
+namespace Application {
+
+    class OrderService {
+        <<Service>>
+        +CreateAsync()
+        +SubmitOfflineAsync()
+    }
+
+    class IRealTimeAllocationService {
+        <<interface>>
+        +AllocateAsync()
+    }
+
+    class RealTimeAllocationService {
+        <<Service>>
+        +AllocateAsync()
+        -AllocateOnceAsync()
+        -MarkOutOfStockAsync()
+    }
+
+    class IRealTimeAllocationStore {
+        <<interface>>
+        +LoadForUpdateAsync()
+        +ExecuteInTransactionAsync()
+        +AddRun()
+        +AddAllocation()
+        +AddReservation()
+        +AddTransaction()
+        +AddQuote()
+        +AddHistory()
+        +SaveChangesAsync()
+    }
+
+    class AllocationPricingService {
+        <<Service>>
+        +PriceAsync()
+    }
+
+    class InventoryService {
+        <<Service>>
+        +ListInventoryAsync()
+        +GetBatchAsync()
+        +GetExpiryHealthAsync()
+    }
+
+    class IInventoryStore {
+        <<interface>>
+        +ListInventoryAsync()
+        +FindBatchInventoryAsync()
+        +FindBalanceForUpdateAsync()
+        +SaveChangesAsync()
+    }
+}
+
+%% ==========================================
+%% PERSISTENCE LAYER
+%% ==========================================
+
+namespace Persistence {
+
+    class RealTimeAllocationStore {
+        <<Repository>>
+        +LoadForUpdateAsync()
+        +ExecuteInTransactionAsync()
+        +AddRun()
+        +AddAllocation()
+        +AddReservation()
+        +AddTransaction()
+        +AddQuote()
+        +AddHistory()
+        +SaveChangesAsync()
+    }
+
+    class InventoryStore {
+        <<Repository>>
+        +ListInventoryAsync()
+        +FindBatchInventoryAsync()
+        +FindBalanceForUpdateAsync()
+        +SaveChangesAsync()
+    }
+}
+
+%% ==========================================
+%% DOMAIN - ALLOCATION ENGINE
+%% ==========================================
+
+namespace Domain_AllocationEngine {
+
+    class AllocationEngine {
+        <<Domain Service>>
+        +Allocate()
+        -ValidateRequest()
+        -ValidateCandidate()
+        -ValidateWeights()
+        -Score()
+    }
+
+    class AllocationRequest {
+        <<Value Object>>
+    }
+
+    class AllocationResult {
+        <<Value Object>>
+        +AllocatedQuantity: int
+    }
+
+    class BatchCandidate {
+        <<Value Object>>
+    }
+
+    class AllocationWeights {
+        <<Value Object>>
+    }
+}
+
+%% ==========================================
+%% DOMAIN - ORDER AND ALLOCATION
+%% ==========================================
+
+namespace Domain_Allocation {
+
+    class SalesOrder {
+        +Id: Guid
+        +OrderCode: string
+        +RetailerId: Guid
+        +Status: string
+        +ServerReceivedAt: DateTimeOffset
+        +CreatedAt: DateTimeOffset
+    }
+
+    class SalesOrderLine {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +ProductId: Guid
+        +OrderedQuantity: int
+        +MlorMinimumLifeRatio: decimal
+        +MlorMinimumLifeHours: decimal
+        +EstimatedArrivalAt: DateTimeOffset
+    }
+
+    class AllocationRun {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +RunCode: string
+        +AttemptNumber: int
+        +Status: string
+        +StartedAt: DateTimeOffset
+        +CompletedAt: DateTimeOffset
+    }
+
+    class Allocation {
+        +Id: Guid
+        +SalesOrderLineId: Guid
+        +BatchId: Guid
+        +WarehouseId: Guid
+        +AllocatedQuantity: int
+        +WeightedScore: decimal
+        +ShelfLifeScore: decimal
+        +DistanceScore: decimal
+        +CoverageScore: decimal
+        +EstimatedArrivalAt: DateTimeOffset
+        +UnitPrice: decimal
+        +NetAmount: decimal
+        +Status: string
+    }
+
+    class Reservation {
+        +Id: Guid
+        +AllocationId: Guid
+        +BatchId: Guid
+        +Quantity: int
+        +Status: string
+        +ReservedAt: DateTimeOffset
+        +ReleasedAt: DateTimeOffset
+        +ConsumedAt: DateTimeOffset
+    }
+
+    class SalesOrderQuote {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +RevisionNumber: int
+        +Status: string
+        +TotalAmount: decimal
+        +IssuedAt: DateTimeOffset
+        +ExpiresAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - INVENTORY
+%% ==========================================
+
+namespace Domain_Inventory {
+
+    class Warehouse {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +RegionId: Guid
+        +IsActive: bool
+    }
+
+    class Batch {
+        +Id: Guid
+        +ProductId: Guid
+        +WarehouseId: Guid
+        +BatchCode: string
+        +ProductionDate: DateOnly
+        +ExpirationDate: DateOnly
+        +Quantity: int
+        +StockStatus: string
+        +ExpiryStatus: string
+        +Version: int
+    }
+
+    class InventoryBalance {
+        +Id: Guid
+        +BatchId: Guid
+        +PhysicalQuantity: int
+        +ReservedQuantity: int
+        +AvailableQuantity: int
+        +Version: int
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class InventoryTransaction {
+        +Id: Guid
+        +BatchId: Guid
+        +WarehouseId: Guid
+        +TransactionType: string
+        +PhysicalQuantityDelta: int
+        +ReservedQuantityDelta: int
+        +OccurredAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - BUSINESS REFERENCES
+%% ==========================================
+
+namespace Domain_References {
+
+    class Retailer {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +Status: string
+    }
+
+    class RetailerProductMlor {
+        +Id: Guid
+        +RetailerId: Guid
+        +ProductId: Guid
+        +ProductCategoryId: Guid
+        +MinimumLifeRatio: decimal
+        +MinimumLifeHours: decimal
+        +Version: int
+        +IsActive: bool
+    }
+
+    class Product {
+        +Id: Guid
+        +ProductCategoryId: Guid
+        +Sku: string
+        +Name: string
+        +ShelfLifeHours: int
+        +Status: string
+    }
+
+    class ProductCategory {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +ParentCategoryId: Guid
+    }
+}
+
+%% ==========================================
+%% API DEPENDENCIES
+%% ==========================================
+
+OrdersController ..> OrderService : uses
+InventoryController ..> InventoryService : uses
+
+%% ==========================================
+%% APPLICATION DEPENDENCIES
+%% ==========================================
+
+OrderService ..> IRealTimeAllocationService : requests allocation
+
+RealTimeAllocationService ..|> IRealTimeAllocationService : implements
+
+RealTimeAllocationService ..> IRealTimeAllocationStore : uses
+
+RealTimeAllocationService ..> AllocationEngine : evaluates candidates
+
+RealTimeAllocationService ..> AllocationPricingService : calculates batch prices
+
+InventoryService ..> IInventoryStore : uses
+
+%% ==========================================
+%% INTERFACE REALIZATION
+%% ==========================================
+
+RealTimeAllocationStore ..|> IRealTimeAllocationStore : implements
+
+InventoryStore ..|> IInventoryStore : implements
+
+%% ==========================================
+%% PERSISTENCE DEPENDENCIES
+%% ==========================================
+
+RealTimeAllocationStore ..> Allocation : persists
+RealTimeAllocationStore ..> Reservation : persists
+RealTimeAllocationStore ..> SalesOrderQuote : persists
+
+InventoryStore ..> Batch : queries
+InventoryStore ..> InventoryBalance : queries
+
+%% ==========================================
+%% ALLOCATION ENGINE DEPENDENCIES
+%% ==========================================
+
+AllocationEngine ..> AllocationRequest : accepts
+AllocationEngine ..> AllocationResult : produces
+AllocationEngine ..> BatchCandidate : evaluates
+AllocationEngine ..> AllocationWeights : uses
+
+%% ==========================================
+%% SALES ORDER RELATIONSHIPS
+%% ==========================================
+
+Retailer "1" -- "0..*" SalesOrder : places
+
+SalesOrder "1" *-- "1..*" SalesOrderLine : contains
+
+SalesOrder "1" -- "0..*" AllocationRun : allocation attempts
+
+SalesOrder "1" -- "0..*" SalesOrderQuote : quotations
+
+%% ==========================================
+%% ALLOCATION RELATIONSHIPS
+%% ==========================================
+
+SalesOrderLine "1" -- "0..*" Allocation : allocated through
+
+Batch "1" -- "0..*" Allocation : supplies
+
+Warehouse "1" -- "0..*" Allocation : source warehouse
+
+Allocation "1" -- "0..1" Reservation : holds stock
+
+Batch "1" -- "0..*" Reservation : reserved from
+
+%% ==========================================
+%% INVENTORY RELATIONSHIPS
+%% ==========================================
+
+Warehouse "1" -- "0..*" Batch : stores
+
+Product "1" -- "0..*" Batch : produced as
+
+Batch "1" -- "0..1" InventoryBalance : stock balance
+
+Batch "1" -- "0..*" InventoryTransaction : stock movements
+
+%% ==========================================
+%% MLOR RELATIONSHIPS
+%% ==========================================
+
+ProductCategory "1" -- "0..*" Product : categorizes
+
+Retailer "1" -- "0..*" RetailerProductMlor : defines
+
+Product "0..1" -- "0..*" RetailerProductMlor : SKU requirement
+
+ProductCategory "0..1" -- "0..*" RetailerProductMlor : category requirement
+
+%% ==========================================
+%% BUSINESS CONSTRAINTS
+%% ==========================================
+
+note for AllocationEngine "Weighted greedy allocation with hard eligibility filters. All order lines must be fulfillable."
+
+note for RealTimeAllocationService "Runs immediately after order acceptance. No daily cutoff or manual approval."
+
+note for InventoryBalance "Available stock must reflect committed reservations. Updates must be concurrency-safe."
+
+note for RetailerProductMlor "SKU rule takes precedence over Category rule. Order lines retain resolved MLOR snapshots."
+
+note for AllocationRun "Records allocation attempts. It does not imply a daily batch approval workflow."
+
+note for AllocationPricingService "Applies the configured shelf-life percentage discount after the quantity promotion."
+
+note for SalesOrderQuote "Issued after successful complete allocation and atomic reservation."

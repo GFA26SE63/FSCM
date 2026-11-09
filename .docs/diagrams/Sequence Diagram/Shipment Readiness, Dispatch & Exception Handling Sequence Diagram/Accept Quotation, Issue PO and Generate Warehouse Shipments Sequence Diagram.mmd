@@ -1,0 +1,515 @@
+sequenceDiagram
+    autonumber
+
+    actor Retailer as Retailer
+    actor PayOS as PayOS Payment Gateway
+    actor Keeper as Warehouse Keeper
+
+    participant UI as Mobile App / Warehouse App
+
+    participant QuoteAPI as QuotesController
+    participant PaymentAPI as PaymentsController
+    participant PickingAPI as PickingListsController
+
+    participant QuoteSvc as QuoteService
+    participant PlanSvc as PaymentPlanService
+    participant PaymentSvc as PaymentService
+    participant GateSvc as PurchaseOrderGateService
+    participant PickingSvc as CurrentPickingService
+
+    participant QuoteStore as QuoteStore
+    participant PaymentStore as PaymentStore
+    participant GateStore as PurchaseOrderGateStore
+    participant PickingStore as PickingStore
+
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. ACCEPT FINAL QUOTATION
+    %% ==========================================
+
+    Retailer->>+UI: Review and accept final quotation
+
+    UI->>+QuoteAPI: Accept(quoteId, request)
+
+    QuoteAPI->>+QuoteSvc: AcceptAsync(quoteId, version, paymentMethod, actorId, role)
+
+    Note over QuoteSvc,QuoteStore: Validate Retailer role and quotation state
+
+    %% ==========================================
+    %% 2. LOAD QUOTATION
+    %% ==========================================
+
+    QuoteSvc->>+QuoteStore: FindAsync(quoteId, forUpdate)
+
+    QuoteStore->>+DB: SELECT SalesOrderQuote and SalesOrder
+    DB-->>QuoteStore: Quotation and order data
+    deactivate DB
+
+    QuoteStore-->>QuoteSvc: QuoteView or null
+    deactivate QuoteStore
+
+    %% ==========================================
+    %% 3. VERIFY RETAILER ACCESS
+    %% ==========================================
+
+    QuoteSvc->>+QuoteStore: CanRetailerAccessAsync(orderId, actorId)
+
+    QuoteStore->>+DB: SELECT Retailer ownership and access scope
+    DB-->>QuoteStore: Access result
+    deactivate DB
+
+    QuoteStore-->>QuoteSvc: Authorized or Forbidden
+    deactivate QuoteStore
+
+    %% ==========================================
+    %% 4. VALIDATE QUOTATION
+    %% ==========================================
+
+    alt Unauthorized, expired, stale or non-pending quotation
+
+        Note right of QuoteSvc: Reject acceptance without creating PO
+
+    else Quotation is valid
+
+        %% ==========================================
+        %% 5. ACCEPT QUOTATION
+        %% ==========================================
+
+        Note right of QuoteSvc: Set quotation to Accepted
+
+        Note right of QuoteSvc: Record payment method and accepted timestamp
+
+        QuoteSvc->>+QuoteStore: AddHistory(statusHistory)
+
+        QuoteStore-->>QuoteSvc: History staged
+        deactivate QuoteStore
+
+        QuoteSvc->>+QuoteStore: SaveChangesAsync()
+
+        QuoteStore->>+DB: UPDATE SalesOrderQuote and order history
+        DB-->>QuoteStore: Acceptance changes saved
+        deactivate DB
+
+        QuoteStore-->>QuoteSvc: Save successful
+        deactivate QuoteStore
+
+        %% ==========================================
+        %% 6. PREPARE PAYMENT OBLIGATION
+        %% ==========================================
+
+        QuoteSvc->>+PlanSvc: CreateForFinalApprovedOrderAsync(order, paymentMethod)
+
+        PlanSvc->>+PaymentStore: FindByOrderAsync(orderId)
+
+        PaymentStore->>+DB: SELECT existing Payment obligation
+        DB-->>PaymentStore: Existing Payment or null
+        deactivate DB
+
+        PaymentStore-->>PlanSvc: Payment information
+        deactivate PaymentStore
+
+        opt Payment obligation must be created
+
+            PlanSvc->>+PaymentStore: Add(payment)
+
+            PaymentStore-->>PlanSvc: Payment staged
+            deactivate PaymentStore
+
+        end
+
+        PlanSvc-->>QuoteSvc: Payment obligation prepared
+        deactivate PlanSvc
+
+        %% ==========================================
+        %% 7. ATTEMPT PURCHASE ORDER RELEASE
+        %% ==========================================
+
+        QuoteSvc->>+GateSvc: TryCreateAsync(orderId)
+
+        Note over GateSvc,GateStore: PO gate executes its stock and payment checks transactionally
+
+        GateSvc->>+GateStore: LoadForUpdateAsync(orderId)
+
+        GateStore->>+DB: SELECT order, quote, payment, allocations and existing PO
+        DB-->>GateStore: PurchaseOrderGateView
+        deactivate DB
+
+        GateStore-->>GateSvc: Gate context
+        deactivate GateStore
+
+        %% ==========================================
+        %% 8. CHECK PURCHASE ORDER GATE
+        %% ==========================================
+
+        alt Purchase Order already exists
+
+            Note right of GateSvc: Return existing result without duplicates
+
+        else Prepaid is not fully settled
+
+            Note right of GateSvc: Keep quotation Accepted
+
+            Note right of GateSvc: Do not create PO or Picking Lists
+
+        else Credit is invalid or other gate condition fails
+
+            Note right of GateSvc: Do not release order for picking
+
+        else Payment or Credit gate is satisfied
+
+            %% ==========================================
+            %% 9. CREATE PURCHASE ORDER
+            %% ==========================================
+
+            GateSvc->>+GateStore: AddPurchaseOrder(purchaseOrder)
+
+            GateStore-->>GateSvc: PurchaseOrder staged
+            deactivate GateStore
+
+            %% ==========================================
+            %% 10. GENERATE WAREHOUSE PICKING LISTS
+            %% ==========================================
+
+            loop For each allocated Warehouse
+
+                GateSvc->>+GateStore: AddPickingList(pickingList)
+
+                GateStore-->>GateSvc: PickingList staged
+                deactivate GateStore
+
+                loop For each allocated Batch portion
+
+                    GateSvc->>+GateStore: AddPickingItem(pickingItem)
+
+                    GateStore-->>GateSvc: PickingItem staged
+                    deactivate GateStore
+
+                end
+
+            end
+
+            %% ==========================================
+            %% 11. RECORD ORDER TRANSITION
+            %% ==========================================
+
+            GateSvc->>+GateStore: AddHistory(orderHistory)
+
+            GateStore-->>GateSvc: Order history staged
+            deactivate GateStore
+
+            %% ==========================================
+            %% 12. COMMIT PO AND PICKING LISTS
+            %% ==========================================
+
+            GateSvc->>+GateStore: SaveChangesAsync()
+
+            GateStore->>+DB: INSERT PurchaseOrder, PickingLists and PickingItems
+
+            Note right of DB: Persist order history in the same gate transaction
+
+            DB-->>GateStore: Changes committed
+            deactivate DB
+
+            GateStore-->>GateSvc: Save successful
+            deactivate GateStore
+
+        end
+
+        %% ==========================================
+        %% 13. RETURN PURCHASE ORDER GATE RESULT
+        %% ==========================================
+
+        GateSvc-->>QuoteSvc: PO created, existing or waiting for payment
+        deactivate GateSvc
+
+    end
+
+    %% ==========================================
+    %% 14. RETURN ACCEPTANCE RESULT
+    %% ==========================================
+
+    QuoteSvc-->>QuoteAPI: Quotation acceptance result or error
+    deactivate QuoteSvc
+
+    QuoteAPI-->>UI: Acceptance response
+    deactivate QuoteAPI
+
+    UI-->>Retailer: Display acceptance and fulfillment status
+    deactivate UI
+
+    %% ==========================================
+    %% 15. PREPAID PAYMENT SETTLEMENT
+    %% ==========================================
+
+    opt Prepaid payment is confirmed later through PayOS
+
+        PayOS->>+PaymentAPI: PayOsWebhook(webhookRequest)
+
+        PaymentAPI->>+PaymentSvc: HandlePayOsWebhookAsync(webhookData)
+
+        %% ==========================================
+        %% 16. VERIFY PAYMENT WEBHOOK
+        %% ==========================================
+
+        Note right of PaymentSvc: Verify signature, payment status and idempotency
+
+        PaymentSvc->>+PaymentStore: FindByPayOsOrderCodeAsync(orderCode)
+
+        PaymentStore->>+DB: SELECT Payment by PayOS order code
+        DB-->>PaymentStore: Payment record or null
+        deactivate DB
+
+        PaymentStore-->>PaymentSvc: Payment information
+        deactivate PaymentStore
+
+        alt Invalid or unverified payment event
+
+            Note right of PaymentSvc: Reject or ignore invalid event
+
+        else Verified successful settlement
+
+            %% ==========================================
+            %% 17. PERSIST PAYMENT SETTLEMENT
+            %% ==========================================
+
+            PaymentSvc->>+PaymentStore: SaveChangesAsync()
+
+            PaymentStore->>+DB: UPDATE Payment settlement status
+
+            DB-->>PaymentStore: Payment settlement saved
+            deactivate DB
+
+            PaymentStore-->>PaymentSvc: Save successful
+            deactivate PaymentStore
+
+            %% ==========================================
+            %% 18. RECHECK PURCHASE ORDER GATE
+            %% ==========================================
+
+            PaymentSvc->>+GateSvc: TryCreateAsync(orderId)
+
+            GateSvc->>+GateStore: LoadForUpdateAsync(orderId)
+
+            GateStore->>+DB: SELECT payment, accepted quote and existing PO
+            DB-->>GateStore: Updated PO gate context
+            deactivate DB
+
+            GateStore-->>GateSvc: PurchaseOrderGateView
+            deactivate GateStore
+
+            alt Payment gate is satisfied and PO does not exist
+
+                %% ==========================================
+                %% 19. CREATE PURCHASE ORDER AFTER PAYMENT
+                %% ==========================================
+
+                GateSvc->>+GateStore: AddPurchaseOrder(purchaseOrder)
+
+                GateStore-->>GateSvc: PurchaseOrder staged
+                deactivate GateStore
+
+                %% ==========================================
+                %% 20. GENERATE PICKING LISTS
+                %% ==========================================
+
+                loop For each allocated Warehouse
+
+                    GateSvc->>+GateStore: AddPickingList(pickingList)
+
+                    GateStore-->>GateSvc: PickingList staged
+                    deactivate GateStore
+
+                    loop For each allocation in Warehouse
+
+                        GateSvc->>+GateStore: AddPickingItem(pickingItem)
+
+                        GateStore-->>GateSvc: PickingItem staged
+                        deactivate GateStore
+
+                    end
+
+                end
+
+                %% ==========================================
+                %% 21. RECORD PO CREATION
+                %% ==========================================
+
+                GateSvc->>+GateStore: AddHistory(orderHistory)
+
+                GateStore-->>GateSvc: History staged
+                deactivate GateStore
+
+                %% ==========================================
+                %% 22. COMMIT RELEASE
+                %% ==========================================
+
+                GateSvc->>+GateStore: SaveChangesAsync()
+
+                GateStore->>+DB: INSERT PurchaseOrder, PickingLists and PickingItems
+
+                DB-->>GateStore: PO release committed
+                deactivate DB
+
+                GateStore-->>GateSvc: Save successful
+                deactivate GateStore
+
+            else PO already exists or gate remains unsatisfied
+
+                Note right of GateSvc: No duplicate PurchaseOrder is created
+
+            end
+
+            %% ==========================================
+            %% 23. RETURN GATE OUTCOME
+            %% ==========================================
+
+            GateSvc-->>PaymentSvc: PO gate result
+            deactivate GateSvc
+
+        end
+
+        %% ==========================================
+        %% 24. RETURN PAYMENT OUTCOME
+        %% ==========================================
+
+        PaymentSvc-->>PaymentAPI: Webhook processing result
+        deactivate PaymentSvc
+
+        PaymentAPI-->>PayOS: Webhook response
+        deactivate PaymentAPI
+
+    end
+
+    %% ==========================================
+    %% 25. WAREHOUSE PICKING COMPLETION
+    %% ==========================================
+
+    opt Purchase Order and Picking Lists have been released
+
+        Note over Keeper,DB: Shipment creation occurs when a Warehouse completes its PickingList
+
+        loop For each Warehouse PickingList
+
+            Keeper->>+UI: Complete Warehouse PickingList
+
+            UI->>+PickingAPI: Complete(pickingCode, request)
+
+            PickingAPI->>+PickingSvc: CompleteAsync(pickingCode, data, actorId, role)
+
+            %% ==========================================
+            %% 26. LOAD PICKING LIST
+            %% ==========================================
+
+            PickingSvc->>+PickingStore: FindAsync(pickingCode, forUpdate)
+
+            PickingStore->>+DB: SELECT PickingList and PickingItems
+            DB-->>PickingStore: Picking data
+            deactivate DB
+
+            PickingStore-->>PickingSvc: PickingView
+            deactivate PickingStore
+
+            %% ==========================================
+            %% 27. VALIDATE PICKING COMPLETION
+            %% ==========================================
+
+            alt Picking is incomplete, unauthorized or has exception
+
+                Note right of PickingSvc: Reject completion or retain exception state
+
+                Note right of PickingSvc: Do not create Shipment
+
+            else Warehouse PickingList is complete
+
+                %% ==========================================
+                %% 28. CHECK EXISTING SHIPMENT
+                %% ==========================================
+
+                PickingSvc->>+PickingStore: ShipmentExistsAsync(orderId, warehouseId)
+
+                PickingStore->>+DB: SELECT existing Shipment for order and Warehouse
+                DB-->>PickingStore: Shipment existence result
+                deactivate DB
+
+                PickingStore-->>PickingSvc: Exists or NotExists
+                deactivate PickingStore
+
+                alt Shipment already exists
+
+                    Note right of PickingSvc: Avoid duplicate Shipment creation
+
+                else Shipment does not exist
+
+                    %% ==========================================
+                    %% 29. CREATE SHIPMENT CODE
+                    %% ==========================================
+
+                    PickingSvc->>+PickingStore: NextShipmentCodeAsync()
+
+                    PickingStore->>+DB: SELECT next Shipment code
+                    DB-->>PickingStore: Shipment code
+                    deactivate DB
+
+                    PickingStore-->>PickingSvc: New ShipmentCode
+                    deactivate PickingStore
+
+                    %% ==========================================
+                    %% 30. STAGE WAREHOUSE SHIPMENT
+                    %% ==========================================
+
+                    PickingSvc->>+PickingStore: AddShipment(shipment)
+
+                    PickingStore-->>PickingSvc: Shipment staged
+                    deactivate PickingStore
+
+                end
+
+                %% ==========================================
+                %% 31. SAVE PICKING COMPLETION
+                %% ==========================================
+
+                PickingSvc->>+PickingStore: SaveChangesAsync()
+
+                PickingStore->>+DB: UPDATE PickingList and INSERT Shipment if new
+
+                Note right of DB: Do not deduct Physical Stock during picking
+
+                DB-->>PickingStore: Picking completion saved
+                deactivate DB
+
+                PickingStore-->>PickingSvc: Save successful
+                deactivate PickingStore
+
+            end
+
+            %% ==========================================
+            %% 32. RETURN PICKING RESULT
+            %% ==========================================
+
+            PickingSvc-->>PickingAPI: Picking completion result
+            deactivate PickingSvc
+
+            PickingAPI-->>UI: Picking result
+            deactivate PickingAPI
+
+            UI-->>Keeper: Display completed PickingList and Shipment status
+            deactivate UI
+
+        end
+
+    end
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over QuoteSvc,DB: Accepting a quote does not bypass payment or credit eligibility
+
+    Note over GateSvc,DB: PO and Picking Lists are created only when the release gate succeeds
+
+    Note over PickingSvc,DB: Shipment creation must be idempotent for each order and Warehouse
+
+    Note over Keeper,DB: All Warehouse portions must be picked before any part can be issued
+
+    Note over PickingSvc,DB: Physical Stock decreases only at confirmed issue, not picking completion

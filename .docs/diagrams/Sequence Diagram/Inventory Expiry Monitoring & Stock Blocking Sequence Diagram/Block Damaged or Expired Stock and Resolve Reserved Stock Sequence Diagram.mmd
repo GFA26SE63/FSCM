@@ -1,0 +1,328 @@
+sequenceDiagram
+    autonumber
+
+    actor User as Warehouse Keeper / Administrator
+    participant UI as Web Portal / Warehouse Mobile App
+    participant API as InventoryLocksController
+    participant Service as InventoryLockService
+    participant Store as InventoryLockStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. REQUEST INVENTORY LOCK
+    %% ==========================================
+
+    User->>+UI: Open Inventory Lock Management
+
+    UI-->>User: Display Inventory Lock form
+
+    User->>UI: Select Batch, quantity and reason
+
+    User->>UI: Confirm Inventory Lock
+
+    UI->>+API: Create(request)
+
+    API->>+Service: CreateAsync(actorId, actorRole, data)
+
+    %% ==========================================
+    %% 2. VALIDATE USER ROLE
+    %% ==========================================
+
+    Service->>+Service: EnsureWriteRole(actorRole)
+
+    Service-->>Service: Role validation result
+    deactivate Service
+
+    Note right of Service: Validate quantity, reason and request fields
+
+    alt User role is forbidden or request is invalid
+
+        Note right of Service: Prepare Forbidden or Validation error
+
+    else Role and request are valid
+
+        %% ==========================================
+        %% 3. LOAD BATCH LOCK CONTEXT
+        %% ==========================================
+
+        Service->>+Store: FindBatchContextAsync(batchId)
+
+        Store->>+DB: SELECT Batch, InventoryBalance and lock context
+        DB-->>Store: BatchLockContext or null
+        deactivate DB
+
+        Store-->>Service: BatchLockContext
+        deactivate Store
+
+        alt Batch does not exist
+
+            Note right of Service: Prepare Not Found error
+
+        else Batch exists
+
+            %% ==========================================
+            %% 4. VERIFY WAREHOUSE ACCESS
+            %% ==========================================
+
+            Service->>+Store: CanAccessWarehouseAsync(actorId, role, warehouseId)
+
+            Store->>+DB: SELECT authorized Warehouse access
+            DB-->>Store: Access permission
+            deactivate DB
+
+            Store-->>Service: Access result
+            deactivate Store
+
+            alt User cannot access Warehouse
+
+                Note right of Service: Prepare Forbidden error
+
+            else Warehouse access is allowed
+
+                %% ==========================================
+                %% 5. VALIDATE LOCK QUANTITY
+                %% ==========================================
+
+                Note over Service,Store: Validate requested quantity against Batch stock and lock context
+
+                alt Lock quantity exceeds permitted stock
+
+                    Note right of Service: Prepare Conflict or Validation error
+
+                else Lock quantity is valid
+
+                    %% ==========================================
+                    %% 6. CHECK RESERVED STOCK OVERLAP
+                    %% ==========================================
+
+                    alt Lock overlaps existing Reserved Stock
+
+                        Note right of Service: Set RequiresResolution = true
+
+                        Note right of Service: Preserve existing Reservations
+
+                        Note right of Service: Affected stock requires separate business resolution
+
+                    else Lock affects unreserved stock only
+
+                        Note right of Service: Set RequiresResolution = false
+
+                    end
+
+                    %% ==========================================
+                    %% 7. CREATE INVENTORY LOCK
+                    %% ==========================================
+
+                    Note right of Service: Prepare InventoryLock with Batch, Warehouse, quantity and reason
+
+                    Service->>+Store: Add(inventoryLock)
+
+                    Store-->>Service: InventoryLock staged
+                    deactivate Store
+
+                    %% ==========================================
+                    %% 8. PERSIST INVENTORY LOCK
+                    %% ==========================================
+
+                    Service->>+Store: SaveChangesAsync()
+
+                    Store->>+DB: INSERT InventoryLock
+                    Note right of DB: Save status, reason and RequiresResolution
+
+                    DB-->>Store: InventoryLock saved
+                    deactivate DB
+
+                    Store-->>Service: Save successful
+                    deactivate Store
+
+                    %% ==========================================
+                    %% 9. RETRIEVE CREATED LOCK
+                    %% ==========================================
+
+                    Service->>+Store: FindAsync(inventoryLockId)
+
+                    Store->>+DB: SELECT InventoryLock by Id
+                    DB-->>Store: Persisted InventoryLock
+                    deactivate DB
+
+                    Store-->>Service: InventoryLockView
+                    deactivate Store
+
+                end
+
+            end
+
+        end
+
+    end
+
+    %% ==========================================
+    %% 10. RETURN INVENTORY LOCK RESULT
+    %% ==========================================
+
+    Service-->>API: InventoryLockResult or business error
+    deactivate Service
+
+    API-->>UI: Create result or error
+    deactivate API
+
+    UI-->>User: Display lock status and resolution flag
+    deactivate UI
+
+    %% ==========================================
+    %% 11. RESERVED STOCK RESOLUTION BOUNDARY
+    %% ==========================================
+
+    opt Created lock has RequiresResolution = true
+
+        Note over User,DB: Existing Reservations remain recorded
+
+        Note over Service,DB: Further order and reservation resolution is a separate workflow
+
+        Note over Service,DB: No automatic cancellation or reallocation is confirmed here
+
+    end
+
+    %% ==========================================
+    %% 12. OPTIONAL RELEASE INVENTORY LOCK
+    %% ==========================================
+
+    opt Authorized user releases an existing Inventory Lock
+
+        User->>+UI: Select Inventory Lock and request Release
+
+        UI->>+API: Release(lockId, releaseRequest)
+
+        API->>+Service: ReleaseAsync(actorId, role, data)
+
+        %% ==========================================
+        %% 13. VALIDATE RELEASE ROLE
+        %% ==========================================
+
+        Service->>+Service: EnsureWriteRole(actorRole)
+
+        Service-->>Service: Role validation result
+        deactivate Service
+
+        alt User role is forbidden
+
+            Note right of Service: Prepare Forbidden error
+
+        else User role is permitted
+
+            %% ==========================================
+            %% 14. LOAD INVENTORY LOCK
+            %% ==========================================
+
+            Service->>+Store: FindForUpdateAsync(lockId)
+
+            Store->>+DB: SELECT InventoryLock and current Version
+            DB-->>Store: InventoryLock or null
+            deactivate DB
+
+            Store-->>Service: InventoryLock
+            deactivate Store
+
+            alt Inventory Lock does not exist
+
+                Note right of Service: Prepare Not Found error
+
+            else Inventory Lock exists
+
+                %% ==========================================
+                %% 15. CHECK WAREHOUSE PERMISSION
+                %% ==========================================
+
+                Service->>+Store: CanAccessWarehouseAsync(actorId, role, warehouseId)
+
+                Store->>+DB: SELECT authorized Warehouse access
+                DB-->>Store: Access permission
+                deactivate DB
+
+                Store-->>Service: Access result
+                deactivate Store
+
+                alt Warehouse access is denied
+
+                    Note right of Service: Prepare Forbidden error
+
+                else Warehouse access is allowed
+
+                    %% ==========================================
+                    %% 16. VALIDATE CURRENT LOCK
+                    %% ==========================================
+
+                    Note right of Service: Validate Status and expected Version
+
+                    alt Lock is not releasable or Version is stale
+
+                        Note right of Service: Prepare Conflict error
+
+                    else Release is valid
+
+                        %% ==========================================
+                        %% 17. UPDATE INVENTORY LOCK
+                        %% ==========================================
+
+                        Note right of Service: Set Status = Released
+
+                        Note right of Service: Record ReleasedByUserId and ReleasedAt
+
+                        Service->>+Store: SaveChangesAsync()
+
+                        Store->>+DB: UPDATE InventoryLock release status and Version
+                        DB-->>Store: InventoryLock updated
+                        deactivate DB
+
+                        Store-->>Service: Save successful
+                        deactivate Store
+
+                        %% ==========================================
+                        %% 18. RETRIEVE UPDATED LOCK
+                        %% ==========================================
+
+                        Service->>+Store: FindAsync(lockId)
+
+                        Store->>+DB: SELECT updated InventoryLock
+                        DB-->>Store: Released InventoryLock
+                        deactivate DB
+
+                        Store-->>Service: InventoryLockView
+                        deactivate Store
+
+                    end
+
+                end
+
+            end
+
+        end
+
+        %% ==========================================
+        %% 19. RETURN RELEASE RESULT
+        %% ==========================================
+
+        Service-->>API: InventoryLockResult or business error
+        deactivate Service
+
+        API-->>UI: Release result or error
+        deactivate API
+
+        UI-->>User: Display release outcome
+        deactivate UI
+
+    end
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over Service,DB: Lock creation must not deduct Physical Stock
+
+    Note over Service,DB: Existing Reservations are not silently deleted
+
+    Note over Service,DB: RequiresResolution flags reserved stock conflicts
+
+    Note over Service,DB: Write-Off requires a separate authorized business operation
+
+    Note over Service,DB: No automatic refund, replacement or loyalty adjustment

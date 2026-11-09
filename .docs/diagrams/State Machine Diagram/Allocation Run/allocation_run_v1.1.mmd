@@ -1,0 +1,15 @@
+---
+title: AllocationRun State Machine
+---
+stateDiagram-v2
+    [*] --> Snapshotted : SO accepted, allocation attempt created with input snapshot (ordered by AcceptedAt, then SO code)
+    Snapshotted --> Planning : filter warehouses in service radius, Available > 0, MLOR, then weighted-score FEFO greedy
+    Planning --> Planning : optimistic-lock conflict, rollback, reload stock and re-plan (max 3 retries)
+    Planning --> Committed : every line covered, reservation + shelf-life price committed in one transaction
+    Planning --> Short : at least one line cannot be fully covered, whole SO rolled back
+    Planning --> Conflict : still conflicting after 3 retries, moved to technical retry queue
+    Planning --> Failed : technical error or invalid input
+    Committed --> [*]
+    Short --> [*]
+    Conflict --> [*]
+    Failed --> [*]

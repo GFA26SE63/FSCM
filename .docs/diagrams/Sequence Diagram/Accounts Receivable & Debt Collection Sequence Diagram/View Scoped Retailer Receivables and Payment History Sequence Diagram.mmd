@@ -1,0 +1,357 @@
+sequenceDiagram
+    autonumber
+
+    actor Retailer as Retailer
+    actor Staff as Authorized Staff
+
+    participant Mobile as Retailer Mobile App
+    participant Portal as Web Portal
+
+    participant ARApi as RetailerReceivablesController
+    participant PaymentApi as PaymentsController
+
+    participant ARSvc as RetailerReceivableService
+    participant PaymentSvc as PaymentService
+
+    participant ARStore as RetailerReceivableStore
+    participant PaymentStore as PaymentStore
+
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% PART 1 - VIEW SCOPED RECEIVABLE LIST
+    %% ==========================================
+
+    Note over Retailer,DB: PART 1 - VIEW SCOPED RETAILER RECEIVABLES
+
+    Retailer->>+Mobile: Open Receivables and select filters
+
+    Mobile->>+ARApi: List(filter)
+
+    ARApi->>+ARSvc: ListAsync(filter, retailerUserId, ct)
+
+    %% ==========================================
+    %% 1. VALIDATE RECEIVABLE FILTER
+    %% ==========================================
+
+    ARSvc->>+ARSvc: Validate(filter)
+
+    ARSvc-->>ARSvc: Validation result
+    deactivate ARSvc
+
+    alt Filter is invalid
+
+        Note right of ARSvc: Return Validation error
+
+    else Filter is valid
+
+        %% ==========================================
+        %% 2. DETERMINE CURRENT BUSINESS DATE
+        %% ==========================================
+
+        ARSvc->>+ARSvc: Today()
+
+        ARSvc-->>ARSvc: Current business date
+        deactivate ARSvc
+
+        %% ==========================================
+        %% 3. LOAD RECEIVABLE DATA WITH USER SCOPE
+        %% ==========================================
+
+        ARSvc->>+ARStore: ListAsync(retailerUserId, ct)
+
+        ARStore->>+ARStore: LoadAsync(retailerUserId, ct)
+
+        ARStore->>+DB: SELECT scoped SalesOrders and Payments
+
+        Note right of DB: Read payment allocations and collection history
+
+        Note right of DB: Read related disputes and refund history
+
+        DB-->>ARStore: Scoped receivable source data
+        deactivate DB
+
+        ARStore-->>ARStore: RetailerReceivableView collection
+        deactivate ARStore
+
+        ARStore-->>ARSvc: RetailerReceivableView collection
+        deactivate ARStore
+
+        %% ==========================================
+        %% 4. BUILD RECEIVABLE RESULTS
+        %% ==========================================
+
+        loop For each scoped receivable
+
+            ARSvc->>+ARSvc: ToResult(receivableView, today)
+
+            Note right of ARSvc: Calculate outstanding and collectible balances
+
+            Note right of ARSvc: Include collection, dispute and refund histories
+
+            alt DueDate is past and collectible balance is positive
+
+                Note right of ARSvc: Report Overdue
+
+            else Payment is fully settled
+
+                Note right of ARSvc: Report settled status
+
+            else DueDate is not established
+
+                Note right of ARSvc: Do not report Overdue
+
+            else Receivable is not overdue
+
+                Note right of ARSvc: Report current payment status
+
+            end
+
+            ARSvc-->>ARSvc: RetailerReceivableResult
+            deactivate ARSvc
+
+        end
+
+        %% ==========================================
+        %% 5. APPLY STATUS FILTER AND PAGINATION
+        %% ==========================================
+
+        ARSvc->>+ARSvc: NormalizeStatus(filter.Status)
+
+        ARSvc-->>ARSvc: Normalized status
+        deactivate ARSvc
+
+        Note right of ARSvc: Apply requested filters and deterministic pagination
+
+    end
+
+    %% ==========================================
+    %% 6. RETURN SCOPED RECEIVABLE LIST
+    %% ==========================================
+
+    ARSvc-->>ARApi: RetailerReceivablePage or error
+    deactivate ARSvc
+
+    ARApi-->>Mobile: Receivables response
+    deactivate ARApi
+
+    Mobile-->>Retailer: Display receivables and outstanding balances
+    deactivate Mobile
+
+    %% ==========================================
+    %% PART 2 - VIEW PAYMENT HISTORY BY ORDER
+    %% ==========================================
+
+    opt Retailer selects one SalesOrder
+
+        Note over Retailer,DB: PART 2 - VIEW SCOPED RECEIVABLE AND PAYMENT HISTORY
+
+        Retailer->>+Mobile: Open SalesOrder payment history
+
+        Mobile->>+ARApi: GetByOrder(orderId)
+
+        ARApi->>+ARSvc: GetByOrderAsync(orderId, retailerUserId, ct)
+
+        %% ==========================================
+        %% 7. LOAD ORDER WITH RETAILER SCOPE
+        %% ==========================================
+
+        ARSvc->>+ARStore: FindByOrderAsync(orderId, retailerUserId, ct)
+
+        ARStore->>+ARStore: LoadAsync(retailerUserId, ct)
+
+        ARStore->>+DB: SELECT receivable data scoped to Retailer
+
+        Note right of DB: Include Payment and related SalesOrder
+
+        Note right of DB: Include PaymentReceipt allocations and collection history
+
+        Note right of DB: Include dispute and refund information
+
+        DB-->>ARStore: Scoped receivable source data
+        deactivate DB
+
+        ARStore-->>ARStore: RetailerReceivableView collection
+        deactivate ARStore
+
+        Note right of ARStore: Find matching SalesOrder within the scoped data
+
+        ARStore-->>ARSvc: Matching ReceivableView or null
+        deactivate ARStore
+
+        %% ==========================================
+        %% 8. CHECK ORDER VISIBILITY
+        %% ==========================================
+
+        alt Order does not exist or is outside Retailer scope
+
+            Note right of ARSvc: Return Not Found without exposing another Retailer
+
+        else Retailer can access this order
+
+            %% ==========================================
+            %% 9. EVALUATE CURRENT RECEIVABLE BALANCE
+            %% ==========================================
+
+            ARSvc->>+ARSvc: Today()
+
+            ARSvc-->>ARSvc: Current business date
+            deactivate ARSvc
+
+            %% ==========================================
+            %% 10. BUILD PAYMENT HISTORY RESPONSE
+            %% ==========================================
+
+            ARSvc->>+ARSvc: ToResult(receivableView, today)
+
+            Note right of ARSvc: Calculate adjusted and confirmed payment amounts
+
+            Note right of ARSvc: Calculate outstanding and overdue amounts
+
+            Note right of ARSvc: Map ReceivableCollectionHistory
+
+            Note right of ARSvc: Map ReceivableDisputeHistory
+
+            Note right of ARSvc: Map ReceivableRefundHistory
+
+            ARSvc-->>ARSvc: RetailerReceivableResult
+            deactivate ARSvc
+
+        end
+
+        %% ==========================================
+        %% 11. RETURN PAYMENT HISTORY
+        %% ==========================================
+
+        ARSvc-->>ARApi: RetailerReceivableResult or Not Found
+        deactivate ARSvc
+
+        ARApi-->>Mobile: Receivable details and financial histories
+        deactivate ARApi
+
+        Mobile-->>Retailer: Display collections, disputes and refunds
+        deactivate Mobile
+
+    end
+
+    %% ==========================================
+    %% PART 3 - AUTHORIZED STAFF PAYMENT LOOKUP
+    %% ==========================================
+
+    opt Authorized staff views Payment by SalesOrder
+
+        Note over Staff,DB: PART 3 - VIEW PAYMENT WITH ROLE AND ORDER SCOPE
+
+        Staff->>+Portal: Open Payment details for SalesOrder
+
+        Portal->>+PaymentApi: GetByOrder(orderId)
+
+        PaymentApi->>+PaymentSvc: GetByOrderAsync(orderId, actorId, role, ct)
+
+        %% ==========================================
+        %% 12. VALIDATE READ ROLE
+        %% ==========================================
+
+        PaymentSvc->>+PaymentSvc: ValidateReadRole(role)
+
+        PaymentSvc-->>PaymentSvc: Authorization result
+        deactivate PaymentSvc
+
+        alt Staff role is not authorized
+
+            Note right of PaymentSvc: Return Forbidden
+
+        else Staff role is authorized
+
+            %% ==========================================
+            %% 13. LOAD PAYMENT
+            %% ==========================================
+
+            PaymentSvc->>+PaymentStore: FindByOrderAsync(orderId, ct)
+
+            PaymentStore->>+DB: SELECT Payment WHERE SalesOrderId = orderId
+
+            DB-->>PaymentStore: PaymentView or null
+            deactivate DB
+
+            PaymentStore-->>PaymentSvc: PaymentView or null
+            deactivate PaymentStore
+
+            alt Payment does not exist
+
+                Note right of PaymentSvc: Return Not Found
+
+            else Payment exists
+
+                %% ==========================================
+                %% 14. CHECK ORDER ACCESS SCOPE
+                %% ==========================================
+
+                PaymentSvc->>+PaymentStore: CanViewAsync(orderId, actorId, role, ct)
+
+                PaymentStore->>+DB: SELECT permitted SalesOrder access
+
+                DB-->>PaymentStore: Access result
+                deactivate DB
+
+                PaymentStore-->>PaymentSvc: Authorized or Forbidden
+                deactivate PaymentStore
+
+                alt Staff cannot access this SalesOrder
+
+                    Note right of PaymentSvc: Return Forbidden
+
+                else Staff can access this SalesOrder
+
+                    %% ==========================================
+                    %% 15. BUILD PAYMENT RESULT
+                    %% ==========================================
+
+                    PaymentSvc->>+PaymentSvc: Today()
+
+                    PaymentSvc-->>PaymentSvc: Current business date
+                    deactivate PaymentSvc
+
+                    PaymentSvc->>+PaymentSvc: ToResult(paymentView, today)
+
+                    Note right of PaymentSvc: Calculate current payment status and balances
+
+                    PaymentSvc-->>PaymentSvc: PaymentResult
+                    deactivate PaymentSvc
+
+                end
+
+            end
+
+        end
+
+        %% ==========================================
+        %% 16. RETURN PAYMENT RESULT
+        %% ==========================================
+
+        PaymentSvc-->>PaymentApi: PaymentResult or business error
+        deactivate PaymentSvc
+
+        PaymentApi-->>Portal: Payment detail response
+        deactivate PaymentApi
+
+        Portal-->>Staff: Display authorized Payment information
+        deactivate Portal
+
+    end
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over ARSvc,DB: Retailer history must be restricted to the authenticated Retailer
+
+    Note over ARStore,DB: Collections include allocations from consolidated PaymentReceipts
+
+    Note over ARSvc,DB: Disputes and refunds are separate from confirmed collections
+
+    Note over PaymentSvc,DB: Staff Payment access requires both role and order scope checks
+
+    Note over ARSvc,DB: All operations in this diagram are read-only
+
+    Note over ARSvc,DB: No PaymentReceipt, allocation or refund is created during retrieval

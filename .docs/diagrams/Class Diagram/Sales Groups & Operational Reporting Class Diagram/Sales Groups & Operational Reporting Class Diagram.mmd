@@ -1,0 +1,368 @@
+classDiagram
+direction TB
+
+%% ==========================================
+%% API LAYER
+%% ==========================================
+
+namespace API {
+
+    class RegionsController {
+        <<Controller>>
+        +List()
+        +Get()
+        +Create()
+        +Update()
+        +UpdateStatus()
+    }
+
+    class SalesGroupsController {
+        <<Controller>>
+        +List()
+        +Get()
+        +Create()
+        +Update()
+        +UpdateStatus()
+    }
+
+    class TerritoryAssignmentsController {
+        <<Controller>>
+        +ListSales()
+        +TransferSales()
+        +ListRetailers()
+        +AssignRetailer()
+    }
+
+    class ReportsController {
+        <<Controller>>
+        +SalesRanking()
+        +SalesKpis()
+        +BestSellingProducts()
+    }
+}
+
+%% ==========================================
+%% APPLICATION SERVICES
+%% ==========================================
+
+namespace Application_Services {
+
+    class TerritoryService {
+        <<Service>>
+        +ListRegionsAsync()
+        +GetRegionAsync()
+        +CreateRegionAsync()
+        +UpdateRegionAsync()
+        +SetRegionStatusAsync()
+        +ListSalesGroupsAsync()
+        +GetSalesGroupAsync()
+        +CreateSalesGroupAsync()
+        +UpdateSalesGroupAsync()
+        +SetSalesGroupStatusAsync()
+        +ListMembershipsAsync()
+        +TransferSalesAsync()
+        +ListRetailerAssignmentsAsync()
+        +AssignRetailerAsync()
+        +CheckOrderAccessAsync()
+    }
+
+    class ReportService {
+        <<Service>>
+        +GetSalesRankingAsync()
+        +GetSalesKpiAsync()
+        +GetProductRankingAsync()
+        -ResolveScopeAsync()
+        -ValidatePeriod()
+        -BuildKpiEntry()
+        -ParseConfiguration()
+    }
+}
+
+%% ==========================================
+%% APPLICATION INTERFACES
+%% ==========================================
+
+namespace Application_Interfaces {
+
+    class ITerritoryStore {
+        <<interface>>
+        +ListRegionsAsync()
+        +FindRegionAsync()
+        +FindRegionByCodeAsync()
+        +AddRegion()
+        +ListSalesGroupsAsync()
+        +FindSalesGroupAsync()
+        +FindSalesGroupByCodeAsync()
+        +AddSalesGroup()
+        +ListMembershipsAsync()
+        +ListActiveMembershipsAsync()
+        +IsActiveMemberAsync()
+        +AddMembership()
+        +ListRetailerAssignmentsAsync()
+        +ListActiveRetailerAssignmentsAsync()
+        +AddRetailerAssignment()
+        +FindOrderAccessAsync()
+        +SaveChangesAsync()
+    }
+
+    class IReportStore {
+        <<interface>>
+        +ListActiveGroupIdsAsync()
+        +IsActiveGroupMemberAsync()
+        +AggregateSalesRevenueAsync()
+        +ListRecognizedOrdersAsync()
+        +FindSalesKpiConfigurationAsync()
+        +AggregateProductSalesAsync()
+    }
+}
+
+%% ==========================================
+%% PERSISTENCE LAYER
+%% ==========================================
+
+namespace Persistence {
+
+    class TerritoryStore {
+        <<Repository>>
+        +ListRegionsAsync()
+        +FindRegionAsync()
+        +FindRegionByCodeAsync()
+        +AddRegion()
+        +ListSalesGroupsAsync()
+        +FindSalesGroupAsync()
+        +FindSalesGroupByCodeAsync()
+        +AddSalesGroup()
+        +ListMembershipsAsync()
+        +ListActiveMembershipsAsync()
+        +IsActiveMemberAsync()
+        +AddMembership()
+        +ListRetailerAssignmentsAsync()
+        +ListActiveRetailerAssignmentsAsync()
+        +AddRetailerAssignment()
+        +FindOrderAccessAsync()
+        +SaveChangesAsync()
+    }
+
+    class ReportStore {
+        <<Repository>>
+        +ListActiveGroupIdsAsync()
+        +IsActiveGroupMemberAsync()
+        +AggregateSalesRevenueAsync()
+        +ListRecognizedOrdersAsync()
+        +FindSalesKpiConfigurationAsync()
+        +AggregateProductSalesAsync()
+    }
+}
+
+%% ==========================================
+%% DOMAIN - REGION
+%% ==========================================
+
+namespace Domain_Region {
+
+    class Region {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +Description: string
+        +IsActive: bool
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class UserRegionAssignment {
+        +Id: Guid
+        +UserAccountId: Guid
+        +RegionId: Guid
+        +AssignedAt: DateTimeOffset
+        +UnassignedAt: DateTimeOffset
+        +IsActive: bool
+    }
+}
+
+%% ==========================================
+%% DOMAIN - SALES GROUP
+%% ==========================================
+
+namespace Domain_SalesGroup {
+
+    class SalesGroup {
+        +Id: Guid
+        +RegionId: Guid
+        +Code: string
+        +Name: string
+        +IsActive: bool
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class SalesGroupMember {
+        +Id: Guid
+        +SalesGroupId: Guid
+        +UserAccountId: Guid
+        +AssignedAt: DateTimeOffset
+        +UnassignedAt: DateTimeOffset
+        +IsActive: bool
+    }
+
+    class RetailerSalesAssignment {
+        +Id: Guid
+        +RetailerId: Guid
+        +SalesGroupId: Guid
+        +AssignedAt: DateTimeOffset
+        +UnassignedAt: DateTimeOffset
+        +IsActive: bool
+    }
+}
+
+%% ==========================================
+%% DOMAIN - BUSINESS REFERENCES
+%% ==========================================
+
+namespace Domain_References {
+
+    class UserAccount {
+        +Id: Guid
+        +Email: string
+        +FullName: string
+        +Role: string
+        +IsActive: bool
+        +CreatedAt: DateTimeOffset
+    }
+
+    class Retailer {
+        +Id: Guid
+        +RegionId: Guid
+        +Code: string
+        +Name: string
+        +Status: string
+        +CreatedAt: DateTimeOffset
+    }
+
+    class SalesOrder {
+        +Id: Guid
+        +OrderCode: string
+        +RetailerId: Guid
+        +SalesGroupId: Guid
+        +CreatedByUserId: Guid
+        +Status: string
+        +FinalAmount: decimal
+        +ServerReceivedAt: DateTimeOffset
+        +CreatedAt: DateTimeOffset
+    }
+
+    class SystemConfiguration {
+        +Id: Guid
+        +ConfigKey: string
+        +ConfigValue: string
+        +ValueType: string
+        +Version: int
+        +IsActive: bool
+        +EffectiveFrom: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% API DEPENDENCIES
+%% ==========================================
+
+RegionsController ..> TerritoryService : uses
+
+SalesGroupsController ..> TerritoryService : uses
+
+TerritoryAssignmentsController ..> TerritoryService : uses
+
+ReportsController ..> ReportService : uses
+
+%% ==========================================
+%% APPLICATION DEPENDENCIES
+%% ==========================================
+
+TerritoryService ..> ITerritoryStore : uses
+
+ReportService ..> IReportStore : uses
+
+%% ==========================================
+%% INTERFACE REALIZATION
+%% ==========================================
+
+TerritoryStore ..|> ITerritoryStore : implements
+
+ReportStore ..|> IReportStore : implements
+
+%% ==========================================
+%% PERSISTENCE DEPENDENCIES
+%% ==========================================
+
+TerritoryStore ..> Region : manages
+
+TerritoryStore ..> SalesGroup : manages
+
+TerritoryStore ..> SalesGroupMember : manages
+
+TerritoryStore ..> RetailerSalesAssignment : manages
+
+ReportStore ..> SalesOrder : aggregates
+
+ReportStore ..> SystemConfiguration : reads KPI settings
+
+ReportStore ..> SalesGroupMember : checks report scope
+
+%% ==========================================
+%% REGION AND SALES GROUP
+%% ==========================================
+
+Region "1" -- "0..*" SalesGroup : contains
+
+%% ==========================================
+%% USER REGION ASSIGNMENT
+%% ==========================================
+
+Region "1" -- "0..*" UserRegionAssignment : access assignments
+
+UserAccount "1" -- "0..*" UserRegionAssignment : assigned regions
+
+%% ==========================================
+%% SALES GROUP MEMBERSHIP
+%% ==========================================
+
+SalesGroup "1" -- "0..*" SalesGroupMember : memberships
+
+UserAccount "1" -- "0..*" SalesGroupMember : member history
+
+%% ==========================================
+%% RETAILER COVERAGE
+%% ==========================================
+
+Region "1" -- "0..*" Retailer : regional retailers
+
+SalesGroup "1" -- "0..*" RetailerSalesAssignment : coverage assignments
+
+Retailer "1" -- "0..*" RetailerSalesAssignment : assignment history
+
+%% ==========================================
+%% SALES ORDER RELATIONSHIPS
+%% ==========================================
+
+Retailer "1" -- "0..*" SalesOrder : places orders
+
+UserAccount "1" -- "0..*" SalesOrder : created by
+
+SalesGroup "0..1" -- "0..*" SalesOrder : recorded group
+
+%% ==========================================
+%% BUSINESS CONSTRAINTS
+%% ==========================================
+
+note for SalesGroup "Group management respects regional access and active assignments."
+
+note for SalesGroupMember "A Sales user has at most one active group assignment at a time."
+
+note for RetailerSalesAssignment "A Retailer has at most one active Sales Group assignment at a time."
+
+note for SalesOrder "Historical orders retain original creator and group attribution."
+
+note for ReportService "Reports enforce role scope and calculate revenue from recognized orders."
+
+note for SystemConfiguration "Versioned configuration provides KPI targets and calculation settings."

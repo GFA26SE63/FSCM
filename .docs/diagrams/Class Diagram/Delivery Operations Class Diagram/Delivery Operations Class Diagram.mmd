@@ -1,0 +1,535 @@
+classDiagram
+direction TB
+
+%% ==========================================
+%% API LAYER
+%% ==========================================
+
+namespace API {
+
+    class ShipmentsController {
+        <<Controller>>
+        +List()
+        +Get()
+        +OrderReadiness()
+        +OrderDeliveryView()
+        +Assign()
+        +ConfirmIssue()
+        +Dispatch()
+        +FlagException()
+        +ConfirmReceipt()
+        +Sync()
+    }
+
+    class DeliveriesController {
+        <<Controller>>
+        +List()
+        +GetByOrder()
+        +Drivers()
+        +Vehicles()
+        +CreateDriver()
+        +UpdateDriver()
+        +SetDriverStatus()
+        +CreateVehicle()
+        +UpdateVehicle()
+        +SetVehicleStatus()
+    }
+}
+
+%% ==========================================
+%% APPLICATION SERVICES
+%% ==========================================
+
+namespace Application_Services {
+
+    class ShipmentService {
+        <<Service>>
+        +ListAsync()
+        +GetAsync()
+        +GetOrderReadinessAsync()
+        +GetRetailerOrderDeliveryAsync()
+        +AssignAsync()
+        +ConfirmIssueAsync()
+        +DispatchAsync()
+        +FlagExceptionAsync()
+        +ConfirmReceiptAsync()
+        +SyncOrderAsync()
+        -BuildReadinessAsync()
+        -IsPaymentSettledAsync()
+    }
+
+    class DeliveryService {
+        <<Service>>
+        +ListAsync()
+        +GetByOrderAsync()
+        +ListDriversAsync()
+        +CreateDriverAsync()
+        +UpdateDriverAsync()
+        +SetDriverActiveAsync()
+        +ListVehiclesAsync()
+        +CreateVehicleAsync()
+        +UpdateVehicleAsync()
+        +SetVehicleActiveAsync()
+        +DispatchAsync()
+        +ConfirmReceiptAsync()
+    }
+
+    class DeliveryEtaService {
+        <<Service>>
+        +EstimateAsync()
+        +GetScheduleAsync()
+        -EnsureDistanceIsCurrentAsync()
+        -NextDispatchSlot()
+        -ResolveMilestone()
+    }
+
+    class OrderCompletionService {
+        <<Service>>
+        +EvaluateAsync()
+        +HoldAsync()
+    }
+}
+
+%% ==========================================
+%% APPLICATION INTERFACES
+%% ==========================================
+
+namespace Application_Interfaces {
+
+    class IShipmentStore {
+        <<interface>>
+        +ListAsync()
+        +FindByIdAsync()
+        +FindOrderForUpdateAsync()
+        +ListByOrderAsync()
+        +FindDriverAsync()
+        +FindVehicleAsync()
+        +CanAccessWarehouseAsync()
+        +ListExpectedWarehousesAsync()
+        +ListLabelsAsync()
+        +AddReceipt()
+        +AddReceiptLine()
+        +AddInventoryTransaction()
+        +AddOrderHistory()
+        +ExecuteInTransactionAsync()
+        +SaveChangesAsync()
+    }
+
+    class IDeliveryStore {
+        <<interface>>
+        +ListAsync()
+        +FindByOrderAsync()
+        +ListDriversAsync()
+        +FindDriverAsync()
+        +FindDriverForUpdateAsync()
+        +ListVehiclesAsync()
+        +FindVehicleAsync()
+        +FindVehicleForUpdateAsync()
+        +WarehouseExistsAsync()
+        +DriverCodeExistsAsync()
+        +VehiclePlateExistsAsync()
+        +AddDriver()
+        +AddVehicle()
+        +AddDelivery()
+        +ExecuteInTransactionAsync()
+        +SaveChangesAsync()
+    }
+
+    class IDeliveryEtaStore {
+        <<interface>>
+        +FindLocationAsync()
+        +FindDistanceAsync()
+        +FindScheduleConfigurationAsync()
+    }
+}
+
+%% ==========================================
+%% PERSISTENCE LAYER
+%% ==========================================
+
+namespace Persistence {
+
+    class ShipmentStore {
+        <<Repository>>
+        +ListAsync()
+        +FindByIdAsync()
+        +FindOrderForUpdateAsync()
+        +ListByOrderAsync()
+        +FindDriverAsync()
+        +FindVehicleAsync()
+        +CanAccessWarehouseAsync()
+        +ListExpectedWarehousesAsync()
+        +ListLabelsAsync()
+        +AddReceipt()
+        +AddReceiptLine()
+        +AddInventoryTransaction()
+        +AddOrderHistory()
+        +ExecuteInTransactionAsync()
+        +SaveChangesAsync()
+    }
+
+    class DeliveryStore {
+        <<Repository>>
+        +ListAsync()
+        +FindByOrderAsync()
+        +ListDriversAsync()
+        +FindDriverAsync()
+        +FindDriverForUpdateAsync()
+        +ListVehiclesAsync()
+        +FindVehicleAsync()
+        +FindVehicleForUpdateAsync()
+        +WarehouseExistsAsync()
+        +DriverCodeExistsAsync()
+        +VehiclePlateExistsAsync()
+        +AddDriver()
+        +AddVehicle()
+        +AddDelivery()
+        +ExecuteInTransactionAsync()
+        +SaveChangesAsync()
+    }
+
+    class DeliveryEtaStore {
+        <<Repository>>
+        +FindLocationAsync()
+        +FindDistanceAsync()
+        +FindScheduleConfigurationAsync()
+    }
+}
+
+%% ==========================================
+%% DOMAIN - SHIPMENT
+%% ==========================================
+
+namespace Domain_Shipment {
+
+    class Shipment {
+        +Id: Guid
+        +ShipmentCode: string
+        +SalesOrderId: Guid
+        +WarehouseId: Guid
+        +PickingListId: Guid
+        +DriverId: Guid
+        +VehicleId: Guid
+        +Status: string
+        +TotalQuantity: decimal
+        +ReceivedQuantity: decimal
+        +DriverCodeSnapshot: string
+        +DriverNameSnapshot: string
+        +DriverPhoneSnapshot: string
+        +DriverLicenseSnapshot: string
+        +PlateNumberSnapshot: string
+        +VehicleTypeSnapshot: string
+        +AssignedAt: DateTimeOffset
+        +ReadyAt: DateTimeOffset
+        +IssuedAt: DateTimeOffset
+        +DispatchedAt: DateTimeOffset
+        +ReceivedAt: DateTimeOffset
+        +ExceptionReason: string
+        +Version: int
+    }
+
+    class Delivery {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +DriverId: Guid
+        +VehicleId: Guid
+        +OperationKey: string
+        +Status: string
+        +DriverCodeSnapshot: string
+        +DriverNameSnapshot: string
+        +DriverPhoneSnapshot: string
+        +PlateNumberSnapshot: string
+        +VehicleTypeSnapshot: string
+        +AssignedAt: DateTimeOffset
+        +DispatchedAt: DateTimeOffset
+        +DeliveredAt: DateTimeOffset
+        +Note: string
+        +Version: int
+    }
+}
+
+%% ==========================================
+%% DOMAIN - FLEET
+%% ==========================================
+
+namespace Domain_Fleet {
+
+    class Driver {
+        +Id: Guid
+        +WarehouseId: Guid
+        +Code: string
+        +FullName: string
+        +Phone: string
+        +LicenseNumber: string
+        +IsActive: bool
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class Vehicle {
+        +Id: Guid
+        +WarehouseId: Guid
+        +PlateNumber: string
+        +VehicleType: string
+        +Capacity: decimal
+        +IsActive: bool
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - ORDER
+%% ==========================================
+
+namespace Domain_Order {
+
+    class SalesOrder {
+        +Id: Guid
+        +OrderCode: string
+        +RetailerId: Guid
+        +DeliveryAddress: string
+        +RequestedDeliveryDate: DateOnly
+        +Status: string
+        +FinalAmount: decimal
+        +Version: int
+    }
+
+    class PurchaseOrder {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +PurchaseOrderCode: string
+        +Status: string
+        +IssuedAt: DateTimeOffset
+    }
+
+    class OrderStatusHistory {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +FromStatus: string
+        +ToStatus: string
+        +Reason: string
+        +ChangedByUserId: Guid
+        +ChangedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - WAREHOUSE
+%% ==========================================
+
+namespace Domain_Warehouse {
+
+    class Warehouse {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +Address: string
+        +RegionId: Guid
+        +IsActive: bool
+    }
+
+    class PickingList {
+        +Id: Guid
+        +PurchaseOrderId: Guid
+        +WarehouseId: Guid
+        +PickingCode: string
+        +Status: string
+        +ConfirmedAt: DateTimeOffset
+        +Version: int
+    }
+
+    class InventoryTransaction {
+        +Id: Guid
+        +BatchId: Guid
+        +WarehouseId: Guid
+        +SourceType: string
+        +SourceId: Guid
+        +TransactionType: string
+        +PhysicalQuantityDelta: decimal
+        +ReservedQuantityDelta: decimal
+        +OccurredAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - RECEIPT
+%% ==========================================
+
+namespace Domain_Receipt {
+
+    class ReceiptConfirmation {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +ShipmentId: Guid
+        +ConfirmedByRetailerUserId: Guid
+        +OperationKey: string
+        +RequestHash: string
+        +Status: string
+        +ConfirmedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - LOCATION AND ETA
+%% ==========================================
+
+namespace Domain_Location {
+
+    class Retailer {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +Address: string
+        +RegionId: Guid
+        +Status: string
+    }
+
+    class MapLocation {
+        +Id: Guid
+        +WarehouseId: Guid
+        +RetailerId: Guid
+        +Latitude: decimal
+        +Longitude: decimal
+        +FormattedAddress: string
+        +Version: int
+        +NormalizedAt: DateTimeOffset
+    }
+
+    class MapDistanceCache {
+        +Id: Guid
+        +WarehouseId: Guid
+        +RetailerId: Guid
+        +OriginLocationId: Guid
+        +DestinationLocationId: Guid
+        +DistanceMeters: decimal
+        +DurationSeconds: int
+        +OriginLocationVersion: int
+        +DestinationLocationVersion: int
+        +CalculatedAt: DateTimeOffset
+        +ExpiresAt: DateTimeOffset
+        +IsActive: bool
+    }
+}
+
+%% ==========================================
+%% API DEPENDENCIES
+%% ==========================================
+
+ShipmentsController ..> ShipmentService : uses
+
+DeliveriesController ..> DeliveryService : uses
+
+%% ==========================================
+%% APPLICATION DEPENDENCIES
+%% ==========================================
+
+ShipmentService ..> IShipmentStore : uses
+
+DeliveryService ..> IDeliveryStore : uses
+
+DeliveryEtaService ..> IDeliveryEtaStore : uses
+
+ShipmentService ..> OrderCompletionService : evaluates completion
+
+%% ==========================================
+%% INTERFACE REALIZATION
+%% ==========================================
+
+ShipmentStore ..|> IShipmentStore : implements
+
+DeliveryStore ..|> IDeliveryStore : implements
+
+DeliveryEtaStore ..|> IDeliveryEtaStore : implements
+
+%% ==========================================
+%% PERSISTENCE DEPENDENCIES
+%% ==========================================
+
+ShipmentStore ..> Shipment : manages
+
+ShipmentStore ..> ReceiptConfirmation : records
+
+ShipmentStore ..> InventoryTransaction : records dispatch
+
+DeliveryStore ..> Delivery : manages order delivery
+
+DeliveryStore ..> Driver : manages
+
+DeliveryStore ..> Vehicle : manages
+
+DeliveryEtaStore ..> MapLocation : reads
+
+DeliveryEtaStore ..> MapDistanceCache : reads
+
+%% ==========================================
+%% SALES ORDER RELATIONSHIPS
+%% ==========================================
+
+Retailer "1" -- "0..*" SalesOrder : places
+
+SalesOrder "1" -- "0..1" PurchaseOrder : generates
+
+SalesOrder "1" -- "0..*" Shipment : has shipments
+
+SalesOrder "1" -- "0..1" Delivery : order-level record
+
+SalesOrder "1" -- "0..*" OrderStatusHistory : status history
+
+%% ==========================================
+%% WAREHOUSE RELATIONSHIPS
+%% ==========================================
+
+Warehouse "1" -- "0..*" Shipment : ships from
+
+Warehouse "1" -- "0..*" Driver : manages drivers
+
+Warehouse "1" -- "0..*" Vehicle : manages vehicles
+
+Warehouse "1" -- "0..*" PickingList : picking lists
+
+%% ==========================================
+%% DRIVER ASSIGNMENT
+%% ==========================================
+
+Driver "0..1" -- "0..*" Shipment : assigned driver
+
+Driver "0..1" -- "0..*" Delivery : delivery driver
+
+%% ==========================================
+%% VEHICLE ASSIGNMENT
+%% ==========================================
+
+Vehicle "0..1" -- "0..*" Shipment : assigned vehicle
+
+Vehicle "0..1" -- "0..*" Delivery : delivery vehicle
+
+%% ==========================================
+%% PURCHASE ORDER AND PICKING
+%% ==========================================
+
+PurchaseOrder "1" -- "0..*" PickingList : releases
+
+PickingList "0..1" -- "0..*" Shipment : picking source
+
+%% ==========================================
+%% SHIPMENT AND RECEIPT
+%% ==========================================
+
+Shipment "1" -- "0..1" ReceiptConfirmation : confirmed by
+
+%% ==========================================
+%% LOCATION RELATIONSHIPS
+%% ==========================================
+
+Warehouse "0..1" -- "0..*" MapLocation : warehouse location
+
+Retailer "0..1" -- "0..*" MapLocation : retailer location
+
+MapLocation "1" -- "0..*" MapDistanceCache : origin
+
+MapLocation "1" -- "0..*" MapDistanceCache : destination
+
+Warehouse "1" -- "0..*" MapDistanceCache : origin warehouse
+
+Retailer "1" -- "0..*" MapDistanceCache : destination retailer

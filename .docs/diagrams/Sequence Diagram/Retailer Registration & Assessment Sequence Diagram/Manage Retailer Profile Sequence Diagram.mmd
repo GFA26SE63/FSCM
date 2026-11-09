@@ -1,0 +1,152 @@
+sequenceDiagram
+    autonumber
+
+    actor Admin as Administrator
+    participant UI as Web Portal
+    participant API as RetailersController
+    participant Service as RetailerService
+    participant Store as RetailerStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. VIEW RETAILER LIST
+    %% ==========================================
+
+    Admin->>+UI: Open Retailer Management
+
+    UI->>+API: List(filters)
+    API->>+Service: ListAsync(filters)
+
+    Service->>+Store: Retrieve Retailers
+    Store->>+DB: SELECT Retailers with filters
+    DB-->>Store: Retailer records
+    deactivate DB
+
+    Store-->>Service: Retailer list
+    deactivate Store
+
+    Service-->>API: Paged Retailer results
+    deactivate Service
+
+    API-->>UI: Retailer list response
+    deactivate API
+
+    UI-->>Admin: Display Retailer list
+    deactivate UI
+
+    %% ==========================================
+    %% 2. VIEW RETAILER PROFILE
+    %% ==========================================
+
+    Admin->>+UI: Select Retailer
+
+    UI->>+API: Get(retailerId)
+    API->>+Service: GetAsync(retailerId)
+
+    Service->>+Store: FindViewAsync(retailerId)
+    Store->>+DB: SELECT profile, assessment, contact, MLOR
+    DB-->>Store: Retailer details
+    deactivate DB
+
+    Store-->>Service: Retailer profile
+    deactivate Store
+
+    Service-->>API: Retailer details
+    deactivate Service
+
+    API-->>UI: Profile response
+    deactivate API
+
+    UI-->>Admin: Display Retailer profile
+    deactivate UI
+
+    %% ==========================================
+    %% 3. MANAGE RETAILER PROFILE
+    %% ==========================================
+
+    opt Administrator manages Retailer
+
+        Admin->>+UI: Select management action
+
+        alt Update Retailer Information and MLOR
+
+            Admin->>UI: Edit profile, assessment or MLOR
+
+            UI->>+API: UpdateDeclaration(retailerId, updatedData)
+            API->>+Service: UpdateDeclarationAsync(retailerId, updatedData)
+
+            Service->>+Store: FindForUpdateAsync(retailerId)
+            Store->>+DB: SELECT Retailer and current profile
+            DB-->>Store: Existing Retailer data
+            deactivate DB
+
+            Store-->>Service: Retailer record
+            deactivate Store
+
+            alt Valid update and permitted state
+
+                Service->>+Store: Save profile and MLOR changes
+                Store->>+DB: UPDATE Retailer and contact / Save MLOR rules
+                DB-->>Store: Changes committed
+                deactivate DB
+
+                Store-->>Service: Profile updated
+                deactivate Store
+
+                Service-->>API: Updated Retailer profile
+
+            else Invalid data or update not permitted
+
+                Service-->>API: Validation or conflict error
+
+            end
+
+            deactivate Service
+
+            API-->>UI: Update result
+            deactivate API
+
+        else Activate or Deactivate Retailer
+
+            Admin->>UI: Select new Retailer status
+
+            UI->>+API: UpdateStatus(retailerId, status)
+            API->>+Service: SetActiveAsync(retailerId, status)
+
+            Service->>+Store: FindForUpdateAsync(retailerId)
+            Store->>+DB: SELECT Retailer and current status
+            DB-->>Store: Retailer status
+            deactivate DB
+
+            Store-->>Service: Retailer record
+            deactivate Store
+
+            alt Valid status transition
+
+                Service->>+Store: Save Retailer status
+                Store->>+DB: UPDATE Retailer status
+                DB-->>Store: Status committed
+                deactivate DB
+
+                Store-->>Service: Status updated
+                deactivate Store
+
+                Service-->>API: Status update successful
+
+            else Invalid transition or blocked deactivation
+
+                Service-->>API: Status update rejected
+
+            end
+
+            deactivate Service
+
+            API-->>UI: Status update response
+            deactivate API
+
+        end
+
+        UI-->>Admin: Display updated profile or error
+        deactivate UI
+
+    end

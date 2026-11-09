@@ -1,0 +1,172 @@
+sequenceDiagram
+    autonumber
+
+    actor Admin as Administrator
+    participant UI as Web Portal
+    participant API as CategoriesController
+    participant Service as CatalogService
+    participant Store as CatalogStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. VIEW PRODUCT CATEGORY TREE
+    %% ==========================================
+
+    Admin->>+UI: Open Product Category Management
+
+    UI->>+API: List()
+    API->>+Service: ListCategoriesAsync()
+
+    Service->>+Store: ListCategoriesAsync()
+    Store->>+DB: SELECT categories and parent relationships
+    DB-->>Store: Category records
+    deactivate DB
+
+    Store-->>Service: Category list
+    deactivate Store
+
+    Service-->>API: Category hierarchy
+    deactivate Service
+
+    API-->>UI: Category list response
+    deactivate API
+
+    UI-->>Admin: Display category tree
+    deactivate UI
+
+    %% ==========================================
+    %% 2. MANAGE PRODUCT CATEGORY TREE
+    %% ==========================================
+
+    opt Administrator manages category tree
+
+        Admin->>+UI: Select category management action
+
+        UI->>+API: Submit category management request
+
+        API->>+Service: Invoke corresponding CatalogService operation
+
+        alt Create Category
+
+            Note over API,Service: CreateCategoryAsync()
+
+            Service->>+Store: Validate parent and category uniqueness
+            Store->>+DB: SELECT parent category and sibling categories
+            DB-->>Store: Validation data
+            deactivate DB
+
+            Store-->>Service: Parent and uniqueness result
+            deactivate Store
+
+            alt Valid parent and hierarchy depth
+
+                Service->>+Store: AddCategory() and SaveChangesAsync()
+                Store->>+DB: INSERT new product category
+                DB-->>Store: Category created
+                deactivate DB
+
+                Store-->>Service: Created category
+                deactivate Store
+
+            else Invalid parent, duplicate or depth exceeded
+
+                Note right of Service: Reject category creation
+
+            end
+
+        else Update or Move Category
+
+            Note over API,Service: UpdateCategoryAsync()
+
+            Service->>+Store: Retrieve category and target parent
+            Store->>+DB: SELECT category hierarchy
+            DB-->>Store: Existing category tree
+            deactivate DB
+
+            Store-->>Service: Category and hierarchy data
+            deactivate Store
+
+            alt Valid update without cycle or depth violation
+
+                Service->>+Store: Update category and SaveChangesAsync()
+                Store->>+DB: UPDATE category name, parent or details
+                DB-->>Store: Category updated
+                deactivate DB
+
+                Store-->>Service: Updated category
+                deactivate Store
+
+            else Circular hierarchy or invalid update
+
+                Note right of Service: Reject invalid hierarchy change
+
+            end
+
+        else Activate or Deactivate Category
+
+            Note over API,Service: SetCategoryStatusAsync()
+
+            Service->>+Store: FindCategoryAsync(categoryId)
+            Store->>+DB: SELECT category and current status
+            DB-->>Store: Category record
+            deactivate DB
+
+            Store-->>Service: Current category
+            deactivate Store
+
+            alt Valid status change
+
+                Service->>+Store: Update status and SaveChangesAsync()
+                Store->>+DB: UPDATE category status
+                DB-->>Store: Status updated
+                deactivate DB
+
+                Store-->>Service: Updated category
+                deactivate Store
+
+            else Category not found or change not permitted
+
+                Note right of Service: Reject status change
+
+            end
+
+        else Delete Category
+
+            Note over API,Service: DeleteCategoryAsync()
+
+            Service->>+Store: Check category dependencies
+            Store->>+DB: SELECT children, products and business references
+            DB-->>Store: Dependency information
+            deactivate DB
+
+            Store-->>Service: Dependency validation result
+            deactivate Store
+
+            alt Category has no dependent records
+
+                Service->>+Store: RemoveCategory() and SaveChangesAsync()
+                Store->>+DB: DELETE product category
+                DB-->>Store: Category deleted
+                deactivate DB
+
+                Store-->>Service: Deletion successful
+                deactivate Store
+
+            else Category has dependent records
+
+                Note right of Service: Reject deletion and suggest deactivation
+
+            end
+
+        end
+
+        Service-->>API: Operation result or business error
+        deactivate Service
+
+        API-->>UI: Success or error response
+        deactivate API
+
+        UI-->>Admin: Display result and refresh category tree
+        deactivate UI
+
+    end

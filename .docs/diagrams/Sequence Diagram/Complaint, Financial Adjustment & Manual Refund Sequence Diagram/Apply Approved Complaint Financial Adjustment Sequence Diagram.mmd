@@ -1,0 +1,411 @@
+sequenceDiagram
+    autonumber
+
+    actor Reviewer as Administrator / Operator
+
+    participant UI as Web Portal
+
+    participant ComplaintAPI as ComplaintsController
+    participant PaymentAPI as PaymentsController
+
+    participant ComplaintSvc as ComplaintService
+    participant PaymentSvc as PaymentService
+
+    participant ComplaintStore as ComplaintStore
+    participant PaymentStore as PaymentStore
+
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% PART 1 - REVIEW APPROVED COMPLAINT
+    %% ==========================================
+
+    Note over Reviewer,DB: PART 1 - REVIEW APPROVED COMPLAINT
+
+    Reviewer->>+UI: Open Complaint Management
+
+    UI->>+ComplaintAPI: List()
+
+    ComplaintAPI->>+ComplaintSvc: ListAsync(actorId, role, ct)
+
+    ComplaintSvc->>+ComplaintStore: ListAsync(actorId, role, ct)
+
+    %% ==========================================
+    %% 1. LOAD COMPLAINT INFORMATION
+    %% ==========================================
+
+    ComplaintStore->>+DB: SELECT complaints, orders, items and allocations
+
+    Note right of DB: Retrieve complaint status and stored batch price information
+
+    DB-->>ComplaintStore: Complaint review records
+    deactivate DB
+
+    ComplaintStore-->>ComplaintSvc: ComplaintResult collection
+    deactivate ComplaintStore
+
+    ComplaintSvc-->>ComplaintAPI: ComplaintResult collection
+    deactivate ComplaintSvc
+
+    ComplaintAPI-->>UI: Complaint list
+    deactivate ComplaintAPI
+
+    Note right of UI: Display approved complaints and calculated adjustment values
+
+    UI-->>Reviewer: Display complaint information
+    deactivate UI
+
+    Note over Reviewer,PaymentSvc: Current payment adjustment API does not receive or validate ComplaintId
+
+    %% ==========================================
+    %% PART 2 - SUBMIT FINANCIAL ADJUSTMENT
+    %% ==========================================
+
+    Note over Reviewer,DB: PART 2 - APPLY CREDIT RECEIVABLE ADJUSTMENT
+
+    Reviewer->>+UI: Select order and submit adjustment amount
+
+    Note right of UI: Enter Amount, Reason and ExpectedVersion
+
+    Note right of UI: Provide Idempotency-Key
+
+    UI->>+PaymentAPI: Adjust(orderId, request, operationKey)
+
+    PaymentAPI->>+PaymentSvc: AdjustReceivableAsync(orderId, data, key, actorId, role, ct)
+
+    %% ==========================================
+    %% 2. VALIDATE AUTHORIZATION
+    %% ==========================================
+
+    Note right of PaymentSvc: Only Admin or Operator may adjust receivables
+
+    alt Actor is not Admin or Operator
+
+        Note right of PaymentSvc: Return Forbidden
+
+    else Actor is authorized
+
+        %% ==========================================
+        %% 3. VALIDATE REQUEST
+        %% ==========================================
+
+        PaymentSvc->>+PaymentSvc: NormalizeOperationKey(operationKey)
+
+        PaymentSvc-->>PaymentSvc: Normalized OperationKey
+        deactivate PaymentSvc
+
+        Note right of PaymentSvc: Validate nonempty Reason and maximum length
+
+        Note right of PaymentSvc: Validate nonzero Amount and decimal precision
+
+        alt OperationKey, Reason or Amount is invalid
+
+            Note right of PaymentSvc: Return Validation error
+
+        else Request is valid
+
+            %% ==========================================
+            %% 4. CALCULATE REQUEST HASH
+            %% ==========================================
+
+            Note right of PaymentSvc: Hash OrderId, Amount, adjustment type and Reason
+
+            %% ==========================================
+            %% 5. CHECK IDEMPOTENCY
+            %% ==========================================
+
+            PaymentSvc->>+PaymentStore: FindByOperationKeyAsync(operationKey, ct)
+
+            PaymentStore->>+DB: SELECT Payment WHERE OperationKey = key
+
+            DB-->>PaymentStore: Previous PaymentView or null
+            deactivate DB
+
+            PaymentStore-->>PaymentSvc: Previous operation result
+            deactivate PaymentStore
+
+            %% ==========================================
+            %% 6. HANDLE EXISTING OPERATION
+            %% ==========================================
+
+            alt OperationKey already exists
+
+                alt Existing OrderId or RequestHash differs
+
+                    Note right of PaymentSvc: Return Conflict
+
+                else Request matches existing operation
+
+                    %% ==========================================
+                    %% 7. VALIDATE ACCESS TO EXISTING RESULT
+                    %% ==========================================
+
+                    PaymentSvc->>+PaymentStore: CanViewAsync(previousView, actorId, role, ct)
+
+                    PaymentStore-->>PaymentSvc: Access result
+                    deactivate PaymentStore
+
+                    alt Access is denied
+
+                        Note right of PaymentSvc: Return Forbidden
+
+                    else Access is allowed
+
+                        PaymentSvc->>+PaymentSvc: ToResult(previousView, Today())
+
+                        PaymentSvc-->>PaymentSvc: Existing PaymentResult
+                        deactivate PaymentSvc
+
+                        Note right of PaymentSvc: Return existing result without another adjustment
+
+                    end
+
+                end
+
+            else OperationKey does not exist
+
+                %% ==========================================
+                %% 8. EXECUTE ADJUSTMENT TRANSACTION
+                %% ==========================================
+
+                PaymentSvc->>+PaymentStore: ExecuteInTransactionAsync(operation, ct)
+
+                PaymentStore->>+DB: BEGIN TRANSACTION
+
+                DB-->>PaymentStore: Transaction started
+                deactivate DB
+
+                Note over PaymentSvc,PaymentStore: Service callback runs within the active transaction
+
+                %% ==========================================
+                %% 9. LOAD PAYMENT FOR UPDATE
+                %% ==========================================
+
+                PaymentSvc->>+PaymentStore: FindByOrderAsync(orderId, true, ct)
+
+                PaymentStore->>+DB: SELECT Payment and related order context
+
+                Note right of DB: Load Payment for tracked update
+
+                DB-->>PaymentStore: PaymentView or null
+                deactivate DB
+
+                PaymentStore-->>PaymentSvc: PaymentView or null
+                deactivate PaymentStore
+
+                %% ==========================================
+                %% 10. VALIDATE PAYMENT ELIGIBILITY
+                %% ==========================================
+
+                alt Payment does not exist
+
+                    Note right of PaymentSvc: Return Not Found
+
+                    PaymentStore->>+DB: ROLLBACK
+
+                    DB-->>PaymentStore: Transaction rolled back
+                    deactivate DB
+
+                else Payment Method is not Credit
+
+                    Note right of PaymentSvc: Return Conflict
+
+                    PaymentStore->>+DB: ROLLBACK
+
+                    DB-->>PaymentStore: Transaction rolled back
+                    deactivate DB
+
+                else DeliveredDate is not established
+
+                    Note right of PaymentSvc: Return Conflict
+
+                    PaymentStore->>+DB: ROLLBACK
+
+                    DB-->>PaymentStore: Transaction rolled back
+                    deactivate DB
+
+                else ExpectedVersion does not match Payment.Version
+
+                    Note right of PaymentSvc: Return concurrency Conflict
+
+                    PaymentStore->>+DB: ROLLBACK
+
+                    DB-->>PaymentStore: Transaction rolled back
+                    deactivate DB
+
+                else Credit Payment is eligible
+
+                    %% ==========================================
+                    %% 11. CALCULATE ADJUSTED RECEIVABLE
+                    %% ==========================================
+
+                    PaymentSvc->>+PaymentSvc: Calculate new AdjustedAmount
+
+                    Note right of PaymentSvc: NewAmount = CurrentAdjustedAmount - Request.Amount
+
+                    PaymentSvc-->>PaymentSvc: New AdjustedAmount
+                    deactivate PaymentSvc
+
+                    %% ==========================================
+                    %% 12. VALIDATE ADJUSTMENT BOUNDS
+                    %% ==========================================
+
+                    alt New AdjustedAmount is below ConfirmedAmount
+
+                        Note right of PaymentSvc: Reject adjustment below money already collected
+
+                        PaymentStore->>+DB: ROLLBACK
+
+                        DB-->>PaymentStore: Transaction rolled back
+                        deactivate DB
+
+                    else New AdjustedAmount exceeds original Payment.Amount
+
+                        Note right of PaymentSvc: Reject adjustment above original obligation
+
+                        PaymentStore->>+DB: ROLLBACK
+
+                        DB-->>PaymentStore: Transaction rolled back
+                        deactivate DB
+
+                    else Adjustment amount is valid
+
+                        %% ==========================================
+                        %% 13. UPDATE PAYMENT
+                        %% ==========================================
+
+                        Note right of PaymentSvc: Update Payment.AdjustedAmount
+
+                        Note right of PaymentSvc: Store OperationKey and RequestHash
+
+                        Note right of PaymentSvc: Record adjustment Reason
+
+                        Note right of PaymentSvc: Increment Payment.Version
+
+                        %% ==========================================
+                        %% 14. UPDATE DERIVED PAYMENT STATUS
+                        %% ==========================================
+
+                        opt Payment becomes fully covered by confirmed collections
+
+                            Note right of PaymentSvc: Set Payment.Status to Paid
+
+                            Note right of PaymentSvc: Set PaidDate when not already recorded
+
+                        end
+
+                        %% ==========================================
+                        %% 15. STAGE AUDIT LOG
+                        %% ==========================================
+
+                        PaymentSvc->>+PaymentStore: AddAuditLog(auditLog)
+
+                        Note right of PaymentStore: Action = ReceivableAdjusted
+
+                        PaymentStore-->>PaymentSvc: AuditLog staged
+                        deactivate PaymentStore
+
+                        %% ==========================================
+                        %% 16. SAVE PAYMENT AND AUDIT
+                        %% ==========================================
+
+                        PaymentSvc->>+PaymentStore: SaveChangesAsync(ct)
+
+                        PaymentStore->>+DB: UPDATE Payment adjusted amount, status and Version
+
+                        Note right of DB: INSERT AuditLog with old and new values
+
+                        DB-->>PaymentStore: Changes saved
+                        deactivate DB
+
+                        PaymentStore-->>PaymentSvc: Save successful
+                        deactivate PaymentStore
+
+                        %% ==========================================
+                        %% 17. COMMIT TRANSACTION
+                        %% ==========================================
+
+                        PaymentStore->>+DB: COMMIT
+
+                        DB-->>PaymentStore: Transaction committed
+                        deactivate DB
+
+                    end
+
+                end
+
+                %% ==========================================
+                %% 18. RETURN TRANSACTION RESULT
+                %% ==========================================
+
+                PaymentStore-->>PaymentSvc: Transaction completed or exception
+                deactivate PaymentStore
+
+                %% ==========================================
+                %% 19. RELOAD UPDATED PAYMENT
+                %% ==========================================
+
+                opt Transaction committed successfully
+
+                    PaymentSvc->>+PaymentStore: ClearTracking()
+
+                    PaymentStore-->>PaymentSvc: Tracking cleared
+                    deactivate PaymentStore
+
+                    PaymentSvc->>+PaymentStore: FindByOrderAsync(orderId, false, ct)
+
+                    PaymentStore->>+DB: SELECT updated Payment and related records
+
+                    DB-->>PaymentStore: Updated PaymentView
+                    deactivate DB
+
+                    PaymentStore-->>PaymentSvc: Updated PaymentView
+                    deactivate PaymentStore
+
+                    %% ==========================================
+                    %% 20. BUILD PAYMENT RESULT
+                    %% ==========================================
+
+                    PaymentSvc->>+PaymentSvc: ToResult(paymentView, Today())
+
+                    PaymentSvc-->>PaymentSvc: Updated PaymentResult
+                    deactivate PaymentSvc
+
+                end
+
+            end
+
+        end
+
+    end
+
+    %% ==========================================
+    %% 21. RETURN FINANCIAL ADJUSTMENT RESULT
+    %% ==========================================
+
+    PaymentSvc-->>PaymentAPI: PaymentResult or business error
+    deactivate PaymentSvc
+
+    PaymentAPI-->>UI: Adjustment response
+    deactivate PaymentAPI
+
+    UI-->>Reviewer: Display updated receivable or error
+    deactivate UI
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over ComplaintSvc,PaymentSvc: Complaint resolution and payment adjustment are separate workflows
+
+    Note over PaymentSvc,DB: Adjustment is permitted only for delivered Credit receivables
+
+    Note over PaymentSvc,DB: Batch-specific final prices must not be recalculated
+
+    Note over PaymentSvc,DB: No automatic ManualRefund is created by this method
+
+    Note over PaymentSvc,DB: No FinancialAdjustment entity is inserted
+
+    Note over PaymentSvc,DB: Updating a Payment does not automatically modify stock or reservations
+
+    Note over PaymentSvc,DB: Complaint-linked adjustment uniqueness is not enforced by this API

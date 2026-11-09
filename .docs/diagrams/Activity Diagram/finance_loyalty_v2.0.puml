@@ -1,0 +1,103 @@
+@startuml
+title F5 - Settlement, Completion, Loyalty and After-sales
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam ActivityBackgroundColor #F5F5F5
+skinparam ActivityBorderColor #333333
+skinparam RoundCorner 15
+skinparam wrapWidth 220
+
+|System|
+start
+:Show receivables per Retailer (original, adjusted, confirmed, outstanding, due, overdue);
+
+|Operator|
+:Record ONE consolidated payment receipt (amount, reference, evidence);
+:Select invoices and enter the applied amount per invoice;
+|System|
+if (Retailer named invoices?) then (no)
+  :Propose order: overdue first, earliest due date, earliest created, order code;
+else (yes)
+endif
+if (Sum applied <= receipt and each line <= outstanding?) then (yes)
+  :Confirm receipt, update invoices atomically;
+  :Keep any excess as Unapplied Credit;
+else (no)
+  :Reject allocation;
+  stop
+endif
+note right: A confirmed receipt is never edited - use reversal + new receipt
+
+|System|
+:Completion gate - all shipments received, money settled, no open complaint;
+if (Gate passed?) then (yes)
+  :SO = Completed (idempotent);
+  :Post Loyalty exactly once from the OrderCompleted event;
+else (no)
+  :Keep SO = Delivered and show the blocking reason;
+endif
+
+|Retailer|
+if (Redeem reward with loyalty points?) then (yes)
+  :Request redemption (points are held);
+  |Admin/Operator|
+  if (Approve redemption?) then (yes)
+    :Approve and deliver the reward;
+    |Retailer|
+    :Confirm gift receipt, redemption Completed;
+  else (no)
+    :Reject, release the held points;
+  endif
+else (no)
+endif
+
+|Retailer|
+if (Damaged / missing / quality issue?) then (yes)
+  :Submit claim (shipment, line, batch, quantity, reason, evidence);
+else (no)
+  stop
+endif
+
+|Admin/Operator|
+:Review claim with evidence and the final allocated price;
+if (Evidence sufficient?) then (no)
+  :Request more evidence (claim stays UnderReview);
+else (yes)
+endif
+if (Decision?) then (reject)
+  :Reject with reason;
+  stop
+else (approve)
+endif
+if (Resolution?) then (Replacement)
+  :Create ReplacementCase and assign warehouse;
+  :Approved -> Preparing -> Shipped -> Received;
+  |Warehouse Keeper|
+  :Stock is issued only when the replacement ships;
+else (FinancialAdjustment)
+  |System|
+  :Adjust amount = final price x approved quantity;
+  if (Money already collected beyond new amount?) then (yes)
+    :Create refund obligation;
+    |Admin/Operator|
+    :Transfer refund outside the system, submit evidence;
+    :Admin verifies or rejects evidence (resubmit on same record);
+  else (no)
+    :Reduce outstanding receivable;
+  endif
+endif
+
+|System|
+:Recalculate Loyalty target and post only the difference;
+note right: Claim alone never increases stock - only a returned and accepted CustomerReturnReceipt does
+
+|Warehouse Keeper|
+:Receive returned goods, inspect quality;
+
+|System|
+:Close claim = Resolved;
+
+|Admin/Operator|
+:Review dashboards (fill rate, expiry risk, receivable aging, claims) and audit log;
+stop
+@enduml

@@ -1,0 +1,244 @@
+sequenceDiagram
+    autonumber
+
+    actor Keeper as Warehouse Keeper
+    actor Admin as Administrator
+
+    participant UI as Web Portal
+    participant API as GoodsReceiptsController
+    participant Service as InventoryService
+    participant Store as InventoryStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. CREATE GOODS RECEIPT
+    %% ==========================================
+
+    Keeper->>+UI: Enter warehouse and received goods
+
+    Note over Keeper,UI: Provide products, quantities,<br/>production dates and expiration dates
+
+    UI->>+API: Create(receiptData, idempotencyKey)
+    API->>+Service: CreateReceiptAsync(receiptData)
+
+    %% ==========================================
+    %% 2. VALIDATE WAREHOUSE ACCESS
+    %% ==========================================
+
+    Service->>+Store: CanAccessWarehouseAsync(userId, warehouseId)
+
+    Store->>+DB: SELECT warehouse assignment and permissions
+    DB-->>Store: Access information
+    deactivate DB
+
+    Store-->>Service: Access validation result
+    deactivate Store
+
+    alt Warehouse access denied
+
+        Service-->>API: Forbidden error
+
+    else Warehouse access allowed
+
+        %% ==========================================
+        %% 3. CHECK IDEMPOTENCY
+        %% ==========================================
+
+        Service->>+Store: FindReceiptByIdempotencyKeyAsync(key)
+
+        Store->>+DB: SELECT existing receipt by idempotency key
+        DB-->>Store: Existing receipt or null
+        deactivate DB
+
+        Store-->>Service: Duplicate request information
+        deactivate Store
+
+        alt Same request already processed
+
+            Service-->>API: Return existing GoodsReceipt
+
+        else Same key with different request data
+
+            Service-->>API: Conflict error
+
+        else New receipt request
+
+            %% ==========================================
+            %% 4. VALIDATE RECEIVING DATA
+            %% ==========================================
+
+            Service->>+Store: FindWarehouseAsync(warehouseId)
+
+            Store->>+DB: SELECT warehouse information
+            DB-->>Store: Warehouse record
+            deactivate DB
+
+            Store-->>Service: Warehouse information
+            deactivate Store
+
+            loop For each receipt line
+
+                Service->>+Store: FindProductAsync(productId)
+
+                Store->>+DB: SELECT product and current status
+                DB-->>Store: Product information
+                deactivate DB
+
+                Store-->>Service: Product validation data
+                deactivate Store
+
+            end
+
+            Note right of Service: Validate quantities, product status,<br/>production dates and expiration dates
+
+            alt All receipt information valid
+
+                %% ==========================================
+                %% 5. SAVE GOODS RECEIPT
+                %% ==========================================
+
+                Service->>+Store: AddReceipt(), AddReceiptLine(), SaveChangesAsync()
+
+                Store->>+DB: INSERT GoodsReceipt and GoodsReceiptLines
+                DB-->>Store: Receipt created
+                deactivate DB
+
+                Store-->>Service: Saved GoodsReceipt
+                deactivate Store
+
+                Service-->>API: GoodsReceiptResult
+
+            else Invalid product or receiving information
+
+                Service-->>API: Validation error
+
+            end
+
+        end
+
+    end
+
+    deactivate Service
+
+    API-->>UI: Receipt creation result
+    deactivate API
+
+    UI-->>Keeper: Display receipt code and creation status
+    deactivate UI
+
+    %% ==========================================
+    %% 6. ADMINISTRATOR APPROVES GOODS RECEIPT
+    %% ==========================================
+
+    Admin->>+UI: Approve selected GoodsReceipt
+
+    UI->>+API: Approve(receiptId)
+    API->>+Service: ApproveReceiptAsync(receiptId)
+
+    %% ==========================================
+    %% 7. LOAD RECEIPT FOR APPROVAL
+    %% ==========================================
+
+    Service->>+Store: FindReceiptForApprovalAsync(receiptId)
+
+    Store->>+DB: SELECT receipt, lines and current status
+    DB-->>Store: GoodsReceipt approval data
+    deactivate DB
+
+    Store-->>Service: Receipt and receiving lines
+    deactivate Store
+
+    %% ==========================================
+    %% 8. VALIDATE APPROVAL
+    %% ==========================================
+
+    alt Receipt already approved
+
+        Note right of Service: Do not increase stock again
+
+        Service-->>API: Existing approved receipt
+
+    else Unauthorized or invalid receipt status
+
+        Service-->>API: Forbidden or conflict error
+
+    else Receipt eligible for approval
+
+        %% ==========================================
+        %% 9. PROCESS RECEIVED GOODS
+        %% ==========================================
+
+        loop For each GoodsReceiptLine
+
+            Service->>+Store: FindBatchForUpdateAsync(batchIdentity)
+
+            Store->>+DB: SELECT matching Batch for stock update
+            DB-->>Store: Existing Batch or null
+            deactivate DB
+
+            Store-->>Service: Batch information
+            deactivate Store
+
+            alt Matching Batch exists
+
+                Service->>+Store: FindBalanceForUpdateAsync(batchId)
+
+                Store->>+DB: SELECT InventoryBalance for update
+                DB-->>Store: Current inventory balance
+                deactivate DB
+
+                Store-->>Service: Locked balance data
+                deactivate Store
+
+                Note right of Service: Add received quantity<br/>to existing OnHand balance
+
+            else No matching Batch
+
+                Service->>+Store: AddBatch(), AddBalance()
+
+                Store-->>Service: New Batch and balance staged
+                deactivate Store
+
+            end
+
+            %% ==========================================
+            %% 10. RECORD INVENTORY MOVEMENT
+            %% ==========================================
+
+            Service->>+Store: AddTransaction(receiptMovement)
+
+            Store-->>Service: Inventory movement staged
+            deactivate Store
+
+        end
+
+        %% ==========================================
+        %% 11. COMMIT GOODS RECEIPT APPROVAL
+        %% ==========================================
+
+        Service->>+Store: SaveChangesAsync()
+
+        Store->>+DB: UPDATE receipt status and inventory balances
+        Note right of DB: INSERT new batches, balances<br/>and inventory transactions as required
+
+        DB-->>Store: Approval and stock changes committed
+        deactivate DB
+
+        Store-->>Service: Approved receipt
+        deactivate Store
+
+        Service-->>API: GoodsReceipt approved
+
+    end
+
+    deactivate Service
+
+    API-->>UI: Approval result
+    deactivate API
+
+    UI-->>Admin: Display approval status
+    deactivate UI
+
+    Note over Service,DB: Goods Receipt approval increases physical stock exactly once
+
+    Note over UI,DB: QR label generation is handled separately by the QR module
