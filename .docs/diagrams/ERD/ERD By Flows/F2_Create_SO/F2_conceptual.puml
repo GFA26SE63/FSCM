@@ -1,0 +1,98 @@
+@startchen F2_conceptual
+
+title F2 – Conceptual ERD (Chen) – Retailer/Sales Sales-Order Creation and Real-time Validation
+
+entity "SalesOrder\nSales order (SO)" as SalesOrder {
+}
+entity "SalesOrderLine\nSales order line" as SalesOrderLine <<weak>> {
+}
+entity "OrderStatusHistory\nOrder status history" as OrderStatusHistory {
+}
+entity "Retailer\nRetailer" as Retailer {
+}
+entity "SalesGroup\nSales group" as SalesGroup {
+}
+entity "UserAccount\nUser account" as UserAccount {
+}
+entity "Region\nBusiness region" as Region {
+}
+entity "Warehouse\nWarehouse" as Warehouse {
+}
+entity "ProductCategory\nProduct category" as ProductCategory {
+}
+entity "Product\nProduct (SKU)" as Product {
+}
+entity "ProductPrice\nProduct price by effective period" as ProductPrice {
+}
+entity "Promotion\nQuantity promotion" as Promotion {
+}
+entity "RetailerCreditProfile\nRetailer credit profile" as RetailerCreditProfile {
+}
+
+relationship "places order" as R_SALES_ORDER_RetailerId {
+}
+relationship "handles order" as R_SALES_ORDER_SalesGroupId {
+}
+relationship "creates order" as R_SALES_ORDER_CreatedByUserId {
+}
+relationship "has order line" as R_SALES_ORDER_LINE_SalesOrderId <<identifying>> {
+}
+relationship "is ordered" as R_SALES_ORDER_LINE_ProductId {
+}
+relationship "prices" as R_SALES_ORDER_LINE_ProductPriceId {
+}
+relationship "records status history" as R_ORDER_STATUS_HISTORY_SalesOrderId {
+}
+relationship "serves retailer" as R_RETAILER_RegionId {
+}
+relationship "has sales group" as R_SALES_GROUP_RegionId {
+}
+relationship "contains warehouse" as R_WAREHOUSE_RegionId {
+}
+relationship "classifies" as R_PRODUCT_ProductCategoryId {
+}
+relationship "has price" as R_PRODUCT_PRICE_ProductId {
+}
+relationship "has credit profile" as R_RETAILER_CREDIT_PROFILE_RetailerId {
+}
+relationship "selects promotion" as M_OrderPromotion {
+}
+relationship "requires MLOR by SKU" as M_RetailerProductMlor {
+}
+relationship "requires MLOR by category" as M_RetailerCategoryMlor {
+}
+
+R_SALES_ORDER_RetailerId -1- Retailer
+R_SALES_ORDER_RetailerId =N= SalesOrder
+R_SALES_ORDER_SalesGroupId -1- SalesGroup
+R_SALES_ORDER_SalesGroupId =N= SalesOrder
+R_SALES_ORDER_CreatedByUserId -1- UserAccount
+R_SALES_ORDER_CreatedByUserId =N= SalesOrder
+R_SALES_ORDER_LINE_SalesOrderId =1= SalesOrder
+R_SALES_ORDER_LINE_SalesOrderId =N= SalesOrderLine
+R_SALES_ORDER_LINE_ProductId -1- Product
+R_SALES_ORDER_LINE_ProductId =N= SalesOrderLine
+R_SALES_ORDER_LINE_ProductPriceId -1- ProductPrice
+R_SALES_ORDER_LINE_ProductPriceId =N= SalesOrderLine
+R_ORDER_STATUS_HISTORY_SalesOrderId -1- SalesOrder
+R_ORDER_STATUS_HISTORY_SalesOrderId =N= OrderStatusHistory
+R_RETAILER_RegionId -1- Region
+R_RETAILER_RegionId =N= Retailer
+R_SALES_GROUP_RegionId -1- Region
+R_SALES_GROUP_RegionId =N= SalesGroup
+R_WAREHOUSE_RegionId -1- Region
+R_WAREHOUSE_RegionId =N= Warehouse
+R_PRODUCT_ProductCategoryId -1- ProductCategory
+R_PRODUCT_ProductCategoryId =N= Product
+R_PRODUCT_PRICE_ProductId -1- Product
+R_PRODUCT_PRICE_ProductId =N= ProductPrice
+R_RETAILER_CREDIT_PROFILE_RetailerId -1- Retailer
+R_RETAILER_CREDIT_PROFILE_RetailerId =1= RetailerCreditProfile
+M_OrderPromotion -N- SalesOrder
+M_OrderPromotion -1- Promotion
+M_RetailerProductMlor -M- Retailer
+M_RetailerProductMlor -N- Product
+M_RetailerCategoryMlor -M- Retailer
+M_RetailerCategoryMlor -N- ProductCategory
+
+@endchen

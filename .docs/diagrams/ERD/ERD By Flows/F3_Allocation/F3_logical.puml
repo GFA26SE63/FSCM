@@ -1,0 +1,263 @@
+@startchen F3_logical
+
+title F3 – Logical ERD (Chen) – Real-time Allocation, Shelf-life Pricing, Reservation and Quotation
+
+entity AllocationAttempt {
+  RunCode <<key>>
+  AttemptNumber
+  TriggerType
+  AlgorithmSettings
+  Status
+  ConcurrencyRetryCount
+  StartedAt
+  SnapshotCompletedAt
+  CompletedAt
+  FailureReason
+  TechnicalErrorCode
+}
+entity AllocationAttemptLine <<weak>> {
+  LineNumber <<key>>
+  OrderedQuantity
+  AllocatedQuantity
+  ShortageQuantity <<derived>>
+  EffectiveMlorRatio
+  MlorSource
+  RequiredShelfLifeHours
+  MaxServingDistanceMeters
+  Outcome
+  Note
+}
+entity AllocationCandidateTrace {
+  Stage
+  Passed
+  Reason
+  DistanceMeters
+  EstimatedArrivalAt
+  AvailableQuantity
+  RemainingShelfLifeHours
+  RequiredShelfLifeHours
+}
+entity AllocationScoreTrace {
+  Iteration
+  Rank
+  ShelfLifeScore
+  DistanceScore
+  CoverageScore
+  WeightedScore
+  RemainingDemand
+  Selected
+  SelectedQuantity
+}
+entity Allocation <<weak>> {
+  AllocationSequence <<key>>
+  AllocatedQuantity
+  EstimatedArrivalAt
+  DistanceMeters
+  RemainingShelfLifePercent
+  WeightedScore
+  ListUnitPrice
+  PromotionDiscountPercent
+  BaseNetUnitPrice
+  ShelfLifeDiscountPercent
+  FinalUnitPrice
+  GrossAmount
+  NetAmount <<derived>>
+  PriceExplanation
+  Status
+}
+entity Reservation {
+  Id <<key>>
+  Quantity
+  Status
+  ReservedAt
+  ExpiresAt
+  ReleasedAt
+  ReleaseReason
+  ConsumedAt
+}
+entity SalesOrderQuote <<weak>> {
+  RevisionNumber <<key>>
+  ListAmount
+  PromotionDiscountAmount
+  ShelfLifeDiscountAmount
+  TotalAmount <<derived>>
+  IssuedAt
+  ExpiresAt
+  Status
+  DecidedAt
+  RejectionReason
+}
+entity Notification {
+  Id <<key>>
+}
+entity SalesOrder {
+  OrderCode <<key>>
+  Status
+  AcceptedAt
+}
+entity SalesOrderLine <<weak>> {
+  LineNumber <<key>>
+  OrderedQuantity
+  BaseNetUnitPrice
+  MlorMinimumLifeRatio
+}
+entity Product {
+  Sku <<key>>
+}
+entity Warehouse {
+  Code <<key>>
+  Latitude
+  Longitude
+  ServiceRadiusMeters
+}
+entity Batch {
+  BatchCode <<key>>
+  ExpirationDate
+}
+entity InventoryBalance {
+  Id <<key>>
+  PhysicalQuantity
+  ReservedQuantity
+  LockedQuantity
+  LockedReservedQuantity
+  AvailableQuantity <<derived>>
+}
+entity InventoryLock {
+  LockCode <<key>>
+  LockedQuantity
+  Status
+}
+entity TransitTable {
+  VersionNumber <<key>>
+}
+entity ShelfLifeDiscountTable {
+  VersionNumber <<key>>
+}
+entity ShelfLifeDiscountTier <<weak>> {
+  TierNo <<key>>
+  MinRemainingPercent
+  MaxRemainingPercent
+  DiscountPercent
+}
+entity UserAccount {
+  Email <<key>>
+}
+entity OutboxMessage {
+  Id <<key>>
+}
+
+relationship "is allocated via" as R_ALLOCATION_RUN_SalesOrderId {
+}
+relationship "is retry of" as R_ALLOCATION_RUN_RetryOfAllocationRunId {
+}
+relationship "requests retry" as R_ALLOCATION_RUN_TriggeredByUserId {
+}
+relationship "provides ETA" as R_ALLOCATION_RUN_TransitTableId {
+}
+relationship "provides discount tier" as R_ALLOCATION_RUN_ShelfLifeDiscountTableId {
+}
+relationship "evaluates order line" as R_ALLOCATION_RUN_LINE_AllocationRunId <<identifying>> {
+}
+relationship "is snapshotted into" as R_ALLOCATION_RUN_LINE_SalesOrderLineId {
+}
+relationship "evaluates candidate" as R_ALLOCATION_TRACE_CANDIDATE_AllocationRunLineId {
+}
+relationship "is candidate" as R_ALLOCATION_TRACE_CANDIDATE_BatchId {
+}
+relationship "scores candidate" as R_ALLOCATION_TRACE_SCORE_AllocationRunLineId {
+}
+relationship "is scored" as R_ALLOCATION_TRACE_SCORE_BatchId {
+}
+relationship "is allocated" as R_ALLOCATION_AllocationRunLineId <<identifying>> {
+}
+relationship "allocated from batch" as R_ALLOCATION_BatchId {
+}
+relationship "applies shelf-life discount" as R_ALLOCATION_ShelfLifeDiscountTierId {
+}
+relationship "is reserved by" as R_RESERVATION_AllocationId {
+}
+relationship "receives quote" as R_SALES_ORDER_QUOTE_SalesOrderId <<identifying>> {
+}
+relationship "issues quote" as R_SALES_ORDER_QUOTE_AllocationRunId {
+}
+relationship "decides quote" as R_SALES_ORDER_QUOTE_DecidedByUserId {
+}
+relationship "receives notification" as R_NOTIFICATION_UserAccountId {
+}
+relationship "relates to order" as R_NOTIFICATION_SalesOrderId {
+}
+relationship "emitted from event" as R_NOTIFICATION_OutboxMessageId {
+}
+relationship "has order line" as R_SALES_ORDER_LINE_SalesOrderId <<identifying>> {
+}
+relationship "is ordered" as R_SALES_ORDER_LINE_ProductId {
+}
+relationship "has batch" as R_BATCH_ProductId {
+}
+relationship "stores batch" as R_BATCH_WarehouseId {
+}
+relationship "has inventory balance" as R_INVENTORY_BALANCE_BatchId {
+}
+relationship "is locked" as R_INVENTORY_LOCK_BatchId {
+}
+relationship "has discount tier" as R_SHELF_LIFE_DISCOUNT_TIER_ShelfLifeDiscountTableId <<identifying>> {
+}
+
+R_ALLOCATION_RUN_SalesOrderId -1- SalesOrder
+R_ALLOCATION_RUN_SalesOrderId =N= AllocationAttempt
+R_ALLOCATION_RUN_RetryOfAllocationRunId -1- AllocationAttempt
+R_ALLOCATION_RUN_RetryOfAllocationRunId -N- AllocationAttempt
+R_ALLOCATION_RUN_TriggeredByUserId -1- UserAccount
+R_ALLOCATION_RUN_TriggeredByUserId -N- AllocationAttempt
+R_ALLOCATION_RUN_TransitTableId -1- TransitTable
+R_ALLOCATION_RUN_TransitTableId =N= AllocationAttempt
+R_ALLOCATION_RUN_ShelfLifeDiscountTableId -1- ShelfLifeDiscountTable
+R_ALLOCATION_RUN_ShelfLifeDiscountTableId =N= AllocationAttempt
+R_ALLOCATION_RUN_LINE_AllocationRunId =1= AllocationAttempt
+R_ALLOCATION_RUN_LINE_AllocationRunId =N= AllocationAttemptLine
+R_ALLOCATION_RUN_LINE_SalesOrderLineId -1- SalesOrderLine
+R_ALLOCATION_RUN_LINE_SalesOrderLineId =N= AllocationAttemptLine
+R_ALLOCATION_TRACE_CANDIDATE_AllocationRunLineId -1- AllocationAttemptLine
+R_ALLOCATION_TRACE_CANDIDATE_AllocationRunLineId =N= AllocationCandidateTrace
+R_ALLOCATION_TRACE_CANDIDATE_BatchId -1- Batch
+R_ALLOCATION_TRACE_CANDIDATE_BatchId =N= AllocationCandidateTrace
+R_ALLOCATION_TRACE_SCORE_AllocationRunLineId -1- AllocationAttemptLine
+R_ALLOCATION_TRACE_SCORE_AllocationRunLineId =N= AllocationScoreTrace
+R_ALLOCATION_TRACE_SCORE_BatchId -1- Batch
+R_ALLOCATION_TRACE_SCORE_BatchId =N= AllocationScoreTrace
+R_ALLOCATION_AllocationRunLineId -1- AllocationAttemptLine
+R_ALLOCATION_AllocationRunLineId =N= Allocation
+R_ALLOCATION_BatchId -1- Batch
+R_ALLOCATION_BatchId =N= Allocation
+R_ALLOCATION_ShelfLifeDiscountTierId -1- ShelfLifeDiscountTier
+R_ALLOCATION_ShelfLifeDiscountTierId -N- Allocation
+R_RESERVATION_AllocationId -1- Allocation
+R_RESERVATION_AllocationId =1= Reservation
+R_SALES_ORDER_QUOTE_SalesOrderId -1- SalesOrder
+R_SALES_ORDER_QUOTE_SalesOrderId =N= SalesOrderQuote
+R_SALES_ORDER_QUOTE_AllocationRunId -1- AllocationAttempt
+R_SALES_ORDER_QUOTE_AllocationRunId =1= SalesOrderQuote
+R_SALES_ORDER_QUOTE_DecidedByUserId -1- UserAccount
+R_SALES_ORDER_QUOTE_DecidedByUserId -N- SalesOrderQuote
+R_NOTIFICATION_UserAccountId -1- UserAccount
+R_NOTIFICATION_UserAccountId =N= Notification
+R_NOTIFICATION_SalesOrderId -1- SalesOrder
+R_NOTIFICATION_SalesOrderId -N- Notification
+R_NOTIFICATION_OutboxMessageId -1- OutboxMessage
+R_NOTIFICATION_OutboxMessageId -N- Notification
+R_SALES_ORDER_LINE_SalesOrderId =1= SalesOrder
+R_SALES_ORDER_LINE_SalesOrderId =N= SalesOrderLine
+R_SALES_ORDER_LINE_ProductId -1- Product
+R_SALES_ORDER_LINE_ProductId =N= SalesOrderLine
+R_BATCH_ProductId -1- Product
+R_BATCH_ProductId =N= Batch
+R_BATCH_WarehouseId -1- Warehouse
+R_BATCH_WarehouseId =N= Batch
+R_INVENTORY_BALANCE_BatchId =1= Batch
+R_INVENTORY_BALANCE_BatchId =1= InventoryBalance
+R_INVENTORY_LOCK_BatchId -1- Batch
+R_INVENTORY_LOCK_BatchId =N= InventoryLock
+R_SHELF_LIFE_DISCOUNT_TIER_ShelfLifeDiscountTableId =1= ShelfLifeDiscountTable
+R_SHELF_LIFE_DISCOUNT_TIER_ShelfLifeDiscountTableId =N= ShelfLifeDiscountTier
+
+@endchen

@@ -1,0 +1,655 @@
+@startchen F1_physical
+
+title F1 – Physical ERD (Chen) – Sourcing, Retailer and Master Data
+
+entity REGION {
+  "Id : uuid PK" as Id <<key>>
+  "Code : varchar(30) UQ NN" as Code
+  "Name : varchar(150) NN" as Name
+  "Description : text NULL" as Description
+  "IsActive : boolean NN" as IsActive
+  "CreatedAt : timestamptz NN" as CreatedAt
+}
+entity WAREHOUSE {
+  "Id : uuid PK" as Id <<key>>
+  "Code : varchar(30) UQ NN" as Code
+  "Name : varchar(150) NN" as Name
+  "RegionId : uuid FK→REGION NN" as RegionId
+  "Address : text NN" as Address
+  "Latitude : numeric(10,7) NN" as Latitude
+  "Longitude : numeric(10,7) NN" as Longitude
+  "ServiceRadiusMeters : integer NN" as ServiceRadiusMeters
+  "MinimumStockThresholdCartons : integer NN" as MinimumStockThresholdCartons
+  "Status : varchar(30) NN" as Status
+  "CreatedAt : timestamptz NN" as CreatedAt
+}
+entity USER_ACCOUNT {
+  "Id : uuid PK" as Id <<key>>
+  "Email : varchar(150) UQ NN" as Email
+  "FullName : varchar(150) NN" as FullName
+  "Phone : varchar(20) NULL" as Phone
+  "Role : varchar(30) NN" as Role
+  "GoogleSubject : varchar(255) UQ NULL" as GoogleSubject
+  "IsActive : boolean NN" as IsActive
+  "LockReason : text NULL" as LockReason
+  "LockEffectiveAt : timestamptz NULL" as LockEffectiveAt
+  "LockedByUserId : uuid FK→USER_ACCOUNT NULL" as LockedByUserId
+  "LastLoginAt : timestamptz NULL" as LastLoginAt
+  "CreatedAt : timestamptz NN" as CreatedAt
+}
+entity PRODUCT_CATEGORY {
+  "Id : uuid PK" as Id <<key>>
+  "Code : varchar(30) UQ NN" as Code
+  "Name : varchar(150) NN" as Name
+  "ParentCategoryId : uuid FK→PRODUCT_CATEGORY NULL" as ParentCategoryId
+  "Description : text NULL" as Description
+  "IsActive : boolean NN" as IsActive
+  "CreatedAt : timestamptz NN" as CreatedAt
+}
+entity PRODUCT {
+  "Id : uuid PK" as Id <<key>>
+  "Sku : varchar(50) UQ NN" as Sku
+  "Name : varchar(200) NN" as Name
+  "Unit : varchar(50) NN" as Unit
+  "ProductCategoryId : uuid FK→PRODUCT_CATEGORY NN" as ProductCategoryId
+  "ShelfLifeHours : integer NN" as ShelfLifeHours
+  "NearDateThresholdHours : integer NN" as NearDateThresholdHours
+  "DefaultMinimumLifeRatio : numeric(5,4) NN" as DefaultMinimumLifeRatio
+  "Status : varchar(30) NN" as Status
+  "PublishedAt : timestamptz NULL" as PublishedAt
+  "InactivatedAt : timestamptz NULL" as InactivatedAt
+  "CreatedAt : timestamptz NN" as CreatedAt
+}
+entity PRODUCT_PRICE {
+  "Id : uuid PK" as Id <<key>>
+  "ProductId : uuid FK→PRODUCT NN" as ProductId
+  "UnitPrice : numeric(18,2) NN" as UnitPrice
+  "EffectiveFrom : timestamptz NN" as EffectiveFrom
+  "EffectiveTo : timestamptz NULL" as EffectiveTo
+  "Status : varchar(30) NN" as Status
+  "CreatedByUserId : uuid FK→USER_ACCOUNT NN" as CreatedByUserId
+  "CreatedAt : timestamptz NN" as CreatedAt
+}
+entity RETAILER {
+  "Id : uuid PK" as Id <<key>>
+  "Code : varchar(30) UQ NN" as Code
+  "Name : varchar(200) NN" as Name
+  "RetailerType : varchar(30) NN" as RetailerType
+  "StoreSizeCategory : varchar(1) NN" as StoreSizeCategory
+  "PurchasingCapacity : numeric(18,2) NULL" as PurchasingCapacity
+  "Address : text NN" as Address
+  "Latitude : numeric(10,7) NN" as Latitude
+  "Longitude : numeric(10,7) NN" as Longitude
+  "RegionId : uuid FK→REGION NN" as RegionId
+  "ContactName : varchar(150) NN" as ContactName
+  "ContactPhone : varchar(20) NN" as ContactPhone
+  "ContactEmail : varchar(150) NN" as ContactEmail
+  "UserAccountId : uuid FK→USER_ACCOUNT UQ NULL" as UserAccountId
+  "DeclaredByUserId : uuid FK→USER_ACCOUNT NN" as DeclaredByUserId
+  "ReviewedByUserId : uuid FK→USER_ACCOUNT NULL" as ReviewedByUserId
+  "Status : varchar(30) NN" as Status
+  "ReviewReason : text NULL" as ReviewReason
+  "SubmittedAt : timestamptz NULL" as SubmittedAt
+  "ReviewedAt : timestamptz NULL" as ReviewedAt
+  "CreatedAt : timestamptz NN" as CreatedAt
+}
+entity RETAILER_CREDIT_PROFILE {
+  "Id : uuid PK" as Id <<key>>
+  "RetailerId : uuid FK→RETAILER UQ NN" as RetailerId
+  "CreditLimitAmount : numeric(18,2) NN" as CreditLimitAmount
+  "AllowedTermDays : integer NN" as AllowedTermDays
+  "MinCompletedPrepaidOrders : integer NN" as MinCompletedPrepaidOrders
+  "CompletedPrepaidOrders : integer NN" as CompletedPrepaidOrders
+  "CurrentOutstandingAmount : numeric(18,2) NN" as CurrentOutstandingAmount
+  "HasOverdue : boolean NN" as HasOverdue
+  "EligibilityStatus : varchar(30) NN" as EligibilityStatus
+  "ApprovedByUserId : uuid FK→USER_ACCOUNT NULL" as ApprovedByUserId
+  "ApprovedAt : timestamptz NULL" as ApprovedAt
+  "EffectiveFrom : timestamptz NN" as EffectiveFrom
+  "Version : integer NN" as Version
+}
+entity RETAILER_CATEGORY_MLOR {
+  "Id : uuid PK" as Id <<key>>
+  "RetailerId : uuid FK→RETAILER NN" as RetailerId
+  "ProductCategoryId : uuid FK→PRODUCT_CATEGORY NN" as ProductCategoryId
+  "MinimumLifeRatio : numeric(5,4) NN" as MinimumLifeRatio
+  "EffectiveFrom : timestamptz NN" as EffectiveFrom
+  "EffectiveTo : timestamptz NULL" as EffectiveTo
+  "IsActive : boolean NN" as IsActive
+  "UpdatedByUserId : uuid FK→USER_ACCOUNT NN" as UpdatedByUserId
+  "Version : integer NN" as Version
+}
+entity RETAILER_PRODUCT_MLOR {
+  "Id : uuid PK" as Id <<key>>
+  "RetailerId : uuid FK→RETAILER NN" as RetailerId
+  "ProductId : uuid FK→PRODUCT NN" as ProductId
+  "MinimumLifeRatio : numeric(5,4) NN" as MinimumLifeRatio
+  "EffectiveFrom : timestamptz NN" as EffectiveFrom
+  "EffectiveTo : timestamptz NULL" as EffectiveTo
+  "IsActive : boolean NN" as IsActive
+  "UpdatedByUserId : uuid FK→USER_ACCOUNT NN" as UpdatedByUserId
+  "Version : integer NN" as Version
+}
+entity PROMOTION {
+  "Id : uuid PK" as Id <<key>>
+  "Code : varchar(40) UQ NN" as Code
+  "Name : varchar(200) NN" as Name
+  "PromotionType : varchar(30) NN" as PromotionType
+  "MinimumQuantity : numeric(18,3) NN" as MinimumQuantity
+  "DiscountPercent : numeric(5,2) NN" as DiscountPercent
+  "StartAt : timestamptz NN" as StartAt
+  "EndAt : timestamptz NN" as EndAt
+  "IsActive : boolean NN" as IsActive
+  "CreatedByUserId : uuid FK→USER_ACCOUNT NN" as CreatedByUserId
+  "CreatedAt : timestamptz NN" as CreatedAt
+}
+entity SHELF_LIFE_DISCOUNT_TABLE {
+  "Id : uuid PK" as Id <<key>>
+  "VersionNumber : integer UQ NN" as VersionNumber
+  "EffectiveFrom : timestamptz NN" as EffectiveFrom
+  "EffectiveTo : timestamptz NULL" as EffectiveTo
+  "IsActive : boolean NN" as IsActive
+  "Note : varchar(500) NULL" as Note
+  "CreatedByUserId : uuid FK→USER_ACCOUNT NN" as CreatedByUserId
+  "CreatedAt : timestamptz NN" as CreatedAt
+}
+entity SHELF_LIFE_DISCOUNT_TIER {
+  "Id : uuid PK" as Id <<key>>
+  "ShelfLifeDiscountTableId : uuid FK→SHELF_LIFE_DISCOUNT_TABLE NN" as ShelfLifeDiscountTableId
+  "TierNo : integer NN" as TierNo
+  "Scope : varchar(30) NN" as Scope
+  "ProductCategoryId : uuid FK→PRODUCT_CATEGORY NULL" as ProductCategoryId
+  "ProductId : uuid FK→PRODUCT NULL" as ProductId
+  "MinRemainingPercent : numeric(5,2) NN" as MinRemainingPercent
+  "MaxRemainingPercent : numeric(5,2) NN" as MaxRemainingPercent
+  "DiscountPercent : numeric(5,2) NN" as DiscountPercent
+}
+entity GOODS_RECEIPT {
+  "Id : uuid PK" as Id <<key>>
+  "ReceiptCode : varchar(40) UQ NN" as ReceiptCode
+  "WarehouseId : uuid FK→WAREHOUSE NN" as WarehouseId
+  "CreatedByUserId : uuid FK→USER_ACCOUNT NN" as CreatedByUserId
+  "ApprovedByUserId : uuid FK→USER_ACCOUNT NULL" as ApprovedByUserId
+  "Status : varchar(30) NN" as Status
+  "ReceivedAt : timestamptz NULL" as ReceivedAt
+  "RejectionReason : text NULL" as RejectionReason
+  "IdempotencyKey : varchar(150) UQ NULL" as IdempotencyKey
+  "Version : integer NN" as Version
+  "CreatedAt : timestamptz NN" as CreatedAt
+}
+entity GOODS_RECEIPT_LINE {
+  "Id : uuid PK" as Id <<key>>
+  "GoodsReceiptId : uuid FK→GOODS_RECEIPT NN" as GoodsReceiptId
+  "LineNumber : integer NN" as LineNumber
+  "ProductId : uuid FK→PRODUCT NN" as ProductId
+  "SourceLotCode : varchar(80) NULL" as SourceLotCode
+  "ProductionDate : date NN" as ProductionDate
+  "ExpirationDate : date NN" as ExpirationDate
+  "ReceivedQuantity : numeric(18,3) NN" as ReceivedQuantity
+}
+entity BATCH {
+  "Id : uuid PK" as Id <<key>>
+  "BatchCode : varchar(80) UQ NN" as BatchCode
+  "ProductId : uuid FK→PRODUCT NN" as ProductId
+  "WarehouseId : uuid FK→WAREHOUSE NN" as WarehouseId
+  "GoodsReceiptLineId : uuid FK→GOODS_RECEIPT_LINE NULL" as GoodsReceiptLineId
+  "ProductionDate : date NN" as ProductionDate
+  "ExpirationDate : date NN" as ExpirationDate
+  "ExpiryStatus : varchar(30) NN" as ExpiryStatus
+  "StockStatus : varchar(30) NN" as StockStatus
+  "Version : integer NN" as Version
+  "CreatedAt : timestamptz NN" as CreatedAt
+}
+entity INVENTORY_BALANCE {
+  "Id : uuid PK" as Id <<key>>
+  "BatchId : uuid FK→BATCH UQ NN" as BatchId
+  "PhysicalQuantity : numeric(18,3) NN" as PhysicalQuantity
+  "ReservedQuantity : numeric(18,3) NN" as ReservedQuantity
+  "LockedQuantity : numeric(18,3) NN" as LockedQuantity
+  "LockedReservedQuantity : numeric(18,3) NN" as LockedReservedQuantity
+  "AvailableQuantity : numeric(18,3) NN" as AvailableQuantity
+  "Version : integer NN" as Version
+  "UpdatedAt : timestamptz NN" as UpdatedAt
+}
+entity INVENTORY_LOCK {
+  "Id : uuid PK" as Id <<key>>
+  "LockCode : varchar(40) UQ NN" as LockCode
+  "BatchId : uuid FK→BATCH NN" as BatchId
+  "LockedQuantity : numeric(18,3) NN" as LockedQuantity
+  "Reason : varchar(30) NN" as Reason
+  "Note : text NULL" as Note
+  "EvidenceUrls : jsonb NULL" as EvidenceUrls
+  "Status : varchar(30) NN" as Status
+  "LockedByUserId : uuid FK→USER_ACCOUNT NN" as LockedByUserId
+  "LockedAt : timestamptz NN" as LockedAt
+  "ReleasedByUserId : uuid FK→USER_ACCOUNT NULL" as ReleasedByUserId
+  "ReleasedAt : timestamptz NULL" as ReleasedAt
+  "Version : integer NN" as Version
+}
+entity INVENTORY_TRANSACTION {
+  "Id : uuid PK" as Id <<key>>
+  "BatchId : uuid FK→BATCH NN" as BatchId
+  "TransactionType : smallint NN" as TransactionType
+  "PhysicalQuantityDelta : numeric(18,3) NN" as PhysicalQuantityDelta
+  "ReservedQuantityDelta : numeric(18,3) NN" as ReservedQuantityDelta
+  "LockedQuantityDelta : numeric(18,3) NN" as LockedQuantityDelta
+  "PhysicalQuantityAfter : numeric(18,3) NN" as PhysicalQuantityAfter
+  "ReservedQuantityAfter : numeric(18,3) NN" as ReservedQuantityAfter
+  "AvailableQuantityAfter : numeric(18,3) NN" as AvailableQuantityAfter
+  "SourceType : varchar(50) NN" as SourceType
+  "SourceId : uuid NN" as SourceId
+  "ReferenceCode : varchar(80) NN" as ReferenceCode
+  "Reason : text NULL" as Reason
+  "OccurredAt : timestamptz NN" as OccurredAt
+  "CreatedByUserId : uuid FK→USER_ACCOUNT NULL" as CreatedByUserId
+  "OperationKey : varchar(100) UQ NN" as OperationKey
+}
+entity WRITE_OFF {
+  "Id : uuid PK" as Id <<key>>
+  "WriteOffCode : varchar(40) UQ NN" as WriteOffCode
+  "WarehouseId : uuid FK→WAREHOUSE NN" as WarehouseId
+  "Reason : text NN" as Reason
+  "EvidenceUrls : jsonb NULL" as EvidenceUrls
+  "Status : varchar(30) NN" as Status
+  "CreatedByUserId : uuid FK→USER_ACCOUNT NN" as CreatedByUserId
+  "ApprovedByUserId : uuid FK→USER_ACCOUNT NULL" as ApprovedByUserId
+  "ApprovedAt : timestamptz NULL" as ApprovedAt
+  "CreatedAt : timestamptz NN" as CreatedAt
+}
+entity WRITE_OFF_ITEM {
+  "Id : uuid PK" as Id <<key>>
+  "WriteOffId : uuid FK→WRITE_OFF NN" as WriteOffId
+  "LineNumber : integer NN" as LineNumber
+  "BatchId : uuid FK→BATCH NN" as BatchId
+  "InventoryLockId : uuid FK→INVENTORY_LOCK UQ NULL" as InventoryLockId
+  "Quantity : numeric(18,3) NN" as Quantity
+}
+entity REFRESH_TOKEN {
+  "Id : uuid PK" as Id <<key>>
+  "UserAccountId : uuid FK→USER_ACCOUNT NN" as UserAccountId
+  "ReplacedByTokenId : uuid FK→REFRESH_TOKEN NULL" as ReplacedByTokenId
+}
+entity USER_REGION_ASSIGNMENT {
+  "Id : uuid PK" as Id <<key>>
+  "UserAccountId : uuid FK→USER_ACCOUNT NN" as UserAccountId
+  "RegionId : uuid FK→REGION NN" as RegionId
+}
+entity USER_WAREHOUSE_ASSIGNMENT {
+  "Id : uuid PK" as Id <<key>>
+  "UserAccountId : uuid FK→USER_ACCOUNT NN" as UserAccountId
+  "WarehouseId : uuid FK→WAREHOUSE NN" as WarehouseId
+}
+entity SALES_GROUP {
+  "Id : uuid PK" as Id <<key>>
+  "Code : varchar(30) UQ NN" as Code
+  "RegionId : uuid FK→REGION NN" as RegionId
+}
+entity SALES_GROUP_MEMBER {
+  "Id : uuid PK" as Id <<key>>
+  "SalesGroupId : uuid FK→SALES_GROUP NN" as SalesGroupId
+  "UserAccountId : uuid FK→USER_ACCOUNT NN" as UserAccountId
+}
+entity RETAILER_SALES_ASSIGNMENT {
+  "Id : uuid PK" as Id <<key>>
+  "RetailerId : uuid FK→RETAILER NN" as RetailerId
+  "SalesGroupId : uuid FK→SALES_GROUP NN" as SalesGroupId
+  "AssignedByUserId : uuid FK→USER_ACCOUNT NULL" as AssignedByUserId
+}
+entity PROMOTION_PRODUCT {
+  "Id : uuid PK" as Id <<key>>
+  "PromotionId : uuid FK→PROMOTION NN" as PromotionId
+  "ProductId : uuid FK→PRODUCT NN" as ProductId
+}
+entity PROMOTION_CATEGORY {
+  "Id : uuid PK" as Id <<key>>
+  "PromotionId : uuid FK→PROMOTION NN" as PromotionId
+  "ProductCategoryId : uuid FK→PRODUCT_CATEGORY NN" as ProductCategoryId
+}
+entity PROMOTION_RETAILER {
+  "Id : uuid PK" as Id <<key>>
+  "PromotionId : uuid FK→PROMOTION NN" as PromotionId
+  "RetailerId : uuid FK→RETAILER NN" as RetailerId
+}
+entity TRANSIT_TABLE {
+  "Id : uuid PK" as Id <<key>>
+  "VersionNumber : integer UQ NN" as VersionNumber
+  "CreatedByUserId : uuid FK→USER_ACCOUNT NN" as CreatedByUserId
+}
+entity TRANSIT_TABLE_BAND {
+  "Id : uuid PK" as Id <<key>>
+  "TransitTableId : uuid FK→TRANSIT_TABLE NN" as TransitTableId
+  "BandNo : integer NN" as BandNo
+}
+entity SYSTEM_CONFIGURATION {
+  "Id : uuid PK" as Id <<key>>
+  "ConfigKey : varchar(150) UQ NN" as ConfigKey
+  "UpdatedByUserId : uuid FK→USER_ACCOUNT NULL" as UpdatedByUserId
+}
+entity BATCH_QR_LABEL {
+  "Id : uuid PK" as Id <<key>>
+  "QrCode : varchar(120) UQ NN" as QrCode
+  "BatchId : uuid FK→BATCH NN" as BatchId
+  "GoodsReceiptId : uuid FK→GOODS_RECEIPT NULL" as GoodsReceiptId
+  "Status : varchar(30) NN" as Status
+}
+entity INVENTORY_COUNT_SESSION {
+  "Id : uuid PK" as Id <<key>>
+  "CountCode : varchar(40) UQ NN" as CountCode
+  "WarehouseId : uuid FK→WAREHOUSE NN" as WarehouseId
+  "Status : varchar(30) NN" as Status
+  "CreatedByUserId : uuid FK→USER_ACCOUNT NN" as CreatedByUserId
+  "ApprovedByUserId : uuid FK→USER_ACCOUNT NULL" as ApprovedByUserId
+}
+entity INVENTORY_COUNT_LINE {
+  "Id : uuid PK" as Id <<key>>
+  "InventoryCountSessionId : uuid FK→INVENTORY_COUNT_SESSION NN" as InventoryCountSessionId
+  "LineNumber : integer NN" as LineNumber
+  "BatchId : uuid FK→BATCH NN" as BatchId
+  "Status : varchar(30) NN" as Status
+  "CountedByUserId : uuid FK→USER_ACCOUNT NULL" as CountedByUserId
+  "AdjustmentTransactionId : uuid FK→INVENTORY_TRANSACTION UQ NULL" as AdjustmentTransactionId
+}
+entity AUDIT_LOG {
+  "Id : uuid PK" as Id <<key>>
+  "UserAccountId : uuid FK→USER_ACCOUNT NULL" as UserAccountId
+}
+
+relationship "contains warehouse\n(RegionId)" as R_WAREHOUSE_RegionId {
+}
+relationship "locks account\n(LockedByUserId)" as R_USER_ACCOUNT_LockedByUserId {
+}
+relationship "is parent of\n(ParentCategoryId)" as R_PRODUCT_CATEGORY_ParentCategoryId {
+}
+relationship "classifies\n(ProductCategoryId)" as R_PRODUCT_ProductCategoryId {
+}
+relationship "has price\n(ProductId)" as R_PRODUCT_PRICE_ProductId {
+}
+relationship "creates price\n(CreatedByUserId)" as R_PRODUCT_PRICE_CreatedByUserId {
+}
+relationship "serves retailer\n(RegionId)" as R_RETAILER_RegionId {
+}
+relationship "is account of\n(UserAccountId)" as R_RETAILER_UserAccountId {
+}
+relationship "declares retailer\n(DeclaredByUserId)" as R_RETAILER_DeclaredByUserId {
+}
+relationship "reviews profile\n(ReviewedByUserId)" as R_RETAILER_ReviewedByUserId {
+}
+relationship "has credit profile\n(RetailerId)" as R_RETAILER_CREDIT_PROFILE_RetailerId {
+}
+relationship "grants credit\n(ApprovedByUserId)" as R_RETAILER_CREDIT_PROFILE_ApprovedByUserId {
+}
+relationship "declares category MLOR\n(RetailerId)" as R_RETAILER_CATEGORY_MLOR_RetailerId {
+}
+relationship "is declared MLOR\n(ProductCategoryId)" as R_RETAILER_CATEGORY_MLOR_ProductCategoryId {
+}
+relationship "updates MLOR\n(UpdatedByUserId)" as R_RETAILER_CATEGORY_MLOR_UpdatedByUserId {
+}
+relationship "declares SKU MLOR\n(RetailerId)" as R_RETAILER_PRODUCT_MLOR_RetailerId {
+}
+relationship "is declared SKU MLOR\n(ProductId)" as R_RETAILER_PRODUCT_MLOR_ProductId {
+}
+relationship "updates SKU MLOR\n(UpdatedByUserId)" as R_RETAILER_PRODUCT_MLOR_UpdatedByUserId {
+}
+relationship "creates promotion\n(CreatedByUserId)" as R_PROMOTION_CreatedByUserId {
+}
+relationship "creates discount table\n(CreatedByUserId)" as R_SHELF_LIFE_DISCOUNT_TABLE_CreatedByUserId {
+}
+relationship "has discount tier\n(ShelfLifeDiscountTableId)" as R_SHELF_LIFE_DISCOUNT_TIER_ShelfLifeDiscountTableId {
+}
+relationship "applies tier to category\n(ProductCategoryId)" as R_SHELF_LIFE_DISCOUNT_TIER_ProductCategoryId {
+}
+relationship "applies tier to SKU\n(ProductId)" as R_SHELF_LIFE_DISCOUNT_TIER_ProductId {
+}
+relationship "receives goods receipt\n(WarehouseId)" as R_GOODS_RECEIPT_WarehouseId {
+}
+relationship "creates goods receipt\n(CreatedByUserId)" as R_GOODS_RECEIPT_CreatedByUserId {
+}
+relationship "approves goods receipt\n(ApprovedByUserId)" as R_GOODS_RECEIPT_ApprovedByUserId {
+}
+relationship "has receipt line\n(GoodsReceiptId)" as R_GOODS_RECEIPT_LINE_GoodsReceiptId {
+}
+relationship "is received\n(ProductId)" as R_GOODS_RECEIPT_LINE_ProductId {
+}
+relationship "has batch\n(ProductId)" as R_BATCH_ProductId {
+}
+relationship "stores batch\n(WarehouseId)" as R_BATCH_WarehouseId {
+}
+relationship "creates batch\n(GoodsReceiptLineId)" as R_BATCH_GoodsReceiptLineId {
+}
+relationship "has inventory balance\n(BatchId)" as R_INVENTORY_BALANCE_BatchId {
+}
+relationship "is locked\n(BatchId)" as R_INVENTORY_LOCK_BatchId {
+}
+relationship "creates lock\n(LockedByUserId)" as R_INVENTORY_LOCK_LockedByUserId {
+}
+relationship "releases lock\n(ReleasedByUserId)" as R_INVENTORY_LOCK_ReleasedByUserId {
+}
+relationship "records ledger entry\n(BatchId)" as R_INVENTORY_TRANSACTION_BatchId {
+}
+relationship "records transaction\n(CreatedByUserId)" as R_INVENTORY_TRANSACTION_CreatedByUserId {
+}
+relationship "writes off at warehouse\n(WarehouseId)" as R_WRITE_OFF_WarehouseId {
+}
+relationship "creates write-off\n(CreatedByUserId)" as R_WRITE_OFF_CreatedByUserId {
+}
+relationship "approves write-off\n(ApprovedByUserId)" as R_WRITE_OFF_ApprovedByUserId {
+}
+relationship "has write-off item\n(WriteOffId)" as R_WRITE_OFF_ITEM_WriteOffId {
+}
+relationship "is written off\n(BatchId)" as R_WRITE_OFF_ITEM_BatchId {
+}
+relationship "is handled by\n(InventoryLockId)" as R_WRITE_OFF_ITEM_InventoryLockId {
+}
+relationship "maintains session\n(UserAccountId)" as R_REFRESH_TOKEN_UserAccountId {
+}
+relationship "is replaced by\n(ReplacedByTokenId)" as R_REFRESH_TOKEN_ReplacedByTokenId {
+}
+relationship "is assigned to region\n(UserAccountId)" as R_USER_REGION_ASSIGNMENT_UserAccountId {
+}
+relationship "is handled by\n(RegionId)" as R_USER_REGION_ASSIGNMENT_RegionId {
+}
+relationship "is assigned to warehouse\n(UserAccountId)" as R_USER_WAREHOUSE_ASSIGNMENT_UserAccountId {
+}
+relationship "has staff\n(WarehouseId)" as R_USER_WAREHOUSE_ASSIGNMENT_WarehouseId {
+}
+relationship "has sales group\n(RegionId)" as R_SALES_GROUP_RegionId {
+}
+relationship "has member\n(SalesGroupId)" as R_SALES_GROUP_MEMBER_SalesGroupId {
+}
+relationship "joins group\n(UserAccountId)" as R_SALES_GROUP_MEMBER_UserAccountId {
+}
+relationship "has assignment history\n(RetailerId)" as R_RETAILER_SALES_ASSIGNMENT_RetailerId {
+}
+relationship "handles retailer\n(SalesGroupId)" as R_RETAILER_SALES_ASSIGNMENT_SalesGroupId {
+}
+relationship "assigns\n(AssignedByUserId)" as R_RETAILER_SALES_ASSIGNMENT_AssignedByUserId {
+}
+relationship "includes SKU\n(PromotionId)" as R_PROMOTION_PRODUCT_PromotionId {
+}
+relationship "is promoted\n(ProductId)" as R_PROMOTION_PRODUCT_ProductId {
+}
+relationship "includes category\n(PromotionId)" as R_PROMOTION_CATEGORY_PromotionId {
+}
+relationship "is promoted by category\n(ProductCategoryId)" as R_PROMOTION_CATEGORY_ProductCategoryId {
+}
+relationship "is for\n(PromotionId)" as R_PROMOTION_RETAILER_PromotionId {
+}
+relationship "is entitled\n(RetailerId)" as R_PROMOTION_RETAILER_RetailerId {
+}
+relationship "creates transit table\n(CreatedByUserId)" as R_TRANSIT_TABLE_CreatedByUserId {
+}
+relationship "has band\n(TransitTableId)" as R_TRANSIT_TABLE_BAND_TransitTableId {
+}
+relationship "updates configuration\n(UpdatedByUserId)" as R_SYSTEM_CONFIGURATION_UpdatedByUserId {
+}
+relationship "is labelled\n(BatchId)" as R_BATCH_QR_LABEL_BatchId {
+}
+relationship "generates label\n(GoodsReceiptId)" as R_BATCH_QR_LABEL_GoodsReceiptId {
+}
+relationship "counts at\n(WarehouseId)" as R_INVENTORY_COUNT_SESSION_WarehouseId {
+}
+relationship "creates count session\n(CreatedByUserId)" as R_INVENTORY_COUNT_SESSION_CreatedByUserId {
+}
+relationship "approves variance\n(ApprovedByUserId)" as R_INVENTORY_COUNT_SESSION_ApprovedByUserId {
+}
+relationship "has count line\n(InventoryCountSessionId)" as R_INVENTORY_COUNT_LINE_InventoryCountSessionId {
+}
+relationship "is counted\n(BatchId)" as R_INVENTORY_COUNT_LINE_BatchId {
+}
+relationship "counts actual\n(CountedByUserId)" as R_INVENTORY_COUNT_LINE_CountedByUserId {
+}
+relationship "generates adjustment entry\n(AdjustmentTransactionId)" as R_INVENTORY_COUNT_LINE_AdjustmentTransactionId {
+}
+relationship "performs action\n(UserAccountId)" as R_AUDIT_LOG_UserAccountId {
+}
+
+R_WAREHOUSE_RegionId -1- REGION
+R_WAREHOUSE_RegionId =N= WAREHOUSE
+R_USER_ACCOUNT_LockedByUserId -1- USER_ACCOUNT
+R_USER_ACCOUNT_LockedByUserId -N- USER_ACCOUNT
+R_PRODUCT_CATEGORY_ParentCategoryId -1- PRODUCT_CATEGORY
+R_PRODUCT_CATEGORY_ParentCategoryId -N- PRODUCT_CATEGORY
+R_PRODUCT_ProductCategoryId -1- PRODUCT_CATEGORY
+R_PRODUCT_ProductCategoryId =N= PRODUCT
+R_PRODUCT_PRICE_ProductId -1- PRODUCT
+R_PRODUCT_PRICE_ProductId =N= PRODUCT_PRICE
+R_PRODUCT_PRICE_CreatedByUserId -1- USER_ACCOUNT
+R_PRODUCT_PRICE_CreatedByUserId =N= PRODUCT_PRICE
+R_RETAILER_RegionId -1- REGION
+R_RETAILER_RegionId =N= RETAILER
+R_RETAILER_UserAccountId -1- USER_ACCOUNT
+R_RETAILER_UserAccountId -1- RETAILER
+R_RETAILER_DeclaredByUserId -1- USER_ACCOUNT
+R_RETAILER_DeclaredByUserId =N= RETAILER
+R_RETAILER_ReviewedByUserId -1- USER_ACCOUNT
+R_RETAILER_ReviewedByUserId -N- RETAILER
+R_RETAILER_CREDIT_PROFILE_RetailerId -1- RETAILER
+R_RETAILER_CREDIT_PROFILE_RetailerId =1= RETAILER_CREDIT_PROFILE
+R_RETAILER_CREDIT_PROFILE_ApprovedByUserId -1- USER_ACCOUNT
+R_RETAILER_CREDIT_PROFILE_ApprovedByUserId -N- RETAILER_CREDIT_PROFILE
+R_RETAILER_CATEGORY_MLOR_RetailerId -1- RETAILER
+R_RETAILER_CATEGORY_MLOR_RetailerId =N= RETAILER_CATEGORY_MLOR
+R_RETAILER_CATEGORY_MLOR_ProductCategoryId -1- PRODUCT_CATEGORY
+R_RETAILER_CATEGORY_MLOR_ProductCategoryId =N= RETAILER_CATEGORY_MLOR
+R_RETAILER_CATEGORY_MLOR_UpdatedByUserId -1- USER_ACCOUNT
+R_RETAILER_CATEGORY_MLOR_UpdatedByUserId =N= RETAILER_CATEGORY_MLOR
+R_RETAILER_PRODUCT_MLOR_RetailerId -1- RETAILER
+R_RETAILER_PRODUCT_MLOR_RetailerId =N= RETAILER_PRODUCT_MLOR
+R_RETAILER_PRODUCT_MLOR_ProductId -1- PRODUCT
+R_RETAILER_PRODUCT_MLOR_ProductId =N= RETAILER_PRODUCT_MLOR
+R_RETAILER_PRODUCT_MLOR_UpdatedByUserId -1- USER_ACCOUNT
+R_RETAILER_PRODUCT_MLOR_UpdatedByUserId =N= RETAILER_PRODUCT_MLOR
+R_PROMOTION_CreatedByUserId -1- USER_ACCOUNT
+R_PROMOTION_CreatedByUserId =N= PROMOTION
+R_SHELF_LIFE_DISCOUNT_TABLE_CreatedByUserId -1- USER_ACCOUNT
+R_SHELF_LIFE_DISCOUNT_TABLE_CreatedByUserId =N= SHELF_LIFE_DISCOUNT_TABLE
+R_SHELF_LIFE_DISCOUNT_TIER_ShelfLifeDiscountTableId =1= SHELF_LIFE_DISCOUNT_TABLE
+R_SHELF_LIFE_DISCOUNT_TIER_ShelfLifeDiscountTableId =N= SHELF_LIFE_DISCOUNT_TIER
+R_SHELF_LIFE_DISCOUNT_TIER_ProductCategoryId -1- PRODUCT_CATEGORY
+R_SHELF_LIFE_DISCOUNT_TIER_ProductCategoryId -N- SHELF_LIFE_DISCOUNT_TIER
+R_SHELF_LIFE_DISCOUNT_TIER_ProductId -1- PRODUCT
+R_SHELF_LIFE_DISCOUNT_TIER_ProductId -N- SHELF_LIFE_DISCOUNT_TIER
+R_GOODS_RECEIPT_WarehouseId -1- WAREHOUSE
+R_GOODS_RECEIPT_WarehouseId =N= GOODS_RECEIPT
+R_GOODS_RECEIPT_CreatedByUserId -1- USER_ACCOUNT
+R_GOODS_RECEIPT_CreatedByUserId =N= GOODS_RECEIPT
+R_GOODS_RECEIPT_ApprovedByUserId -1- USER_ACCOUNT
+R_GOODS_RECEIPT_ApprovedByUserId -N- GOODS_RECEIPT
+R_GOODS_RECEIPT_LINE_GoodsReceiptId =1= GOODS_RECEIPT
+R_GOODS_RECEIPT_LINE_GoodsReceiptId =N= GOODS_RECEIPT_LINE
+R_GOODS_RECEIPT_LINE_ProductId -1- PRODUCT
+R_GOODS_RECEIPT_LINE_ProductId =N= GOODS_RECEIPT_LINE
+R_BATCH_ProductId -1- PRODUCT
+R_BATCH_ProductId =N= BATCH
+R_BATCH_WarehouseId -1- WAREHOUSE
+R_BATCH_WarehouseId =N= BATCH
+R_BATCH_GoodsReceiptLineId -1- GOODS_RECEIPT_LINE
+R_BATCH_GoodsReceiptLineId -N- BATCH
+R_INVENTORY_BALANCE_BatchId =1= BATCH
+R_INVENTORY_BALANCE_BatchId =1= INVENTORY_BALANCE
+R_INVENTORY_LOCK_BatchId -1- BATCH
+R_INVENTORY_LOCK_BatchId =N= INVENTORY_LOCK
+R_INVENTORY_LOCK_LockedByUserId -1- USER_ACCOUNT
+R_INVENTORY_LOCK_LockedByUserId =N= INVENTORY_LOCK
+R_INVENTORY_LOCK_ReleasedByUserId -1- USER_ACCOUNT
+R_INVENTORY_LOCK_ReleasedByUserId -N- INVENTORY_LOCK
+R_INVENTORY_TRANSACTION_BatchId -1- BATCH
+R_INVENTORY_TRANSACTION_BatchId =N= INVENTORY_TRANSACTION
+R_INVENTORY_TRANSACTION_CreatedByUserId -1- USER_ACCOUNT
+R_INVENTORY_TRANSACTION_CreatedByUserId -N- INVENTORY_TRANSACTION
+R_WRITE_OFF_WarehouseId -1- WAREHOUSE
+R_WRITE_OFF_WarehouseId =N= WRITE_OFF
+R_WRITE_OFF_CreatedByUserId -1- USER_ACCOUNT
+R_WRITE_OFF_CreatedByUserId =N= WRITE_OFF
+R_WRITE_OFF_ApprovedByUserId -1- USER_ACCOUNT
+R_WRITE_OFF_ApprovedByUserId -N- WRITE_OFF
+R_WRITE_OFF_ITEM_WriteOffId =1= WRITE_OFF
+R_WRITE_OFF_ITEM_WriteOffId =N= WRITE_OFF_ITEM
+R_WRITE_OFF_ITEM_BatchId -1- BATCH
+R_WRITE_OFF_ITEM_BatchId =N= WRITE_OFF_ITEM
+R_WRITE_OFF_ITEM_InventoryLockId -1- INVENTORY_LOCK
+R_WRITE_OFF_ITEM_InventoryLockId -1- WRITE_OFF_ITEM
+R_REFRESH_TOKEN_UserAccountId -1- USER_ACCOUNT
+R_REFRESH_TOKEN_UserAccountId =N= REFRESH_TOKEN
+R_REFRESH_TOKEN_ReplacedByTokenId -1- REFRESH_TOKEN
+R_REFRESH_TOKEN_ReplacedByTokenId -N- REFRESH_TOKEN
+R_USER_REGION_ASSIGNMENT_UserAccountId -1- USER_ACCOUNT
+R_USER_REGION_ASSIGNMENT_UserAccountId =N= USER_REGION_ASSIGNMENT
+R_USER_REGION_ASSIGNMENT_RegionId -1- REGION
+R_USER_REGION_ASSIGNMENT_RegionId =N= USER_REGION_ASSIGNMENT
+R_USER_WAREHOUSE_ASSIGNMENT_UserAccountId -1- USER_ACCOUNT
+R_USER_WAREHOUSE_ASSIGNMENT_UserAccountId =N= USER_WAREHOUSE_ASSIGNMENT
+R_USER_WAREHOUSE_ASSIGNMENT_WarehouseId -1- WAREHOUSE
+R_USER_WAREHOUSE_ASSIGNMENT_WarehouseId =N= USER_WAREHOUSE_ASSIGNMENT
+R_SALES_GROUP_RegionId -1- REGION
+R_SALES_GROUP_RegionId =N= SALES_GROUP
+R_SALES_GROUP_MEMBER_SalesGroupId -1- SALES_GROUP
+R_SALES_GROUP_MEMBER_SalesGroupId =N= SALES_GROUP_MEMBER
+R_SALES_GROUP_MEMBER_UserAccountId -1- USER_ACCOUNT
+R_SALES_GROUP_MEMBER_UserAccountId =N= SALES_GROUP_MEMBER
+R_RETAILER_SALES_ASSIGNMENT_RetailerId -1- RETAILER
+R_RETAILER_SALES_ASSIGNMENT_RetailerId =N= RETAILER_SALES_ASSIGNMENT
+R_RETAILER_SALES_ASSIGNMENT_SalesGroupId -1- SALES_GROUP
+R_RETAILER_SALES_ASSIGNMENT_SalesGroupId =N= RETAILER_SALES_ASSIGNMENT
+R_RETAILER_SALES_ASSIGNMENT_AssignedByUserId -1- USER_ACCOUNT
+R_RETAILER_SALES_ASSIGNMENT_AssignedByUserId -N- RETAILER_SALES_ASSIGNMENT
+R_PROMOTION_PRODUCT_PromotionId -1- PROMOTION
+R_PROMOTION_PRODUCT_PromotionId =N= PROMOTION_PRODUCT
+R_PROMOTION_PRODUCT_ProductId -1- PRODUCT
+R_PROMOTION_PRODUCT_ProductId =N= PROMOTION_PRODUCT
+R_PROMOTION_CATEGORY_PromotionId -1- PROMOTION
+R_PROMOTION_CATEGORY_PromotionId =N= PROMOTION_CATEGORY
+R_PROMOTION_CATEGORY_ProductCategoryId -1- PRODUCT_CATEGORY
+R_PROMOTION_CATEGORY_ProductCategoryId =N= PROMOTION_CATEGORY
+R_PROMOTION_RETAILER_PromotionId -1- PROMOTION
+R_PROMOTION_RETAILER_PromotionId =N= PROMOTION_RETAILER
+R_PROMOTION_RETAILER_RetailerId -1- RETAILER
+R_PROMOTION_RETAILER_RetailerId =N= PROMOTION_RETAILER
+R_TRANSIT_TABLE_CreatedByUserId -1- USER_ACCOUNT
+R_TRANSIT_TABLE_CreatedByUserId =N= TRANSIT_TABLE
+R_TRANSIT_TABLE_BAND_TransitTableId =1= TRANSIT_TABLE
+R_TRANSIT_TABLE_BAND_TransitTableId =N= TRANSIT_TABLE_BAND
+R_SYSTEM_CONFIGURATION_UpdatedByUserId -1- USER_ACCOUNT
+R_SYSTEM_CONFIGURATION_UpdatedByUserId -N- SYSTEM_CONFIGURATION
+R_BATCH_QR_LABEL_BatchId -1- BATCH
+R_BATCH_QR_LABEL_BatchId =N= BATCH_QR_LABEL
+R_BATCH_QR_LABEL_GoodsReceiptId -1- GOODS_RECEIPT
+R_BATCH_QR_LABEL_GoodsReceiptId -N- BATCH_QR_LABEL
+R_INVENTORY_COUNT_SESSION_WarehouseId -1- WAREHOUSE
+R_INVENTORY_COUNT_SESSION_WarehouseId =N= INVENTORY_COUNT_SESSION
+R_INVENTORY_COUNT_SESSION_CreatedByUserId -1- USER_ACCOUNT
+R_INVENTORY_COUNT_SESSION_CreatedByUserId =N= INVENTORY_COUNT_SESSION
+R_INVENTORY_COUNT_SESSION_ApprovedByUserId -1- USER_ACCOUNT
+R_INVENTORY_COUNT_SESSION_ApprovedByUserId -N- INVENTORY_COUNT_SESSION
+R_INVENTORY_COUNT_LINE_InventoryCountSessionId =1= INVENTORY_COUNT_SESSION
+R_INVENTORY_COUNT_LINE_InventoryCountSessionId =N= INVENTORY_COUNT_LINE
+R_INVENTORY_COUNT_LINE_BatchId -1- BATCH
+R_INVENTORY_COUNT_LINE_BatchId =N= INVENTORY_COUNT_LINE
+R_INVENTORY_COUNT_LINE_CountedByUserId -1- USER_ACCOUNT
+R_INVENTORY_COUNT_LINE_CountedByUserId -N- INVENTORY_COUNT_LINE
+R_INVENTORY_COUNT_LINE_AdjustmentTransactionId -1- INVENTORY_TRANSACTION
+R_INVENTORY_COUNT_LINE_AdjustmentTransactionId -1- INVENTORY_COUNT_LINE
+R_AUDIT_LOG_UserAccountId -1- USER_ACCOUNT
+R_AUDIT_LOG_UserAccountId -N- AUDIT_LOG
+
+@endchen

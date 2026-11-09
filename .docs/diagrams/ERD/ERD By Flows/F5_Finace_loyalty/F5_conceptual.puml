@@ -1,0 +1,168 @@
+@startchen F5_conceptual
+
+title F5 – Conceptual ERD (Chen) – Payment Collection, Completion, Loyalty, Claims and After-sales
+
+entity "PaymentReceipt\nPayment receipt" as PaymentReceipt {
+}
+entity "Claim\nReceipt claim" as Claim {
+}
+entity "ClaimItem\nClaim item" as ClaimItem <<weak>> {
+}
+entity "FinancialAdjustment\nFinancial adjustment" as FinancialAdjustment {
+}
+entity "ReplacementCase\nReplacement case" as ReplacementCase {
+}
+entity "ManualRefund\nManual refund record" as ManualRefund {
+}
+entity "ClaimEvidence\nClaim evidence" as ClaimEvidence {
+}
+entity "RefundEvidence\nRefund evidence" as RefundEvidence <<weak>> {
+}
+entity "CustomerReturnReceipt\nCustomer return receipt" as CustomerReturnReceipt {
+}
+entity "LoyaltyProgram\nLoyalty program" as LoyaltyProgram {
+}
+entity "LoyaltyAccount\nRetailer loyalty account" as LoyaltyAccount {
+}
+entity "LoyaltyTransaction\nLoyalty ledger" as LoyaltyTransaction {
+}
+entity "LoyaltyReward\nLoyalty reward" as LoyaltyReward {
+}
+entity "RewardRedemption\nReward redemption" as RewardRedemption {
+}
+entity "Payment\nOrder receivable / payment" as Payment {
+}
+entity "SalesOrder\nSales order (SO)" as SalesOrder {
+}
+entity "Retailer\nRetailer" as Retailer {
+}
+entity "Shipment\nShipment by warehouse" as Shipment {
+}
+entity "ReceiptConfirmationItem\nReceipt confirmation item" as ReceiptConfirmationItem {
+}
+entity "Warehouse\nWarehouse" as Warehouse {
+}
+entity "Batch\nBatch" as Batch {
+}
+entity "UserAccount\nUser account" as UserAccount {
+}
+
+relationship "submits payment receipt" as R_PAYMENT_RECEIPT_RetailerId {
+}
+relationship "records payment receipt" as R_PAYMENT_RECEIPT_RecordedByUserId {
+}
+relationship "is replaced by" as R_PAYMENT_RECEIPT_ReplacesReceiptId {
+}
+relationship "is claimed" as R_RECEIPT_DISCREPANCY_ShipmentId {
+}
+relationship "submits claim" as R_RECEIPT_DISCREPANCY_ReportedByUserId {
+}
+relationship "has claim item" as R_RECEIPT_DISCREPANCY_ITEM_ReceiptDiscrepancyId <<identifying>> {
+}
+relationship "is affected" as R_RECEIPT_DISCREPANCY_ITEM_ReceiptConfirmationItemId {
+}
+relationship "is financially adjusted" as R_FINANCIAL_ADJUSTMENT_ReceiptDiscrepancyId {
+}
+relationship "is adjusted" as R_FINANCIAL_ADJUSTMENT_PaymentId {
+}
+relationship "is replaced" as R_REPLACEMENT_CASE_ReceiptDiscrepancyId {
+}
+relationship "processes replacement" as R_REPLACEMENT_CASE_WarehouseId {
+}
+relationship "is refunded" as R_MANUAL_REFUND_PaymentId {
+}
+relationship "generates refund" as R_MANUAL_REFUND_FinancialAdjustmentId {
+}
+relationship "has evidence" as R_RECEIPT_DISCREPANCY_ATTACHMENT_ReceiptDiscrepancyId {
+}
+relationship "has evidence" as R_MANUAL_REFUND_EVIDENCE_ManualRefundId <<identifying>> {
+}
+relationship "generates return" as R_CUSTOMER_RETURN_RECEIPT_ReceiptDiscrepancyId {
+}
+relationship "receives return" as R_CUSTOMER_RETURN_RECEIPT_WarehouseId {
+}
+relationship "is returned" as R_CUSTOMER_RETURN_RECEIPT_BatchId {
+}
+relationship "owns loyalty account" as R_RETAILER_LOYALTY_RetailerId {
+}
+relationship "records point movement" as R_LOYALTY_TRANSACTION_RetailerLoyaltyId {
+}
+relationship "earns points from order" as R_LOYALTY_TRANSACTION_SalesOrderId {
+}
+relationship "has reward" as R_LOYALTY_REWARD_LoyaltyProgramId {
+}
+relationship "redeems reward" as R_REWARD_REDEMPTION_RetailerId {
+}
+relationship "is redeemed" as R_REWARD_REDEMPTION_LoyaltyRewardId {
+}
+relationship "generates receivable" as R_PAYMENT_SalesOrderId {
+}
+relationship "places order" as R_SALES_ORDER_RetailerId {
+}
+relationship "is delivered via" as R_SHIPMENT_SalesOrderId {
+}
+relationship "offsets receivable" as M_PaymentReceiptAllocation {
+}
+relationship "joins program" as M_LoyaltyProgramRetailer {
+}
+
+R_PAYMENT_RECEIPT_RetailerId -1- Retailer
+R_PAYMENT_RECEIPT_RetailerId =N= PaymentReceipt
+R_PAYMENT_RECEIPT_RecordedByUserId -1- UserAccount
+R_PAYMENT_RECEIPT_RecordedByUserId =N= PaymentReceipt
+R_PAYMENT_RECEIPT_ReplacesReceiptId -1- PaymentReceipt
+R_PAYMENT_RECEIPT_ReplacesReceiptId -1- PaymentReceipt
+R_RECEIPT_DISCREPANCY_ShipmentId -1- Shipment
+R_RECEIPT_DISCREPANCY_ShipmentId =N= Claim
+R_RECEIPT_DISCREPANCY_ReportedByUserId -1- UserAccount
+R_RECEIPT_DISCREPANCY_ReportedByUserId =N= Claim
+R_RECEIPT_DISCREPANCY_ITEM_ReceiptDiscrepancyId =1= Claim
+R_RECEIPT_DISCREPANCY_ITEM_ReceiptDiscrepancyId =N= ClaimItem
+R_RECEIPT_DISCREPANCY_ITEM_ReceiptConfirmationItemId -1- ReceiptConfirmationItem
+R_RECEIPT_DISCREPANCY_ITEM_ReceiptConfirmationItemId =N= ClaimItem
+R_FINANCIAL_ADJUSTMENT_ReceiptDiscrepancyId -1- Claim
+R_FINANCIAL_ADJUSTMENT_ReceiptDiscrepancyId =1= FinancialAdjustment
+R_FINANCIAL_ADJUSTMENT_PaymentId -1- Payment
+R_FINANCIAL_ADJUSTMENT_PaymentId =N= FinancialAdjustment
+R_REPLACEMENT_CASE_ReceiptDiscrepancyId -1- Claim
+R_REPLACEMENT_CASE_ReceiptDiscrepancyId =1= ReplacementCase
+R_REPLACEMENT_CASE_WarehouseId -1- Warehouse
+R_REPLACEMENT_CASE_WarehouseId =N= ReplacementCase
+R_MANUAL_REFUND_PaymentId -1- Payment
+R_MANUAL_REFUND_PaymentId =N= ManualRefund
+R_MANUAL_REFUND_FinancialAdjustmentId -1- FinancialAdjustment
+R_MANUAL_REFUND_FinancialAdjustmentId -N- ManualRefund
+R_RECEIPT_DISCREPANCY_ATTACHMENT_ReceiptDiscrepancyId -1- Claim
+R_RECEIPT_DISCREPANCY_ATTACHMENT_ReceiptDiscrepancyId =N= ClaimEvidence
+R_MANUAL_REFUND_EVIDENCE_ManualRefundId =1= ManualRefund
+R_MANUAL_REFUND_EVIDENCE_ManualRefundId =N= RefundEvidence
+R_CUSTOMER_RETURN_RECEIPT_ReceiptDiscrepancyId -1- Claim
+R_CUSTOMER_RETURN_RECEIPT_ReceiptDiscrepancyId -N- CustomerReturnReceipt
+R_CUSTOMER_RETURN_RECEIPT_WarehouseId -1- Warehouse
+R_CUSTOMER_RETURN_RECEIPT_WarehouseId =N= CustomerReturnReceipt
+R_CUSTOMER_RETURN_RECEIPT_BatchId -1- Batch
+R_CUSTOMER_RETURN_RECEIPT_BatchId =N= CustomerReturnReceipt
+R_RETAILER_LOYALTY_RetailerId -1- Retailer
+R_RETAILER_LOYALTY_RetailerId =1= LoyaltyAccount
+R_LOYALTY_TRANSACTION_RetailerLoyaltyId -1- LoyaltyAccount
+R_LOYALTY_TRANSACTION_RetailerLoyaltyId =N= LoyaltyTransaction
+R_LOYALTY_TRANSACTION_SalesOrderId -1- SalesOrder
+R_LOYALTY_TRANSACTION_SalesOrderId -N- LoyaltyTransaction
+R_LOYALTY_REWARD_LoyaltyProgramId -1- LoyaltyProgram
+R_LOYALTY_REWARD_LoyaltyProgramId =N= LoyaltyReward
+R_REWARD_REDEMPTION_RetailerId -1- Retailer
+R_REWARD_REDEMPTION_RetailerId =N= RewardRedemption
+R_REWARD_REDEMPTION_LoyaltyRewardId -1- LoyaltyReward
+R_REWARD_REDEMPTION_LoyaltyRewardId =N= RewardRedemption
+R_PAYMENT_SalesOrderId -1- SalesOrder
+R_PAYMENT_SalesOrderId =1= Payment
+R_SALES_ORDER_RetailerId -1- Retailer
+R_SALES_ORDER_RetailerId =N= SalesOrder
+R_SHIPMENT_SalesOrderId -1- SalesOrder
+R_SHIPMENT_SalesOrderId =N= Shipment
+M_PaymentReceiptAllocation -M- PaymentReceipt
+M_PaymentReceiptAllocation -N- Payment
+M_LoyaltyProgramRetailer -M- LoyaltyProgram
+M_LoyaltyProgramRetailer -N- Retailer
+
+@endchen

@@ -1,0 +1,274 @@
+@startchen F4_logical
+
+title F4 – Logical ERD (Chen) – Quote Acceptance, Purchase Order, Picking, Issue and Delivery
+
+entity PurchaseOrder {
+  PurchaseOrderCode <<key>>
+  PaymentMethod
+  CreditTermDaysSnapshot
+  CreditLimitSnapshot
+  Status
+  IssuedAt
+}
+entity Payment {
+  PaymentCode <<key>>
+  Method
+  Status
+  Amount
+  AdjustedAmount
+  ConfirmedAmount
+  RefundedAmount
+  OutstandingAmount <<derived>>
+  PaymentDeadlineAt
+  CreditTermDays
+  DeliveredDate
+  DueDate
+  PaidAt
+  PayOsOrderCode
+  PayOsPaymentLinkId
+  PayOsCheckoutUrl
+  PayOsReference
+  CreatedAt
+}
+entity PickingList {
+  PickingCode <<key>>
+  Status
+  StartedAt
+  CompletedAt
+  CreatedAt
+}
+entity PickingItem <<weak>> {
+  LineNumber <<key>>
+  RequiredQuantity
+  PickedQuantity
+  Status
+  CompletedAt
+}
+entity PickingScan {
+  Id <<key>>
+  ScannedQuantity
+  Result
+  RejectReason
+  ScannedAt
+}
+entity Shipment {
+  ShipmentCode <<key>>
+  DriverNameSnapshot
+  PlateNumberSnapshot
+  Status
+  TotalQuantity
+  ReceivedQuantity
+  ReadyAt
+  IssuedAt
+  DispatchedAt
+  ReceivedAt
+  ExceptionReason
+}
+entity ReceiptConfirmation {
+  Id <<key>>
+  Status
+  ConfirmedAt
+  Note
+}
+entity ReceiptConfirmationItem <<weak>> {
+  LineNumber <<key>>
+  ExpectedQuantity
+  ReceivedQuantity
+  DamagedQuantity
+  MissingQuantity
+  ScannedAt
+}
+entity PickingException {
+  ExceptionCode <<key>>
+  Status
+}
+entity Driver {
+  Code <<key>>
+}
+entity Vehicle {
+  PlateNumber <<key>>
+}
+entity SalesOrder {
+  OrderCode <<key>>
+  Status
+  PaymentMethod
+}
+entity SalesOrderQuote <<weak>> {
+  RevisionNumber <<key>>
+  TotalAmount <<derived>>
+  ExpiresAt
+  Status
+}
+entity Allocation {
+  AllocationSequence <<key>>
+  AllocatedQuantity
+  FinalUnitPrice
+  Status
+}
+entity Reservation {
+  Id <<key>>
+  Quantity
+  Status
+}
+entity Warehouse {
+  Code <<key>>
+}
+entity Batch {
+  BatchCode <<key>>
+  ExpirationDate
+}
+entity BatchQrLabel {
+  QrCode <<key>>
+  Status
+}
+entity UserAccount {
+  Email <<key>>
+}
+
+relationship "is converted to PO" as R_PURCHASE_ORDER_SalesOrderId {
+}
+relationship "is accepted as" as R_PURCHASE_ORDER_SalesOrderQuoteId {
+}
+relationship "generates receivable" as R_PAYMENT_SalesOrderId {
+}
+relationship "is basis for collection" as R_PAYMENT_SalesOrderQuoteId {
+}
+relationship "issues picking list" as R_PICKING_LIST_PurchaseOrderId {
+}
+relationship "picks at warehouse" as R_PICKING_LIST_WarehouseId {
+}
+relationship "is assigned picking" as R_PICKING_LIST_AssignedToUserId {
+}
+relationship "completes picking" as R_PICKING_LIST_CompletedByUserId {
+}
+relationship "has picking item" as R_PICKING_ITEM_PickingListId <<identifying>> {
+}
+relationship "is picked by" as R_PICKING_ITEM_AllocationId {
+}
+relationship "requires batch" as R_PICKING_ITEM_BatchId {
+}
+relationship "records scan" as R_PICKING_SCAN_PickingListId {
+}
+relationship "matches picking item" as R_PICKING_SCAN_PickingItemId {
+}
+relationship "is scanned during picking" as R_PICKING_SCAN_BatchQrLabelId {
+}
+relationship "is scanned batch" as R_PICKING_SCAN_ScannedBatchId {
+}
+relationship "scans label" as R_PICKING_SCAN_ScannedByUserId {
+}
+relationship "is delivered via" as R_SHIPMENT_SalesOrderId {
+}
+relationship "creates shipment" as R_SHIPMENT_PickingListId {
+}
+relationship "delivers shipment" as R_SHIPMENT_DriverId {
+}
+relationship "carries shipment" as R_SHIPMENT_VehicleId {
+}
+relationship "is confirmed received" as R_RECEIPT_CONFIRMATION_ShipmentId {
+}
+relationship "confirms receipt" as R_RECEIPT_CONFIRMATION_ConfirmedByUserId {
+}
+relationship "has receipt item" as R_RECEIPT_CONFIRMATION_ITEM_ReceiptConfirmationId <<identifying>> {
+}
+relationship "is reconciled" as R_RECEIPT_CONFIRMATION_ITEM_PickingItemId {
+}
+relationship "is scanned at receipt" as R_RECEIPT_CONFIRMATION_ITEM_BatchQrLabelId {
+}
+relationship "raises exception" as R_PICKING_EXCEPTION_PickingListId {
+}
+relationship "affects item" as R_PICKING_EXCEPTION_PickingItemId {
+}
+relationship "reports exception" as R_PICKING_EXCEPTION_RaisedByUserId {
+}
+relationship "resolves exception" as R_PICKING_EXCEPTION_ResolvedByUserId {
+}
+relationship "manages driver" as R_DRIVER_WarehouseId {
+}
+relationship "manages vehicle" as R_VEHICLE_WarehouseId {
+}
+relationship "receives quote" as R_SALES_ORDER_QUOTE_SalesOrderId <<identifying>> {
+}
+relationship "allocated from batch" as R_ALLOCATION_BatchId {
+}
+relationship "is reserved by" as R_RESERVATION_AllocationId {
+}
+relationship "stores batch" as R_BATCH_WarehouseId {
+}
+relationship "is labelled" as R_BATCH_QR_LABEL_BatchId {
+}
+
+R_PURCHASE_ORDER_SalesOrderId -1- SalesOrder
+R_PURCHASE_ORDER_SalesOrderId =1= PurchaseOrder
+R_PURCHASE_ORDER_SalesOrderQuoteId -1- SalesOrderQuote
+R_PURCHASE_ORDER_SalesOrderQuoteId =1= PurchaseOrder
+R_PAYMENT_SalesOrderId -1- SalesOrder
+R_PAYMENT_SalesOrderId =1= Payment
+R_PAYMENT_SalesOrderQuoteId -1- SalesOrderQuote
+R_PAYMENT_SalesOrderQuoteId =N= Payment
+R_PICKING_LIST_PurchaseOrderId =1= PurchaseOrder
+R_PICKING_LIST_PurchaseOrderId =N= PickingList
+R_PICKING_LIST_WarehouseId -1- Warehouse
+R_PICKING_LIST_WarehouseId =N= PickingList
+R_PICKING_LIST_AssignedToUserId -1- UserAccount
+R_PICKING_LIST_AssignedToUserId -N- PickingList
+R_PICKING_LIST_CompletedByUserId -1- UserAccount
+R_PICKING_LIST_CompletedByUserId -N- PickingList
+R_PICKING_ITEM_PickingListId =1= PickingList
+R_PICKING_ITEM_PickingListId =N= PickingItem
+R_PICKING_ITEM_AllocationId -1- Allocation
+R_PICKING_ITEM_AllocationId =1= PickingItem
+R_PICKING_ITEM_BatchId -1- Batch
+R_PICKING_ITEM_BatchId =N= PickingItem
+R_PICKING_SCAN_PickingListId -1- PickingList
+R_PICKING_SCAN_PickingListId =N= PickingScan
+R_PICKING_SCAN_PickingItemId -1- PickingItem
+R_PICKING_SCAN_PickingItemId -N- PickingScan
+R_PICKING_SCAN_BatchQrLabelId -1- BatchQrLabel
+R_PICKING_SCAN_BatchQrLabelId -N- PickingScan
+R_PICKING_SCAN_ScannedBatchId -1- Batch
+R_PICKING_SCAN_ScannedBatchId -N- PickingScan
+R_PICKING_SCAN_ScannedByUserId -1- UserAccount
+R_PICKING_SCAN_ScannedByUserId =N= PickingScan
+R_SHIPMENT_SalesOrderId -1- SalesOrder
+R_SHIPMENT_SalesOrderId =N= Shipment
+R_SHIPMENT_PickingListId -1- PickingList
+R_SHIPMENT_PickingListId =1= Shipment
+R_SHIPMENT_DriverId -1- Driver
+R_SHIPMENT_DriverId -N- Shipment
+R_SHIPMENT_VehicleId -1- Vehicle
+R_SHIPMENT_VehicleId -N- Shipment
+R_RECEIPT_CONFIRMATION_ShipmentId -1- Shipment
+R_RECEIPT_CONFIRMATION_ShipmentId =1= ReceiptConfirmation
+R_RECEIPT_CONFIRMATION_ConfirmedByUserId -1- UserAccount
+R_RECEIPT_CONFIRMATION_ConfirmedByUserId =N= ReceiptConfirmation
+R_RECEIPT_CONFIRMATION_ITEM_ReceiptConfirmationId =1= ReceiptConfirmation
+R_RECEIPT_CONFIRMATION_ITEM_ReceiptConfirmationId =N= ReceiptConfirmationItem
+R_RECEIPT_CONFIRMATION_ITEM_PickingItemId -1- PickingItem
+R_RECEIPT_CONFIRMATION_ITEM_PickingItemId =N= ReceiptConfirmationItem
+R_RECEIPT_CONFIRMATION_ITEM_BatchQrLabelId -1- BatchQrLabel
+R_RECEIPT_CONFIRMATION_ITEM_BatchQrLabelId -N- ReceiptConfirmationItem
+R_PICKING_EXCEPTION_PickingListId -1- PickingList
+R_PICKING_EXCEPTION_PickingListId =N= PickingException
+R_PICKING_EXCEPTION_PickingItemId -1- PickingItem
+R_PICKING_EXCEPTION_PickingItemId -N- PickingException
+R_PICKING_EXCEPTION_RaisedByUserId -1- UserAccount
+R_PICKING_EXCEPTION_RaisedByUserId =N= PickingException
+R_PICKING_EXCEPTION_ResolvedByUserId -1- UserAccount
+R_PICKING_EXCEPTION_ResolvedByUserId -N- PickingException
+R_DRIVER_WarehouseId -1- Warehouse
+R_DRIVER_WarehouseId =N= Driver
+R_VEHICLE_WarehouseId -1- Warehouse
+R_VEHICLE_WarehouseId =N= Vehicle
+R_SALES_ORDER_QUOTE_SalesOrderId -1- SalesOrder
+R_SALES_ORDER_QUOTE_SalesOrderId =N= SalesOrderQuote
+R_ALLOCATION_BatchId -1- Batch
+R_ALLOCATION_BatchId =N= Allocation
+R_RESERVATION_AllocationId -1- Allocation
+R_RESERVATION_AllocationId =1= Reservation
+R_BATCH_WarehouseId -1- Warehouse
+R_BATCH_WarehouseId =N= Batch
+R_BATCH_QR_LABEL_BatchId -1- Batch
+R_BATCH_QR_LABEL_BatchId =N= BatchQrLabel
+
+@endchen
