@@ -1,0 +1,741 @@
+classDiagram
+direction TB
+
+%% ==========================================
+%% API LAYER
+%% ==========================================
+
+namespace API {
+
+    class QuotesController {
+        <<Controller>>
+        +ForOrder()
+        +Accept()
+        +Reject()
+    }
+
+    class PickingListsController {
+        <<Controller>>
+        +List()
+        +Get()
+        +Scan()
+        +Complete()
+    }
+
+    class ShipmentsController {
+        <<Controller>>
+        +List()
+        +Get()
+        +OrderReadiness()
+        +OrderDeliveryView()
+        +Assign()
+        +ConfirmIssue()
+        +Dispatch()
+        +FlagException()
+        +ConfirmReceipt()
+        +Sync()
+    }
+
+    class ComplaintsController {
+        <<Controller>>
+        +List()
+        +Create()
+        +Resolve()
+    }
+}
+
+%% ==========================================
+%% APPLICATION SERVICES
+%% ==========================================
+
+namespace Application_Services {
+
+    class QuoteService {
+        <<Service>>
+        +ListForOrderAsync()
+        +AcceptAsync()
+        +RejectAsync()
+    }
+
+    class PurchaseOrderGateService {
+        <<Service>>
+        +TryCreateAsync()
+    }
+
+    class CurrentPickingService {
+        <<Service>>
+        +ListAsync()
+        +GetAsync()
+        +ScanAsync()
+        +CompleteAsync()
+        -EnsureWarehouseKeeper()
+        -FindAccessibleAsync()
+    }
+
+    class ShipmentService {
+        <<Service>>
+        +ListAsync()
+        +GetAsync()
+        +GetOrderReadinessAsync()
+        +GetRetailerOrderDeliveryAsync()
+        +AssignAsync()
+        +ConfirmIssueAsync()
+        +DispatchAsync()
+        +FlagExceptionAsync()
+        +ConfirmReceiptAsync()
+        +SyncOrderAsync()
+        -BuildReadinessAsync()
+        -IsPaymentSettledAsync()
+        -ReconcileAsync()
+    }
+
+    class ComplaintService {
+        <<Service>>
+        +ListAsync()
+        +CreateAsync()
+        +ResolveAsync()
+    }
+
+    class OrderCompletionService {
+        <<Service>>
+        +EvaluateAsync()
+        +HoldAsync()
+    }
+}
+
+%% ==========================================
+%% APPLICATION INTERFACES
+%% ==========================================
+
+namespace Application_Interfaces {
+
+    class IQuoteStore {
+        <<interface>>
+        +FindAsync()
+        +FindPaymentByOrderAsync()
+        +CanRetailerAccessAsync()
+        +SaveChangesAsync()
+    }
+
+    class IPurchaseOrderGateStore {
+        <<interface>>
+        +LoadForUpdateAsync()
+        +AddPurchaseOrder()
+        +AddPickingList()
+        +AddPickingItem()
+        +AddHistory()
+        +ExecuteInTransactionAsync()
+        +SaveChangesAsync()
+    }
+
+    class IPickingStore {
+        <<interface>>
+        +FindAsync()
+        +ListAsync()
+        +ListByOrderAsync()
+        +FindLabelForUpdateAsync()
+        +AddLabel()
+        +AddLabelEvent()
+        +AddShipment()
+        +AddOrderHistory()
+        +ShipmentExistsAsync()
+        +ExecuteInTransactionAsync()
+        +SaveChangesAsync()
+    }
+
+    class IShipmentStore {
+        <<interface>>
+        +FindByIdAsync()
+        +FindOrderForUpdateAsync()
+        +ListByOrderAsync()
+        +ListExpectedWarehousesAsync()
+        +ListIssuableAsync()
+        +ListLabelsAsync()
+        +FindDriverAsync()
+        +FindVehicleAsync()
+        +CanAccessWarehouseAsync()
+        +AddShipment()
+        +AddInventoryTransaction()
+        +AddReceipt()
+        +AddReceiptLine()
+        +AddReceiptQrLabel()
+        +AddOrderHistory()
+        +ExecuteInTransactionAsync()
+        +SaveChangesAsync()
+    }
+
+    class IComplaintStore {
+        <<interface>>
+        +ListAsync()
+        +CreateAsync()
+        +ResolveAsync()
+    }
+
+    class IOrderCompletionStore {
+        <<interface>>
+        +FindAsync()
+        +CompleteAsync()
+    }
+}
+
+%% ==========================================
+%% PERSISTENCE LAYER
+%% ==========================================
+
+namespace Persistence {
+
+    class QuoteStore {
+        <<Repository>>
+        +FindAsync()
+        +FindPaymentByOrderAsync()
+        +CanRetailerAccessAsync()
+        +SaveChangesAsync()
+    }
+
+    class PurchaseOrderGateStore {
+        <<Repository>>
+        +LoadForUpdateAsync()
+        +AddPurchaseOrder()
+        +AddPickingList()
+        +AddPickingItem()
+        +AddHistory()
+        +ExecuteInTransactionAsync()
+        +SaveChangesAsync()
+    }
+
+    class PickingStore {
+        <<Repository>>
+        +FindAsync()
+        +ListByOrderAsync()
+        +FindLabelForUpdateAsync()
+        +AddLabel()
+        +AddLabelEvent()
+        +AddShipment()
+        +ShipmentExistsAsync()
+        +ExecuteInTransactionAsync()
+        +SaveChangesAsync()
+    }
+
+    class ShipmentStore {
+        <<Repository>>
+        +FindByIdAsync()
+        +FindOrderForUpdateAsync()
+        +ListByOrderAsync()
+        +ListExpectedWarehousesAsync()
+        +ListIssuableAsync()
+        +ListLabelsAsync()
+        +AddShipment()
+        +AddInventoryTransaction()
+        +AddReceipt()
+        +AddReceiptLine()
+        +AddReceiptQrLabel()
+        +AddOrderHistory()
+        +ExecuteInTransactionAsync()
+        +SaveChangesAsync()
+    }
+
+    class ComplaintStore {
+        <<Repository>>
+        +ListAsync()
+        +CreateAsync()
+        +ResolveAsync()
+    }
+
+    class OrderCompletionStore {
+        <<Repository>>
+        +FindAsync()
+        +CompleteAsync()
+    }
+}
+
+%% ==========================================
+%% DOMAIN - SALES ORDER AND PURCHASE ORDER
+%% ==========================================
+
+namespace Domain_Order {
+
+    class SalesOrder {
+        +Id: Guid
+        +OrderCode: string
+        +RetailerId: Guid
+        +PaymentMethod: string
+        +Status: string
+        +FinalAmount: decimal
+        +Version: int
+        +CreatedAt: DateTimeOffset
+    }
+
+    class SalesOrderLine {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +ProductId: Guid
+        +OrderedQuantity: decimal
+        +UnitPrice: decimal
+        +NetAmount: decimal
+    }
+
+    class SalesOrderQuote {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +TotalAmount: decimal
+        +Status: string
+        +IssuedAt: DateTimeOffset
+        +ExpiresAt: DateTimeOffset
+        +AcceptedAt: DateTimeOffset
+        +Version: int
+    }
+
+    class PurchaseOrder {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +SalesOrderQuoteId: Guid
+        +PurchaseOrderCode: string
+        +PaymentMethod: string
+        +Status: string
+        +IssuedAt: DateTimeOffset
+        +Version: int
+    }
+
+    class OrderStatusHistory {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +FromStatus: string
+        +ToStatus: string
+        +Reason: string
+        +ChangedAt: DateTimeOffset
+    }
+
+    class Payment {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +Amount: decimal
+        +ConfirmedAmount: decimal
+        +Method: string
+        +Status: string
+        +ConfirmedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - PICKING
+%% ==========================================
+
+namespace Domain_Picking {
+
+    class PickingList {
+        +Id: Guid
+        +PurchaseOrderId: Guid
+        +WarehouseId: Guid
+        +PickingCode: string
+        +Status: string
+        +AssignedToUserId: Guid
+        +StartedAt: DateTimeOffset
+        +ConfirmedAt: DateTimeOffset
+        +Version: int
+    }
+
+    class PickingItem {
+        +Id: Guid
+        +PickingListId: Guid
+        +AllocationId: Guid
+        +SourceBatchId: Guid
+        +StockOutBatchId: Guid
+        +RequestedQuantity: decimal
+        +PickedQuantity: decimal
+        +Status: string
+        +ScannedAt: DateTimeOffset
+        +CompletedAt: DateTimeOffset
+    }
+
+    class BatchQrLabel {
+        +Id: Guid
+        +BatchId: Guid
+        +QrCode: string
+        +Quantity: decimal
+        +Status: string
+        +CurrentWarehouseId: Guid
+        +InvalidatedAt: DateTimeOffset
+        +Version: int
+    }
+
+    class QrLabelEvent {
+        +Id: Guid
+        +BatchQrLabelId: Guid
+        +EventType: string
+        +FromStatus: string
+        +ToStatus: string
+        +OperationKey: string
+        +OccurredAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - SHIPMENT
+%% ==========================================
+
+namespace Domain_Shipment {
+
+    class Shipment {
+        +Id: Guid
+        +ShipmentCode: string
+        +SalesOrderId: Guid
+        +PickingListId: Guid
+        +WarehouseId: Guid
+        +DriverId: Guid
+        +VehicleId: Guid
+        +Status: string
+        +TotalQuantity: decimal
+        +ReceivedQuantity: decimal
+        +DriverNameSnapshot: string
+        +DriverPhoneSnapshot: string
+        +PlateNumberSnapshot: string
+        +AssignedAt: DateTimeOffset
+        +ReadyAt: DateTimeOffset
+        +IssuedAt: DateTimeOffset
+        +DispatchedAt: DateTimeOffset
+        +ReceivedAt: DateTimeOffset
+        +ExceptionReason: string
+        +Version: int
+    }
+
+    class Driver {
+        +Id: Guid
+        +WarehouseId: Guid
+        +Code: string
+        +FullName: string
+        +Phone: string
+        +LicenseNumber: string
+        +IsActive: bool
+    }
+
+    class Vehicle {
+        +Id: Guid
+        +WarehouseId: Guid
+        +PlateNumber: string
+        +VehicleType: string
+        +Capacity: decimal
+        +IsActive: bool
+    }
+}
+
+%% ==========================================
+%% DOMAIN - INVENTORY
+%% ==========================================
+
+namespace Domain_Inventory {
+
+    class Allocation {
+        +Id: Guid
+        +SalesOrderLineId: Guid
+        +BatchId: Guid
+        +WarehouseId: Guid
+        +AllocatedQuantity: decimal
+        +Status: string
+    }
+
+    class Reservation {
+        +Id: Guid
+        +AllocationId: Guid
+        +BatchId: Guid
+        +Quantity: decimal
+        +Status: string
+        +ReservedAt: DateTimeOffset
+        +ConsumedAt: DateTimeOffset
+    }
+
+    class Batch {
+        +Id: Guid
+        +WarehouseId: Guid
+        +ProductId: Guid
+        +BatchCode: string
+        +ExpirationDate: DateOnly
+        +StockStatus: string
+        +ExpiryStatus: string
+    }
+
+    class InventoryBalance {
+        +Id: Guid
+        +BatchId: Guid
+        +PhysicalQuantity: decimal
+        +ReservedQuantity: decimal
+        +AvailableQuantity: decimal
+        +Version: int
+    }
+
+    class InventoryTransaction {
+        +Id: Guid
+        +BatchId: Guid
+        +WarehouseId: Guid
+        +SourceType: string
+        +SourceId: Guid
+        +TransactionType: string
+        +PhysicalQuantityDelta: decimal
+        +ReservedQuantityDelta: decimal
+        +OccurredAt: DateTimeOffset
+    }
+
+    class InventoryLock {
+        +Id: Guid
+        +BatchId: Guid
+        +LockedQuantity: decimal
+        +RequiresResolution: bool
+        +Status: string
+    }
+}
+
+%% ==========================================
+%% DOMAIN - RECEIPT AND EXCEPTIONS
+%% ==========================================
+
+namespace Domain_Receipt {
+
+    class ReceiptConfirmation {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +ShipmentId: Guid
+        +ConfirmedByRetailerUserId: Guid
+        +OperationKey: string
+        +RequestHash: string
+        +Status: string
+        +ConfirmedAt: DateTimeOffset
+    }
+
+    class ReceiptConfirmationItem {
+        +Id: Guid
+        +ReceiptConfirmationId: Guid
+        +SalesOrderLineId: Guid
+        +BatchId: Guid
+        +ExpectedQuantity: decimal
+        +ReceivedQuantity: decimal
+        +MissingQuantity: decimal
+        +DamagedQuantity: decimal
+    }
+
+    class ReceiptConfirmationQrLabel {
+        +Id: Guid
+        +ReceiptConfirmationId: Guid
+        +BatchQrLabelId: Guid
+        +ScannedAt: DateTimeOffset
+    }
+
+    class ReceiptDiscrepancy {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +ReceiptConfirmationId: Guid
+        +ReportedByRetailerUserId: Guid
+        +Status: string
+        +ResolutionType: string
+        +Note: string
+        +ReportedAt: DateTimeOffset
+        +ResolvedAt: DateTimeOffset
+    }
+
+    class ReceiptDiscrepancyItem {
+        +Id: Guid
+        +ReceiptDiscrepancyId: Guid
+        +ShipmentId: Guid
+        +BatchId: Guid
+        +IssueType: string
+        +ExpectedQuantity: decimal
+        +ActualReceivedQuantity: decimal
+        +FinalUnitPrice: decimal
+        +AdjustmentAmount: decimal
+        +EvidenceBlobUrl: string
+    }
+}
+
+%% ==========================================
+%% DOMAIN - WAREHOUSE
+%% ==========================================
+
+namespace Domain_Warehouse {
+
+    class Warehouse {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +IsActive: bool
+    }
+}
+
+%% ==========================================
+%% API DEPENDENCIES
+%% ==========================================
+
+QuotesController ..> QuoteService : uses
+
+PickingListsController ..> CurrentPickingService : uses
+
+ShipmentsController ..> ShipmentService : uses
+
+ComplaintsController ..> ComplaintService : uses
+
+%% ==========================================
+%% APPLICATION DEPENDENCIES
+%% ==========================================
+
+QuoteService ..> IQuoteStore : uses
+
+QuoteService ..> PurchaseOrderGateService : requests PO creation
+
+PurchaseOrderGateService ..> IPurchaseOrderGateStore : uses
+
+CurrentPickingService ..> IPickingStore : uses
+
+ShipmentService ..> IShipmentStore : uses
+
+ComplaintService ..> IComplaintStore : uses
+
+OrderCompletionService ..> IOrderCompletionStore : uses
+
+%% ==========================================
+%% INTERFACE REALIZATION
+%% ==========================================
+
+QuoteStore ..|> IQuoteStore : implements
+
+PurchaseOrderGateStore ..|> IPurchaseOrderGateStore : implements
+
+PickingStore ..|> IPickingStore : implements
+
+ShipmentStore ..|> IShipmentStore : implements
+
+ComplaintStore ..|> IComplaintStore : implements
+
+OrderCompletionStore ..|> IOrderCompletionStore : implements
+
+%% ==========================================
+%% PERSISTENCE DEPENDENCIES
+%% ==========================================
+
+QuoteStore ..> SalesOrderQuote : manages
+
+PurchaseOrderGateStore ..> PurchaseOrder : creates
+
+PurchaseOrderGateStore ..> PickingList : creates
+
+PurchaseOrderGateStore ..> PickingItem : creates
+
+PickingStore ..> PickingList : manages
+
+PickingStore ..> PickingItem : manages
+
+PickingStore ..> BatchQrLabel : manages QR
+
+ShipmentStore ..> Shipment : manages
+
+ShipmentStore ..> ReceiptConfirmation : records
+
+ShipmentStore ..> ReceiptConfirmationItem : records
+
+ShipmentStore ..> InventoryTransaction : records stock movement
+
+ShipmentStore ..> OrderStatusHistory : records transitions
+
+ComplaintStore ..> ReceiptDiscrepancy : manages
+
+ComplaintStore ..> ReceiptDiscrepancyItem : manages
+
+OrderCompletionStore ..> SalesOrder : completes eligible orders
+
+%% ==========================================
+%% SALES ORDER AND PURCHASE ORDER
+%% ==========================================
+
+SalesOrder "1" *-- "1..*" SalesOrderLine : contains
+
+SalesOrder "1" -- "0..*" SalesOrderQuote : quotations
+
+SalesOrder "1" -- "0..1" PurchaseOrder : generates
+
+SalesOrder "1" -- "0..*" Payment : payment obligations
+
+SalesOrder "1" -- "0..*" OrderStatusHistory : status changes
+
+SalesOrderQuote "1" -- "0..1" PurchaseOrder : accepted quote
+
+%% ==========================================
+%% PURCHASE ORDER AND PICKING
+%% ==========================================
+
+PurchaseOrder "1" *-- "0..*" PickingList : releases picking
+
+Warehouse "1" -- "0..*" PickingList : processes
+
+PickingList "1" *-- "0..*" PickingItem : contains
+
+Allocation "1" -- "0..*" PickingItem : picking source
+
+Batch "1" -- "0..*" Allocation : allocated from
+
+SalesOrderLine "1" -- "0..*" Allocation : allocated portions
+
+%% ==========================================
+%% SHIPMENT RELATIONSHIPS
+%% ==========================================
+
+SalesOrder "1" -- "0..*" Shipment : warehouse shipments
+
+Warehouse "1" -- "0..*" Shipment : dispatches
+
+PickingList "0..1" -- "0..1" Shipment : produces
+
+Driver "0..1" -- "0..*" Shipment : assigned driver
+
+Vehicle "0..1" -- "0..*" Shipment : assigned vehicle
+
+Warehouse "1" -- "0..*" Driver : manages
+
+Warehouse "1" -- "0..*" Vehicle : manages
+
+%% ==========================================
+%% INVENTORY AND RESERVATION
+%% ==========================================
+
+Batch "1" -- "0..1" InventoryBalance : current balance
+
+Batch "1" -- "0..*" Reservation : reserved stock
+
+Allocation "0..1" -- "0..*" Reservation : reservation source
+
+Batch "1" -- "0..*" InventoryLock : stock locks
+
+Batch "1" -- "0..*" InventoryTransaction : movements
+
+ShipmentService ..> Reservation : consumes on issue
+
+ShipmentService ..> InventoryBalance : updates on issue
+
+ShipmentService ..> InventoryLock : checks eligibility
+
+%% ==========================================
+%% QR LABEL TRACEABILITY
+%% ==========================================
+
+Batch "1" -- "0..*" BatchQrLabel : labels
+
+BatchQrLabel "1" -- "0..*" QrLabelEvent : history
+
+%% ==========================================
+%% RETAILER RECEIPT
+%% ==========================================
+
+Shipment "1" -- "0..*" ReceiptConfirmation : receipt records
+
+ReceiptConfirmation "1" *-- "0..*" ReceiptConfirmationItem : contains
+
+ReceiptConfirmation "1" *-- "0..*" ReceiptConfirmationQrLabel : scanned labels
+
+BatchQrLabel "1" -- "0..*" ReceiptConfirmationQrLabel : confirmed label
+
+%% ==========================================
+%% RECEIPT DISCREPANCY
+%% ==========================================
+
+SalesOrder "1" -- "0..*" ReceiptDiscrepancy : complaints
+
+ReceiptConfirmation "0..1" -- "0..*" ReceiptDiscrepancy : reported after receipt
+
+ReceiptDiscrepancy "1" *-- "0..*" ReceiptDiscrepancyItem : contains
+
+Shipment "1" -- "0..*" ReceiptDiscrepancyItem : affected shipment

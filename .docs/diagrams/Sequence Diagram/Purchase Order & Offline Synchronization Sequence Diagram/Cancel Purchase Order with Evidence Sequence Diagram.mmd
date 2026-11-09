@@ -1,0 +1,198 @@
+sequenceDiagram
+    autonumber
+
+    actor User as Sales / Retailer
+    actor Retailer
+
+    participant UI as Web Portal / Mobile App
+    participant OrderAPI as OrdersController
+    participant OrderService
+    participant OrderStore
+    participant QuoteAPI as QuotesController
+    participant QuoteService
+    participant QuoteStore
+    participant Release as OrderReleaseService
+    participant ReleaseStore as OrderReleaseStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. VIEW ORDER DETAILS
+    %% ==========================================
+
+    User->>+UI: Open Order Details
+
+    UI->>+OrderAPI: Get(orderId)
+    OrderAPI->>+OrderService: GetAsync(orderId)
+
+    OrderService->>+OrderStore: FindAsync(orderId)
+    OrderStore->>+DB: SELECT order, status and related information
+    DB-->>OrderStore: Order record
+    deactivate DB
+
+    OrderStore-->>OrderService: Order details
+    deactivate OrderStore
+
+    OrderService-->>OrderAPI: Order result
+    deactivate OrderService
+
+    OrderAPI-->>UI: Order details response
+    deactivate OrderAPI
+
+    UI-->>User: Display order and available actions
+    deactivate UI
+
+    %% ==========================================
+    %% 2. SELECT CANCELLATION ACTION
+    %% ==========================================
+
+    alt Withdraw Order Request
+
+        User->>+UI: Request withdrawal and enter reason
+
+        UI->>+OrderAPI: Cancel(orderId, version, reason)
+        OrderAPI->>+OrderService: CancelAsync(orderId, version, reason)
+
+        OrderService->>+OrderStore: FindAsync(orderId)
+        OrderStore->>+DB: SELECT order, current status and version
+        DB-->>OrderStore: Current order information
+        deactivate DB
+
+        OrderStore-->>OrderService: Order validation data
+        deactivate OrderStore
+
+        alt Request eligible before reservation
+
+            OrderService->>+OrderStore: Save cancellation and status history
+            OrderStore->>+DB: UPDATE order status, INSERT status history
+            DB-->>OrderStore: Cancellation committed
+            deactivate DB
+
+            OrderStore-->>OrderService: Order cancelled
+            deactivate OrderStore
+
+            OrderService-->>OrderAPI: Cancellation successful
+
+        else Already cancelled
+
+            OrderService-->>OrderAPI: Existing cancellation result
+
+        else Reservation committed or cancellation not permitted
+
+            OrderService-->>OrderAPI: Conflict - cancellation not allowed
+
+        end
+
+        deactivate OrderService
+
+        OrderAPI-->>UI: Cancellation result or error
+        deactivate OrderAPI
+
+        UI-->>User: Display cancellation status
+        deactivate UI
+
+    %% ==========================================
+    %% 3. REJECT FINAL QUOTATION
+    %% ==========================================
+
+    else Reject Final Quotation
+
+        Retailer->>+UI: Reject quotation and enter reason
+
+        UI->>+QuoteAPI: Reject(quoteId, version, reason)
+        QuoteAPI->>+QuoteService: RejectAsync(quoteId, version, reason)
+
+        QuoteService->>+QuoteStore: FindAsync(quoteId)
+        QuoteStore->>+DB: SELECT quotation, order and current status
+        DB-->>QuoteStore: Quotation information
+        deactivate DB
+
+        QuoteStore-->>QuoteService: Current quotation
+        deactivate QuoteStore
+
+        alt Valid pending quotation and no Purchase Order
+
+            QuoteService->>+Release: ReleaseAsync(orderId, reason)
+
+            Release->>+ReleaseStore: ListHeldAllocationsAsync(orderId)
+            ReleaseStore->>+DB: SELECT reservations and reserved stock
+            DB-->>ReleaseStore: Held allocations
+            deactivate DB
+
+            ReleaseStore-->>Release: Reservation information
+            deactivate ReleaseStore
+
+            Release->>+ReleaseStore: Release reservations and restore availability
+            ReleaseStore->>+DB: UPDATE reservations and stock balances
+            Note right of DB: Record inventory release transactions
+            DB-->>ReleaseStore: Stock released
+            deactivate DB
+
+            ReleaseStore-->>Release: Release completed
+            deactivate ReleaseStore
+
+            Release-->>QuoteService: Inventory release result
+            deactivate Release
+
+            QuoteService->>+QuoteStore: Save quotation rejection and history
+            QuoteStore->>+DB: UPDATE quotation and order status
+            DB-->>QuoteStore: Rejection committed
+            deactivate DB
+
+            QuoteStore-->>QuoteService: Quotation rejected
+            deactivate QuoteStore
+
+            QuoteService-->>QuoteAPI: Rejection successful
+
+        else Quotation expired, processed or Purchase Order issued
+
+            QuoteService-->>QuoteAPI: Conflict - rejection not permitted
+
+        end
+
+        deactivate QuoteService
+
+        QuoteAPI-->>UI: Rejection result or error
+        deactivate QuoteAPI
+
+        UI-->>Retailer: Display quotation rejection result
+        deactivate UI
+
+    %% ==========================================
+    %% 4. PURCHASE ORDER ALREADY ISSUED
+    %% ==========================================
+
+    else Purchase Order Already Issued
+
+        User->>+UI: Request cancellation of issued Purchase Order
+
+        UI->>+OrderAPI: Cancel(orderId, version, reason)
+        OrderAPI->>+OrderService: CancelAsync(orderId, version, reason)
+
+        OrderService->>+OrderStore: FindAsync(orderId)
+        OrderStore->>+DB: SELECT order, Purchase Order and current status
+        DB-->>OrderStore: Issued Purchase Order information
+        deactivate DB
+
+        OrderStore-->>OrderService: Cancellation eligibility data
+        deactivate OrderStore
+
+        Note right of OrderService: Issued Purchase Order cannot use the withdrawal flow
+
+        OrderService-->>OrderAPI: Conflict - cancellation not permitted
+        deactivate OrderService
+
+        OrderAPI-->>UI: Cancellation rejected
+        deactivate OrderAPI
+
+        UI-->>User: Display rejection and applicable support process
+        deactivate UI
+
+        Note over User,DB: Issues after Purchase Order issuance follow the Complaint and Replacement workflow
+
+    end
+
+    %% ==========================================
+    %% 5. EVIDENCE HANDLING
+    %% ==========================================
+
+    Note over UI,DB: Complaint evidence images are managed by the Complaint module, not by order cancellation

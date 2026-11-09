@@ -1,0 +1,257 @@
+sequenceDiagram
+    autonumber
+
+    actor User as Sales / Retailer
+    participant UI as Mobile App
+    participant API as OrdersController
+    participant OrderSvc as OrderService
+    participant OrderStore
+    participant AllocSvc as RealTimeAllocationService
+    participant PricingSvc as AllocationPricingService
+    participant AllocStore as RealTimeAllocationStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. CAPTURE SALES ORDER
+    %% ==========================================
+
+    User->>+UI: Submit Sales Order
+
+    UI->>+API: Create(orderData)
+    API->>+OrderSvc: CreateAsync(orderData)
+
+    Note over OrderSvc,OrderStore: Validate order and selected quantity promotion
+
+    OrderSvc->>+OrderStore: SaveChangesAsync()
+
+    OrderStore->>+DB: INSERT SalesOrder, SalesOrderLines and promotion snapshots
+    DB-->>OrderStore: Order capture saved
+    deactivate DB
+
+    OrderStore-->>OrderSvc: Save result
+    deactivate OrderStore
+
+    %% ==========================================
+    %% 2. START REAL-TIME ALLOCATION
+    %% ==========================================
+
+    OrderSvc->>+AllocSvc: AllocateAsync(orderId)
+
+    AllocSvc->>+AllocStore: LoadForUpdateAsync(orderId)
+
+    AllocStore->>+DB: SELECT order, Batch, inventory and pricing context
+    DB-->>AllocStore: Allocation context
+    deactivate DB
+
+    AllocStore-->>AllocSvc: Allocation data
+    deactivate AllocStore
+
+    %% ==========================================
+    %% 3. CHECK ALLOCATION ELIGIBILITY
+    %% ==========================================
+
+    Note over AllocSvc,DB: Check MLOR at ETA, expiry, service radius and stock
+
+    alt All order lines can be allocated
+
+        %% ==========================================
+        %% 4. CALCULATE BATCH-SPECIFIC PRICES
+        %% ==========================================
+
+        AllocSvc->>+PricingSvc: PriceAsync(pricingOrder, selectedParts)
+
+        Note right of PricingSvc: Apply shelf-life discount after quantity promotion
+
+        PricingSvc-->>AllocSvc: PricedOrder and PricedParts
+        deactivate PricingSvc
+
+        alt Batch pricing is valid
+
+            %% ==========================================
+            %% 5. STAGE PRICE SNAPSHOTS
+            %% ==========================================
+
+            loop For each priced Batch portion
+
+                Note over AllocSvc,AllocStore: Keep Batch, Warehouse, quantity and finalized pricing fields
+
+                AllocSvc->>+AllocStore: AddAllocation(pricedAllocation)
+
+                AllocStore-->>AllocSvc: Allocation staged
+                deactivate AllocStore
+
+                %% ==========================================
+                %% 6. STAGE STOCK RESERVATION
+                %% ==========================================
+
+                AllocSvc->>+AllocStore: AddReservation(reservation)
+
+                AllocStore-->>AllocSvc: Reservation staged
+                deactivate AllocStore
+
+                %% ==========================================
+                %% 7. STAGE INVENTORY TRANSACTION
+                %% ==========================================
+
+                AllocSvc->>+AllocStore: AddTransaction(reservationTransaction)
+
+                AllocStore-->>AllocSvc: Transaction staged
+                deactivate AllocStore
+
+            end
+
+            %% ==========================================
+            %% 8. STAGE FINAL QUOTATION
+            %% ==========================================
+
+            AllocSvc->>+AllocStore: AddQuote(finalQuotation)
+
+            AllocStore-->>AllocSvc: SalesOrderQuote staged
+            deactivate AllocStore
+
+            %% ==========================================
+            %% 9. COMMIT PRICING AND RESERVATION
+            %% ==========================================
+
+            Note over AllocSvc,DB: Commit priced allocations and reservations atomically
+
+            AllocSvc->>+AllocStore: SaveChangesAsync()
+
+            AllocStore->>+DB: INSERT Allocations, Reservations and SalesOrderQuote
+            Note right of DB: UPDATE reserved balances and finalized order amounts
+
+            DB-->>AllocStore: Commit result or concurrency error
+            deactivate DB
+
+            AllocStore-->>AllocSvc: Save result
+            deactivate AllocStore
+
+            alt Transaction committed
+
+                Note right of AllocSvc: Final prices are stored for future retrieval
+
+                AllocSvc-->>OrderSvc: Allocation and finalized quotation
+
+            else Concurrency conflict
+
+                Note right of AllocSvc: No partial reservation remains committed
+
+                AllocSvc-->>OrderSvc: Allocation conflict result
+
+            end
+
+        else Invalid batch pricing
+
+            Note right of AllocSvc: Do not persist an incomplete price result
+
+            AllocSvc-->>OrderSvc: Pricing validation error
+
+        end
+
+    else Order cannot be fully allocated
+
+        Note right of AllocSvc: No partial stock reservation is committed
+
+        AllocSvc-->>OrderSvc: Insufficient allocation result
+
+    end
+
+    deactivate AllocSvc
+
+    %% ==========================================
+    %% 10. RETURN ORDER CREATION RESULT
+    %% ==========================================
+
+    OrderSvc-->>API: Order result and pricing status
+    deactivate OrderSvc
+
+    API-->>UI: Order creation response
+    deactivate API
+
+    UI-->>User: Display order and finalized quotation
+    deactivate UI
+
+    %% ==========================================
+    %% 11. RETRIEVE STORED ORDER PRICING
+    %% ==========================================
+
+    User->>+UI: Open Order Pricing Details
+
+    UI->>+API: Get(orderId)
+    API->>+OrderSvc: GetAsync(orderId, actorContext)
+
+    %% ==========================================
+    %% 12. VERIFY ORDER ACCESS
+    %% ==========================================
+
+    OrderSvc->>+OrderStore: CanViewAsync(orderId, actorContext)
+
+    OrderStore->>+DB: SELECT order ownership and access scope
+    DB-->>OrderStore: Authorization information
+    deactivate DB
+
+    OrderStore-->>OrderSvc: Access result
+    deactivate OrderStore
+
+    alt User is not authorized
+
+        OrderSvc-->>API: Forbidden error
+
+    else User is authorized
+
+        %% ==========================================
+        %% 13. LOAD PERSISTED ORDER DATA
+        %% ==========================================
+
+        OrderSvc->>+OrderStore: FindAsync(orderId)
+
+        OrderStore->>+DB: SELECT SalesOrder and stored order details
+        DB-->>OrderStore: Persisted order data or null
+        deactivate DB
+
+        OrderStore-->>OrderSvc: OrderView or null
+        deactivate OrderStore
+
+        alt Order not found
+
+            OrderSvc-->>API: Not Found error
+
+        else Order exists
+
+            %% ==========================================
+            %% 14. BUILD ORDER PRICE RESULT
+            %% ==========================================
+
+            Note over OrderSvc,OrderStore: Use stored prices and order state
+
+            Note right of OrderSvc: Do not recalculate using current discount rules
+
+            OrderSvc-->>API: OrderDetailResult
+
+        end
+
+    end
+
+    deactivate OrderSvc
+
+    %% ==========================================
+    %% 15. RETURN ORDER DETAIL
+    %% ==========================================
+
+    API-->>UI: Order details or access error
+    deactivate API
+
+    UI-->>User: Display recorded prices and order information
+    deactivate UI
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over AllocSvc,DB: Each Batch portion retains its recorded pricing data
+
+    Note over OrderSvc,DB: Reading an order must not update finalized prices
+
+    Note over AllocStore,DB: Database-level immutability enforcement requires verification
+
+    Note over User,DB: Detailed legacy price-trace lookup is separate from this order read flow

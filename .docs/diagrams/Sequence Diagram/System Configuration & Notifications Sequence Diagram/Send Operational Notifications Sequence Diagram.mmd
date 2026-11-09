@@ -1,0 +1,193 @@
+sequenceDiagram
+    autonumber
+
+    actor Host as .NET Application Host
+    participant Job as InventoryOutboxHostedService
+    participant Dispatcher as InventoryOutboxDispatcher
+    participant Store as InventoryOutboxStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. START BACKGROUND PROCESSING
+    %% ==========================================
+
+    Note over Host,DB: Business transactions have already committed their OutboxMessages
+
+    Host->>+Job: ExecuteAsync(stoppingToken)
+
+    loop While background worker is active
+
+        %% ==========================================
+        %% 2. DISPATCH PENDING OUTBOX MESSAGES
+        %% ==========================================
+
+        Job->>+Dispatcher: DispatchAsync(stoppingToken)
+
+        Dispatcher->>+Store: ListPendingBatchExpiredMessagesAsync(batchSize)
+
+        Store->>+DB: SELECT pending BatchExpired OutboxMessages
+        DB-->>Store: Pending OutboxMessages
+        deactivate DB
+
+        Store-->>Dispatcher: Pending message list
+        deactivate Store
+
+        alt No pending messages
+
+            Note right of Dispatcher: No notification processing required
+
+        else Pending messages found
+
+            %% ==========================================
+            %% 3. PROCESS EACH OUTBOX MESSAGE
+            %% ==========================================
+
+            loop For each pending OutboxMessage
+
+                Note over Dispatcher,Store: Read and validate BatchExpired event payload
+
+                alt Event payload is invalid
+
+                    %% ==========================================
+                    %% 4. HANDLE INVALID EVENT
+                    %% ==========================================
+
+                    Note right of Dispatcher: Record processing error and increment RetryCount
+
+                    alt Retry limit not reached
+
+                        Dispatcher->>+Store: SaveChangesAsync()
+
+                        Store->>+DB: UPDATE OutboxMessage retry count and last error
+                        DB-->>Store: Retry information saved
+                        deactivate DB
+
+                        Store-->>Dispatcher: Save successful
+                        deactivate Store
+
+                        Note right of Dispatcher: Keep event eligible for later retry
+
+                    else Retry limit reached
+
+                        Dispatcher->>+Store: SaveChangesAsync()
+
+                        Store->>+DB: UPDATE OutboxMessage status to Failed
+                        DB-->>Store: Failure status saved
+                        deactivate DB
+
+                        Store-->>Dispatcher: Save successful
+                        deactivate Store
+
+                        Note right of Dispatcher: Retain failure details for monitoring
+
+                    end
+
+                else Event payload is valid
+
+                    %% ==========================================
+                    %% 5. RESOLVE NOTIFICATION RECIPIENTS
+                    %% ==========================================
+
+                    Dispatcher->>+Store: ListExpiryNotificationRecipientsAsync(eventData)
+
+                    Store->>+DB: SELECT eligible users and warehouse assignments
+                    DB-->>Store: Authorized notification recipients
+                    deactivate DB
+
+                    Store-->>Dispatcher: Recipient list
+                    deactivate Store
+
+                    %% ==========================================
+                    %% 6. CREATE NOTIFICATIONS
+                    %% ==========================================
+
+                    loop For each eligible recipient
+
+                        %% ==========================================
+                        %% 7. CHECK DUPLICATE NOTIFICATION
+                        %% ==========================================
+
+                        Dispatcher->>+Store: NotificationExistsAsync(outboxId, userId)
+
+                        Store->>+DB: SELECT Notification by event and recipient
+                        DB-->>Store: Notification exists or not
+                        deactivate DB
+
+                        Store-->>Dispatcher: Existence result
+                        deactivate Store
+
+                        alt Notification already exists
+
+                            Note right of Dispatcher: Skip duplicate notification
+
+                        else Notification does not exist
+
+                            %% ==========================================
+                            %% 8. PREPARE NOTIFICATION
+                            %% ==========================================
+
+                            Note right of Dispatcher: Build localized notification content
+
+                            Dispatcher->>+Store: AddNotification(notification)
+
+                            Store-->>Dispatcher: Notification staged
+                            deactivate Store
+
+                        end
+
+                    end
+
+                    %% ==========================================
+                    %% 9. MARK OUTBOX MESSAGE PROCESSED
+                    %% ==========================================
+
+                    Note over Dispatcher,Store: Mark event Processed after recipient handling succeeds
+
+                    Dispatcher->>+Store: SaveChangesAsync()
+
+                    Store->>+DB: INSERT Notifications and UPDATE OutboxMessage
+                    Note right of DB: Save generated notifications and processed status
+
+                    DB-->>Store: Notification changes committed
+                    deactivate DB
+
+                    Store-->>Dispatcher: Save successful
+                    deactivate Store
+
+                end
+
+            end
+
+        end
+
+        %% ==========================================
+        %% 10. RETURN DISPATCH RESULT
+        %% ==========================================
+
+        Dispatcher-->>Job: InventoryOutboxDispatchResult
+        deactivate Dispatcher
+
+        opt Worker continues running
+
+            Note right of Job: Wait for configured polling interval
+
+        end
+
+    end
+
+    %% ==========================================
+    %% 11. BACKGROUND SERVICE SHUTDOWN
+    %% ==========================================
+
+    Job-->>Host: ExecuteAsync completed or cancelled
+    deactivate Job
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over Dispatcher,DB: Each event and recipient must produce at most one Notification
+
+    Note over Job,DB: Notification processing failures do not roll back source business transactions
+
+    Note over Dispatcher,DB: Current verified dispatcher handles BatchExpired in-app notifications

@@ -1,0 +1,335 @@
+sequenceDiagram
+    autonumber
+
+    actor Admin as Administrator
+    participant UI as Web Portal
+    participant API as WriteOffsController (TO-BE)
+    participant Service as WriteOffService (TO-BE)
+    participant Store as WriteOffStore (TO-BE)
+    participant DB as PostgreSQL Database
+
+    Note over API,Store: TO-BE components - approval workflow not yet verified in codebase
+
+    %% ==========================================
+    %% 1. OPEN PENDING WRITE-OFF
+    %% ==========================================
+
+    Admin->>+UI: Open Pending Write-Off Request
+
+    UI->>+API: Get Write-Off Details
+
+    API->>+Service: Retrieve Write-Off for Review
+
+    Service->>+Store: Find Write-Off with Items and Attachments
+
+    Store->>+DB: SELECT WriteOff, WriteOffItems and Attachments
+
+    DB-->>Store: Write-Off details or null
+    deactivate DB
+
+    Store-->>Service: WriteOffReviewData
+    deactivate Store
+
+    Service-->>API: Write-Off details or Not Found
+    deactivate Service
+
+    API-->>UI: Review information
+    deactivate API
+
+    UI-->>Admin: Display quantities, reasons and evidence
+    deactivate UI
+
+    %% ==========================================
+    %% 2. SUBMIT APPROVAL DECISION
+    %% ==========================================
+
+    Admin->>+UI: Select Approve or Reject
+
+    UI->>+API: Process Write-Off Decision
+
+    API->>+Service: Process Decision
+
+    %% ==========================================
+    %% 3. VALIDATE AUTHORIZATION
+    %% ==========================================
+
+    Service->>+Service: Validate Administrator Role
+
+    Service-->>Service: Authorization result
+    deactivate Service
+
+    alt User is not Administrator
+
+        Note right of Service: Reject operation with Forbidden error
+
+    else Administrator is authorized
+
+        %% ==========================================
+        %% 4. BEGIN ATOMIC DECISION PROCESSING
+        %% ==========================================
+
+        Service->>+Store: Execute Write-Off Decision Transaction
+
+        Store->>+DB: BEGIN TRANSACTION
+        DB-->>Store: Transaction started
+        deactivate DB
+
+        %% ==========================================
+        %% 5. LOCK WRITE-OFF REQUEST
+        %% ==========================================
+
+        Store->>+DB: SELECT WriteOff FOR UPDATE
+
+        DB-->>Store: Current Write-Off and Status
+        deactivate DB
+
+        %% ==========================================
+        %% 6. VALIDATE REQUEST STATUS
+        %% ==========================================
+
+        alt Write-Off does not exist
+
+            Store->>+DB: ROLLBACK
+            DB-->>Store: Transaction rolled back
+            deactivate DB
+
+            Note right of Store: Return Not Found
+
+        else Write-Off already Approved and same decision
+
+            Store->>+DB: ROLLBACK
+            DB-->>Store: Transaction closed
+            deactivate DB
+
+            Note right of Store: Return existing approval without stock deduction
+
+        else Write-Off is not Pending
+
+            Store->>+DB: ROLLBACK
+            DB-->>Store: Transaction rolled back
+            deactivate DB
+
+            Note right of Store: Return state conflict
+
+        else Write-Off is Pending
+
+            %% ==========================================
+            %% 7. PROCESS ADMINISTRATOR DECISION
+            %% ==========================================
+
+            alt Administrator selects Reject
+
+                %% ==========================================
+                %% 8. VALIDATE REJECTION REASON
+                %% ==========================================
+
+                alt Rejection reason is missing
+
+                    Store->>+DB: ROLLBACK
+                    DB-->>Store: Transaction rolled back
+                    deactivate DB
+
+                    Note right of Store: Return validation error
+
+                else Rejection reason is valid
+
+                    %% ==========================================
+                    %% 9. REJECT WRITE-OFF
+                    %% ==========================================
+
+                    Store->>+DB: UPDATE WriteOff Status = Rejected
+
+                    DB-->>Store: Write-Off marked Rejected
+                    deactivate DB
+
+                    Store->>+DB: INSERT AuditLog and COMMIT
+
+                    DB-->>Store: Rejection committed
+                    deactivate DB
+
+                    Note right of Store: Physical and Reserved Stock unchanged
+
+                end
+
+            else Administrator selects Approve
+
+                %% ==========================================
+                %% 10. LOAD WRITE-OFF ITEMS AND EVIDENCE
+                %% ==========================================
+
+                Store->>+DB: SELECT WriteOffItems and WriteOffAttachments
+
+                DB-->>Store: Requested quantities and evidence references
+                deactivate DB
+
+                %% ==========================================
+                %% 11. VALIDATE REQUIRED INFORMATION
+                %% ==========================================
+
+                alt Missing evidence or disposal method
+
+                    Store->>+DB: ROLLBACK
+
+                    DB-->>Store: Transaction rolled back
+                    deactivate DB
+
+                    Note right of Store: Return validation error
+
+                else Required information is valid
+
+                    %% ==========================================
+                    %% 12. LOCK AFFECTED INVENTORY ROWS
+                    %% ==========================================
+
+                    loop For each WriteOffItem
+
+                        Store->>+DB: SELECT InventoryBalance FOR UPDATE
+
+                        DB-->>Store: Physical and Reserved quantities
+                        deactivate DB
+
+                        Store->>+DB: SELECT active Reservations and InventoryLocks
+
+                        DB-->>Store: Reservation and lock information
+                        deactivate DB
+
+                        Note right of Store: Validate quantity and unresolved reserved overlap
+
+                    end
+
+                    %% ==========================================
+                    %% 13. VALIDATE ALL WRITE-OFF ITEMS
+                    %% ==========================================
+
+                    alt Any item exceeds unreserved stock or overlaps unresolved reservation
+
+                        Store->>+DB: ROLLBACK
+
+                        DB-->>Store: Transaction rolled back
+                        deactivate DB
+
+                        Note right of Store: Reject entire approval
+
+                        Note right of Store: No inventory deduction is committed
+
+                    else All WriteOffItems are eligible
+
+                        %% ==========================================
+                        %% 14. PROCESS APPROVED ITEMS
+                        %% ==========================================
+
+                        loop For each approved WriteOffItem
+
+                            %% ==========================================
+                            %% 15. DEDUCT PHYSICAL STOCK
+                            %% ==========================================
+
+                            Store->>+DB: UPDATE InventoryBalance PhysicalQuantity
+
+                            Note right of DB: Deduct approved quantity and recalculate Available
+
+                            DB-->>Store: InventoryBalance updated
+                            deactivate DB
+
+                            %% ==========================================
+                            %% 16. RESOLVE MATCHING INVENTORY LOCK
+                            %% ==========================================
+
+                            opt Item has matching active InventoryLock
+
+                                Store->>+DB: UPDATE matching InventoryLock records
+
+                                Note right of DB: Resolve only the written-off locked quantity
+
+                                DB-->>Store: Matching lock state updated
+                                deactivate DB
+
+                            end
+
+                            %% ==========================================
+                            %% 17. INVALIDATE AFFECTED QR LABELS
+                            %% ==========================================
+
+                            Store->>+DB: UPDATE affected BatchQrLabel status
+
+                            DB-->>Store: QR labels invalidated as applicable
+                            deactivate DB
+
+                            %% ==========================================
+                            %% 18. APPEND INVENTORY TRANSACTION
+                            %% ==========================================
+
+                            Store->>+DB: INSERT InventoryTransaction for WriteOffItem
+
+                            Note right of DB: Unique source reference prevents duplicate deduction
+
+                            DB-->>Store: Inventory movement recorded
+                            deactivate DB
+
+                        end
+
+                        %% ==========================================
+                        %% 19. APPROVE WRITE-OFF
+                        %% ==========================================
+
+                        Store->>+DB: UPDATE WriteOff Status = Approved
+
+                        DB-->>Store: Write-Off marked Approved
+                        deactivate DB
+
+                        %% ==========================================
+                        %% 20. AUDIT AND COMMIT
+                        %% ==========================================
+
+                        Store->>+DB: INSERT AuditLog and COMMIT
+
+                        DB-->>Store: Approval transaction committed
+                        deactivate DB
+
+                        Note right of Store: All inventory movements committed exactly once
+
+                    end
+
+                end
+
+            end
+
+        end
+
+        %% ==========================================
+        %% 21. RETURN TRANSACTION RESULT
+        %% ==========================================
+
+        Store-->>Service: Write-Off Decision Result
+        deactivate Store
+
+    end
+
+    %% ==========================================
+    %% 22. RETURN APPROVAL RESPONSE
+    %% ==========================================
+
+    Service-->>API: Approval outcome or business error
+    deactivate Service
+
+    API-->>UI: Decision response
+    deactivate API
+
+    UI-->>Admin: Display Approved, Rejected or Error
+    deactivate UI
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over Service,DB: Only Administrator may approve or reject Write-Off
+
+    Note over Store,DB: Approval and all stock movements form one atomic transaction
+
+    Note over Store,DB: Pending approval alone must not deduct Physical Stock
+
+    Note over Store,DB: Reserved quantities must be resolved before write-off
+
+    Note over Store,DB: Repeated approval must never deduct stock twice
+
+    Note over Store,DB: Rejection does not modify inventory balances

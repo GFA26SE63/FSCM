@@ -1,0 +1,134 @@
+sequenceDiagram
+    autonumber
+
+    actor Admin as Administrator
+    participant UI as Web Portal
+    participant API as RetailersController
+    participant Service as RetailerService
+    participant Store as RetailerStore
+    participant DB as PostgreSQL Database
+    participant Email as Transactional Email Service
+
+    %% ==========================================
+    %% 1. VIEW PENDING RETAILER REGISTRATIONS
+    %% ==========================================
+
+    Admin->>+UI: Open Retailer Registration Review
+
+    UI->>+API: List(status = Pending)
+    API->>+Service: ListAsync(filters)
+
+    Service->>+Store: Retrieve pending Retailers
+    Store->>+DB: SELECT pending Retailer records
+    DB-->>Store: Pending Retailer list
+    deactivate DB
+
+    Store-->>Service: Retailer records
+    deactivate Store
+
+    Service-->>API: Pending Retailer list
+    deactivate Service
+
+    API-->>UI: 200 OK - Retailer list
+    deactivate API
+
+    UI-->>Admin: Display pending registrations
+    deactivate UI
+
+    %% ==========================================
+    %% 2. VIEW REGISTRATION AND ASSESSMENT
+    %% ==========================================
+
+    Admin->>+UI: Select Retailer for review
+
+    UI->>+API: Get(retailerId)
+    API->>+Service: GetAsync(retailerId)
+
+    Service->>+Store: FindViewAsync(retailerId)
+    Store->>+DB: SELECT Retailer, assessment, contact and MLOR
+    DB-->>Store: Retailer details
+    deactivate DB
+
+    Store-->>Service: Registration information
+    deactivate Store
+
+    Service-->>API: Retailer details
+    deactivate Service
+
+    API-->>UI: 200 OK - Registration details
+    deactivate API
+
+    UI-->>Admin: Display declaration and assessment
+    deactivate UI
+
+    %% ==========================================
+    %% 3. REVIEW RETAILER REGISTRATION
+    %% ==========================================
+
+    Admin->>+UI: Submit approval or rejection decision
+
+    Note over Admin,UI: Approval includes official potential class,<br/>priority, Sales Group and payment term
+
+    UI->>+API: Review(retailerId, decision, reviewData)
+
+    alt Administrator is authorized
+
+        API->>+Service: ReviewAsync(retailerId, decision, reviewData)
+
+        Service->>+Store: FindForUpdateAsync(retailerId)
+        Store->>+DB: SELECT Retailer and current status for update
+        DB-->>Store: Retailer record and current status
+        deactivate DB
+
+        Store-->>Service: Retailer review data
+        deactivate Store
+
+        alt Approve valid pending Retailer
+
+            Service->>+Store: Approve registration and provision account
+
+            Store->>+DB: TRANSACTION - Assign 8-digit code,<br/>activate Retailer, finalize assessment and MLOR,<br/>create or link account and Sales assignment
+
+            DB-->>Store: Approval committed
+            deactivate DB
+
+            Store-->>Service: Active Retailer and business code
+            deactivate Store
+
+            Service->>+Email: SendRetailerAccountCreatedAsync()
+            Email-->>Service: Email delivery result
+            deactivate Email
+
+        else Reject pending Retailer
+
+            Note over Admin,Service: Rejection requires a reason
+
+            Service->>+Store: Reject registration with reason
+
+            Store->>+DB: UPDATE Retailer status and rejection reason
+            DB-->>Store: Rejection committed
+            deactivate DB
+
+            Store-->>Service: Rejected Retailer
+            deactivate Store
+
+        else Invalid or previously processed registration
+
+            Note right of Service: Reject invalid transition,<br/>missing reason or conflicting decision
+
+        end
+
+        Service-->>API: Review result or business error
+        deactivate Service
+
+    else User is not authorized
+
+        Note right of API: Reject review request
+
+    end
+
+    API-->>UI: Approval, rejection or error response
+    deactivate API
+
+    UI-->>Admin: Display final review result
+    deactivate UI

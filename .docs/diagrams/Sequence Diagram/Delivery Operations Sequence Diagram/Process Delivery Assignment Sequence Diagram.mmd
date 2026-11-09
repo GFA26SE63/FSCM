@@ -1,0 +1,293 @@
+sequenceDiagram
+    autonumber
+
+    actor Operator
+    participant UI as Web Portal
+    participant ShipmentAPI as ShipmentsController
+    participant FleetAPI as DeliveriesController
+    participant ShipmentService
+    participant FleetService as DeliveryService
+    participant ShipmentStore
+    participant FleetStore as DeliveryStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. OPEN DELIVERY ASSIGNMENT
+    %% ==========================================
+
+    Operator->>+UI: Open Shipment Delivery Assignment
+
+    UI->>+ShipmentAPI: Get(shipmentId)
+    ShipmentAPI->>+ShipmentService: GetAsync(shipmentId)
+
+    ShipmentService->>+ShipmentStore: FindByIdAsync(shipmentId)
+
+    ShipmentStore->>+DB: SELECT Shipment and related order
+    DB-->>ShipmentStore: Shipment record or null
+    deactivate DB
+
+    ShipmentStore-->>ShipmentService: Shipment information
+    deactivate ShipmentStore
+
+    Note right of ShipmentService: Validate access to shipment details
+
+    ShipmentService-->>ShipmentAPI: ShipmentResult or error
+    deactivate ShipmentService
+
+    ShipmentAPI-->>UI: Shipment details
+    deactivate ShipmentAPI
+
+    %% ==========================================
+    %% 2. LOAD AVAILABLE DRIVERS
+    %% ==========================================
+
+    UI->>+FleetAPI: Drivers(warehouseId)
+    FleetAPI->>+FleetService: ListDriversAsync(filters)
+
+    FleetService->>+FleetStore: ListDriversAsync(filters)
+
+    FleetStore->>+DB: SELECT Drivers for Warehouse
+    DB-->>FleetStore: Driver records
+    deactivate DB
+
+    FleetStore-->>FleetService: Driver list
+    deactivate FleetStore
+
+    FleetService-->>FleetAPI: DriverResults
+    deactivate FleetService
+
+    FleetAPI-->>UI: Driver list
+    deactivate FleetAPI
+
+    %% ==========================================
+    %% 3. LOAD AVAILABLE VEHICLES
+    %% ==========================================
+
+    UI->>+FleetAPI: Vehicles(warehouseId)
+    FleetAPI->>+FleetService: ListVehiclesAsync(filters)
+
+    FleetService->>+FleetStore: ListVehiclesAsync(filters)
+
+    FleetStore->>+DB: SELECT Vehicles for Warehouse
+    DB-->>FleetStore: Vehicle records
+    deactivate DB
+
+    FleetStore-->>FleetService: Vehicle list
+    deactivate FleetStore
+
+    FleetService-->>FleetAPI: VehicleResults
+    deactivate FleetService
+
+    FleetAPI-->>UI: Vehicle list
+    deactivate FleetAPI
+
+    UI-->>Operator: Display Shipment, Drivers and Vehicles
+    deactivate UI
+
+    %% ==========================================
+    %% 4. SUBMIT DELIVERY ASSIGNMENT
+    %% ==========================================
+
+    Operator->>+UI: Select Driver and Vehicle
+
+    UI->>+ShipmentAPI: Assign(shipmentId, assignmentData)
+    ShipmentAPI->>+ShipmentService: AssignAsync(shipmentId, assignmentData)
+
+    %% ==========================================
+    %% 5. LOAD CURRENT SHIPMENT
+    %% ==========================================
+
+    ShipmentService->>+ShipmentStore: FindByIdAsync(shipmentId)
+
+    ShipmentStore->>+DB: SELECT Shipment and current assignment
+    DB-->>ShipmentStore: Current Shipment or null
+    deactivate DB
+
+    ShipmentStore-->>ShipmentService: Shipment information
+    deactivate ShipmentStore
+
+    %% ==========================================
+    %% 6. VALIDATE SHIPMENT
+    %% ==========================================
+
+    alt Shipment not found or assignment is not permitted
+
+        Note right of ShipmentService: Reject invalid role, status or assignment request
+
+        ShipmentService-->>ShipmentAPI: Not Found or business error
+
+    else Shipment is eligible for assignment
+
+        %% ==========================================
+        %% 7. VALIDATE DRIVER
+        %% ==========================================
+
+        ShipmentService->>+ShipmentStore: FindDriverAsync(driverId)
+
+        ShipmentStore->>+DB: SELECT Driver by Id
+        DB-->>ShipmentStore: Driver information or null
+        deactivate DB
+
+        ShipmentStore-->>ShipmentService: Driver
+        deactivate ShipmentStore
+
+        %% ==========================================
+        %% 8. VALIDATE VEHICLE
+        %% ==========================================
+
+        ShipmentService->>+ShipmentStore: FindVehicleAsync(vehicleId)
+
+        ShipmentStore->>+DB: SELECT Vehicle by Id
+        DB-->>ShipmentStore: Vehicle information or null
+        deactivate DB
+
+        ShipmentStore-->>ShipmentService: Vehicle
+        deactivate ShipmentStore
+
+        %% ==========================================
+        %% 9. CHECK ASSIGNMENT CONSTRAINTS
+        %% ==========================================
+
+        Note over ShipmentService,ShipmentStore: Verify active Driver and Vehicle
+
+        Note over ShipmentService,ShipmentStore: Verify Warehouse compatibility
+
+        alt Driver or Vehicle is invalid
+
+            ShipmentService-->>ShipmentAPI: Validation error
+
+        else Driver and Vehicle are valid
+
+            %% ==========================================
+            %% 10. CHECK EXISTING ASSIGNMENT
+            %% ==========================================
+
+            alt Same Driver and Vehicle already assigned
+
+                Note right of ShipmentService: No assignment change required
+
+                ShipmentService-->>ShipmentAPI: Current ShipmentResult
+
+            else New or changed assignment
+
+                %% ==========================================
+                %% 11. UPDATE SHIPMENT ASSIGNMENT
+                %% ==========================================
+
+                Note over ShipmentService,ShipmentStore: Set DriverId and VehicleId
+
+                Note over ShipmentService,ShipmentStore: Capture Driver and Vehicle snapshots
+
+                Note right of ShipmentService: Preserve shipment identity and stock quantities
+
+                ShipmentService->>+ShipmentStore: SaveChangesAsync()
+
+                ShipmentStore->>+DB: UPDATE Shipment assignment and snapshots
+                Note right of DB: Save AssignedAt and updated version
+
+                DB-->>ShipmentStore: Assignment saved
+                deactivate DB
+
+                ShipmentStore-->>ShipmentService: Save successful
+                deactivate ShipmentStore
+
+                ShipmentService-->>ShipmentAPI: Updated ShipmentResult
+
+            end
+
+        end
+
+    end
+
+    %% ==========================================
+    %% 12. RETURN ASSIGNMENT RESULT
+    %% ==========================================
+
+    deactivate ShipmentService
+
+    ShipmentAPI-->>UI: Assignment result or error
+    deactivate ShipmentAPI
+
+    UI-->>Operator: Display assigned Driver and Vehicle
+    deactivate UI
+
+    %% ==========================================
+    %% 13. OPTIONAL DELIVERY EXCEPTION
+    %% ==========================================
+
+    opt Delivery exception occurs after dispatch
+
+        Operator->>+UI: Report Shipment delivery exception
+
+        Note over Operator,UI: Enter failure reason and supporting information
+
+        UI->>+ShipmentAPI: FlagException(shipmentId, exceptionData)
+        ShipmentAPI->>+ShipmentService: FlagExceptionAsync(shipmentId, exceptionData)
+
+        %% ==========================================
+        %% 14. LOAD SHIPMENT STATUS
+        %% ==========================================
+
+        ShipmentService->>+ShipmentStore: FindByIdAsync(shipmentId)
+
+        ShipmentStore->>+DB: SELECT Shipment and current status
+        DB-->>ShipmentStore: Current Shipment information
+        deactivate DB
+
+        ShipmentStore-->>ShipmentService: Shipment
+        deactivate ShipmentStore
+
+        %% ==========================================
+        %% 15. VALIDATE DELIVERY EXCEPTION
+        %% ==========================================
+
+        alt Shipment not found or exception is not allowed
+
+            ShipmentService-->>ShipmentAPI: Not Found or Conflict error
+
+        else Shipment exception is valid
+
+            %% ==========================================
+            %% 16. RECORD EXCEPTION
+            %% ==========================================
+
+            Note right of ShipmentService: Normalize reason and update exception state
+
+            ShipmentService->>+ShipmentStore: SaveChangesAsync()
+
+            ShipmentStore->>+DB: UPDATE Shipment exception reason and status
+            DB-->>ShipmentStore: Exception recorded
+            deactivate DB
+
+            ShipmentStore-->>ShipmentService: Save successful
+            deactivate ShipmentStore
+
+            ShipmentService-->>ShipmentAPI: Updated ShipmentResult
+
+        end
+
+        %% ==========================================
+        %% 17. RETURN EXCEPTION RESULT
+        %% ==========================================
+
+        deactivate ShipmentService
+
+        ShipmentAPI-->>UI: Exception result or error
+        deactivate ShipmentAPI
+
+        UI-->>Operator: Display Shipment exception status
+        deactivate UI
+
+    end
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over ShipmentService,DB: Assignment does not change Physical or Reserved Stock
+
+    Note over ShipmentService,DB: Physical Stock is deducted only during Dispatch
+
+    Note over ShipmentService,DB: Delivery exceptions do not trigger automatic refunds
+
+    Note over Operator,DB: A Shipment is not Delivered until actual receipt is confirmed

@@ -1,0 +1,201 @@
+classDiagram
+direction TB
+
+%% ==========================================
+%% API LAYER
+%% ==========================================
+
+namespace API {
+
+    class CategoriesController {
+        +List()
+        +Get()
+        +Create()
+        +Update()
+        +UpdateStatus()
+        +Delete()
+    }
+
+    class ProductsController {
+        +List()
+        +Get()
+        +Create()
+        +Update()
+        +Delete()
+        +Publish()
+        +Inactivate()
+        +CreateReplacement()
+        +Clone()
+        +ListPrices()
+        +GetPriceSuggestion()
+        +SetPrice()
+    }
+}
+
+%% ==========================================
+%% APPLICATION LAYER
+%% ==========================================
+
+namespace Application {
+
+    class CatalogService {
+        <<Service>>
+        +ListCategoriesAsync()
+        +GetCategoryAsync()
+        +CreateCategoryAsync()
+        +UpdateCategoryAsync()
+        +SetCategoryStatusAsync()
+        +DeleteCategoryAsync()
+        +ListProductsAsync()
+        +GetProductAsync()
+        +CreateProductAsync()
+        +UpdateProductAsync()
+        +DeleteDraftProductAsync()
+        +PublishProductAsync()
+        +InactivateProductAsync()
+        +CreateReplacementAsync()
+        +CloneProductAsync()
+        +SetPriceAsync()
+        +ListPriceHistoryAsync()
+        +GetPriceSuggestionAsync()
+    }
+
+    class ICatalogStore {
+        <<Interface>>
+        +ListCategoriesAsync()
+        +FindCategoryAsync()
+        +FindCategoryByCodeAsync()
+        +CategoryHasAnyChildrenAsync()
+        +CategoryHasAnyProductsAsync()
+        +AddCategory()
+        +RemoveCategory()
+        +ListProductsAsync()
+        +FindProductAsync()
+        +FindProductBySkuAsync()
+        +FindReplacementAsync()
+        +AddProduct()
+        +RemoveProduct()
+        +ListPricesAsync()
+        +FindActivePriceAsync()
+        +AddPrice()
+        +SaveChangesAsync()
+    }
+}
+
+%% ==========================================
+%% PERSISTENCE LAYER
+%% ==========================================
+
+namespace Persistence {
+
+    class CatalogStore {
+        <<Repository>>
+        +ListCategoriesAsync()
+        +FindCategoryAsync()
+        +AddCategory()
+        +RemoveCategory()
+        +ListProductsAsync()
+        +FindProductAsync()
+        +FindProductBySkuAsync()
+        +FindReplacementAsync()
+        +AddProduct()
+        +RemoveProduct()
+        +ListPricesAsync()
+        +FindActivePriceAsync()
+        +AddPrice()
+        +SaveChangesAsync()
+    }
+}
+
+%% ==========================================
+%% DOMAIN LAYER
+%% ==========================================
+
+namespace Domain {
+
+    class ProductCategory {
+        +Id: Guid
+        +ParentCategoryId: Guid
+        +Code: string
+        +Name: string
+        +Description: string
+        +IsActive: bool
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class Product {
+        +Id: Guid
+        +ProductCategoryId: Guid
+        +ReplacesProductId: Guid
+        +Sku: string
+        +Name: string
+        +Unit: string
+        +ShelfLifeHours: int
+        +NearDateThresholdHours: int
+        +Status: string
+        +PublishedAt: DateTimeOffset
+        +InactivatedAt: DateTimeOffset
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class ProductPrice {
+        +Id: Guid
+        +ProductId: Guid
+        +UnitPrice: decimal
+        +EffectiveFrom: DateTimeOffset
+        +EffectiveTo: DateTimeOffset
+        +IsActive: bool
+        +CreatedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% API DEPENDENCIES
+%% ==========================================
+
+CategoriesController ..> CatalogService : uses
+ProductsController ..> CatalogService : uses
+
+%% ==========================================
+%% APPLICATION DEPENDENCIES
+%% ==========================================
+
+CatalogService ..> ICatalogStore : uses
+
+%% ==========================================
+%% INTERFACE REALIZATION
+%% ==========================================
+
+CatalogStore ..|> ICatalogStore : implements
+
+%% ==========================================
+%% PERSISTENCE DEPENDENCIES
+%% ==========================================
+
+CatalogStore ..> ProductCategory : persists
+CatalogStore ..> Product : persists
+CatalogStore ..> ProductPrice : persists
+
+%% ==========================================
+%% DOMAIN ASSOCIATIONS
+%% ==========================================
+
+ProductCategory "0..1" -- "0..*" ProductCategory : parent / children
+
+ProductCategory "1" -- "0..*" Product : categorizes
+
+Product "1" -- "0..*" ProductPrice : price history
+
+Product "0..1" -- "0..*" Product : original / replacements
+
+%% ==========================================
+%% BUSINESS CONSTRAINTS
+%% ==========================================
+
+note for ProductCategory "Maximum 3 hierarchy levels. Products belong to leaf categories."
+
+note for Product "Lifecycle: Draft, Published, Inactive. Published SKU details are immutable."
+
+note for ProductPrice "Stores effective product prices and price history."

@@ -1,0 +1,560 @@
+sequenceDiagram
+    autonumber
+
+    actor Keeper as Warehouse Keeper
+    actor Operator as Operator
+    actor Retailer as Retailer
+
+    participant UI as FSCM Web Portal / Mobile App
+
+    participant PickAPI as PickingListsController
+    participant ShipAPI as ShipmentsController
+    participant ComplaintAPI as ComplaintsController
+
+    participant PickSvc as CurrentPickingService
+    participant ShipSvc as ShipmentService
+    participant ComplaintSvc as ComplaintService
+    participant CompletionSvc as OrderCompletionService
+
+    participant PickStore as PickingStore
+    participant ShipStore as ShipmentStore
+    participant ComplaintStore as ComplaintStore
+
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% PART 1 - HANDLE PICKING EXCEPTIONS
+    %% ==========================================
+
+    rect rgb(245, 248, 255)
+
+        Note over Keeper,DB: PART 1 - PICKING VALIDATION AND EXCEPTION HANDLING
+
+        Keeper->>+UI: Scan picked goods and verify quantities
+
+        UI->>+PickAPI: Scan(pickingCode, scanRequest)
+        PickAPI->>+PickSvc: ScanAsync(pickingCode, data, actorContext)
+
+        %% ------------------------------------------
+        %% 1. LOAD PICKING DATA
+        %% ------------------------------------------
+
+        PickSvc->>+PickStore: FindAsync(pickingCode)
+
+        PickStore->>+DB: SELECT PickingList and PickingItems
+        DB-->>PickStore: Picking data or null
+        deactivate DB
+
+        PickStore-->>PickSvc: PickingList context
+        deactivate PickStore
+
+        %% ------------------------------------------
+        %% 2. VALIDATE SCANNED GOODS
+        %% ------------------------------------------
+
+        Note right of PickSvc: Validate Warehouse scope, QR and allocated quantities
+
+        alt Invalid QR, wrong Batch or excessive quantity
+
+            Note right of PickSvc: Reject scan without changing picked quantities
+
+        else Scan is valid
+
+            PickSvc->>+PickStore: FindLabelForUpdateAsync(qrCode)
+
+            PickStore->>+DB: SELECT BatchQrLabel and current status
+            DB-->>PickStore: QR Label data
+            deactivate DB
+
+            PickStore-->>PickSvc: Label context
+            deactivate PickStore
+
+            Note right of PickSvc: Update tracked PickingItem and QR state
+
+            PickSvc->>+PickStore: SaveChangesAsync()
+
+            PickStore->>+DB: UPDATE PickingItem and QR Label state
+            Note right of DB: INSERT QR Label event where applicable
+
+            DB-->>PickStore: Picking scan saved
+            deactivate DB
+
+            PickStore-->>PickSvc: Save result
+            deactivate PickStore
+
+        end
+
+        PickSvc-->>PickAPI: Picking scan result or business error
+        deactivate PickSvc
+
+        PickAPI-->>UI: Scan response
+        deactivate PickAPI
+
+        UI-->>Keeper: Display scan result
+        deactivate UI
+
+        %% ------------------------------------------
+        %% 3. COMPLETE PICKING LIST
+        %% ------------------------------------------
+
+        Keeper->>+UI: Request PickingList completion
+
+        UI->>+PickAPI: Complete(pickingCode, request)
+        PickAPI->>+PickSvc: CompleteAsync(pickingCode, data, actorContext)
+
+        PickSvc->>+PickStore: FindAsync(pickingCode)
+
+        PickStore->>+DB: SELECT PickingList and item completion status
+        DB-->>PickStore: Current PickingList data
+        deactivate DB
+
+        PickStore-->>PickSvc: Picking context
+        deactivate PickStore
+
+        %% ------------------------------------------
+        %% 4. CHECK PICKING COMPLETION
+        %% ------------------------------------------
+
+        alt Missing quantity, unresolved mismatch or invalid state
+
+            Note right of PickSvc: PickingList cannot be completed
+
+            Note right of PickSvc: Do not create Shipment
+
+            Note right of PickSvc: Preserve allocated stock and Reservations
+
+        else All PickingItems are complete
+
+            %% ------------------------------------------
+            %% 5. PREVENT DUPLICATE SHIPMENT
+            %% ------------------------------------------
+
+            PickSvc->>+PickStore: ShipmentExistsAsync(orderId, warehouseId)
+
+            PickStore->>+DB: SELECT existing Shipment
+            DB-->>PickStore: Existence result
+            deactivate DB
+
+            PickStore-->>PickSvc: Exists or NotExists
+            deactivate PickStore
+
+            opt Shipment does not exist
+
+                PickSvc->>+PickStore: NextShipmentCodeAsync()
+
+                PickStore->>+DB: SELECT next Shipment code
+                DB-->>PickStore: Shipment code
+                deactivate DB
+
+                PickStore-->>PickSvc: New ShipmentCode
+                deactivate PickStore
+
+                PickSvc->>+PickStore: AddShipment(shipment)
+
+                PickStore-->>PickSvc: Shipment staged
+                deactivate PickStore
+
+            end
+
+            %% ------------------------------------------
+            %% 6. SAVE PICKING COMPLETION
+            %% ------------------------------------------
+
+            PickSvc->>+PickStore: SaveChangesAsync()
+
+            PickStore->>+DB: UPDATE PickingList completion state
+            Note right of DB: INSERT Shipment only when newly created
+
+            DB-->>PickStore: Picking completion committed
+            deactivate DB
+
+            PickStore-->>PickSvc: Save result
+            deactivate PickStore
+
+        end
+
+        PickSvc-->>PickAPI: Completion result or conflict
+        deactivate PickSvc
+
+        PickAPI-->>UI: Picking completion response
+        deactivate PickAPI
+
+        UI-->>Keeper: Display completion or exception status
+        deactivate UI
+
+    end
+
+    %% ==========================================
+    %% PART 2 - FLAG SHIPMENT EXCEPTION
+    %% ==========================================
+
+    rect rgb(255, 248, 240)
+
+        Note over Operator,DB: PART 2 - SHIPMENT EXCEPTION
+
+        Operator->>+UI: Select Shipment and report exception
+
+        UI->>+ShipAPI: FlagException(shipmentId, request)
+
+        ShipAPI->>+ShipSvc: FlagExceptionAsync(shipmentId, data, actorRole)
+
+        %% ------------------------------------------
+        %% 7. VALIDATE OPERATOR
+        %% ------------------------------------------
+
+        ShipSvc->>+ShipSvc: EnsureOperator(actorRole)
+
+        ShipSvc-->>ShipSvc: Authorization result
+        deactivate ShipSvc
+
+        alt Actor is not Operator
+
+            Note right of ShipSvc: Return Forbidden
+
+        else Actor is authorized
+
+            %% ------------------------------------------
+            %% 8. LOAD SHIPMENT
+            %% ------------------------------------------
+
+            ShipSvc->>+ShipStore: FindByIdAsync(shipmentId)
+
+            ShipStore->>+DB: SELECT Shipment and Version
+            DB-->>ShipStore: Shipment or null
+            deactivate DB
+
+            ShipStore-->>ShipSvc: Shipment result
+            deactivate ShipStore
+
+            %% ------------------------------------------
+            %% 9. VALIDATE EXCEPTION REQUEST
+            %% ------------------------------------------
+
+            alt Shipment missing, invalid state or stale Version
+
+                Note right of ShipSvc: Return Not Found or Conflict
+
+            else Exception request is valid
+
+                Note right of ShipSvc: Set Shipment exception status
+
+                Note right of ShipSvc: Record ExceptionReason
+
+                %% ------------------------------------------
+                %% 10. PERSIST EXCEPTION
+                %% ------------------------------------------
+
+                ShipSvc->>+ShipStore: SaveChangesAsync()
+
+                ShipStore->>+DB: UPDATE Shipment status, reason and Version
+                DB-->>ShipStore: Shipment exception saved
+                deactivate DB
+
+                ShipStore-->>ShipSvc: Save successful
+                deactivate ShipStore
+
+                Note right of ShipSvc: Unissued portions must respect order readiness
+
+            end
+
+        end
+
+        ShipSvc-->>ShipAPI: Shipment result or business error
+        deactivate ShipSvc
+
+        ShipAPI-->>UI: Exception response
+        deactivate ShipAPI
+
+        UI-->>Operator: Display Shipment exception
+        deactivate UI
+
+    end
+
+    %% ==========================================
+    %% PART 3 - RECORD ACTUAL RETAILER RECEIPT
+    %% ==========================================
+
+    rect rgb(242, 252, 245)
+
+        Note over Retailer,DB: PART 3 - RETAILER ACTUAL RECEIPT CONFIRMATION
+
+        Retailer->>+UI: Scan delivered QR and enter actual quantities
+
+        Note right of UI: Enter received, missing and damaged quantities
+
+        UI->>+ShipAPI: ConfirmReceipt(shipmentId, receiptRequest)
+
+        ShipAPI->>+ShipSvc: ConfirmReceiptAsync(shipmentId, data, actorContext)
+
+        %% ------------------------------------------
+        %% 11. CHECK RECEIPT IDEMPOTENCY
+        %% ------------------------------------------
+
+        ShipSvc->>+ShipStore: FindByReceiptOperationKeyAsync(operationKey)
+
+        ShipStore->>+DB: SELECT ReceiptConfirmation by OperationKey
+        DB-->>ShipStore: Existing receipt or null
+        deactivate DB
+
+        ShipStore-->>ShipSvc: Existing receipt result
+        deactivate ShipStore
+
+        alt Same operation key and same request already processed
+
+            Note right of ShipSvc: Return the existing receipt result
+
+            Note right of ShipSvc: Do not record another receipt
+
+        else New receipt request or operation key conflict
+
+            %% ------------------------------------------
+            %% 12. LOAD SHIPMENT
+            %% ------------------------------------------
+
+            ShipSvc->>+ShipStore: FindByIdAsync(shipmentId)
+
+            ShipStore->>+DB: SELECT Shipment and delivery status
+            DB-->>ShipStore: Shipment or null
+            deactivate DB
+
+            ShipStore-->>ShipSvc: Shipment context
+            deactivate ShipStore
+
+            %% ------------------------------------------
+            %% 13. VALIDATE RETAILER ACCESS
+            %% ------------------------------------------
+
+            ShipSvc->>+ShipStore: CanViewOrderAsync(orderId, actorContext)
+
+            ShipStore->>+DB: SELECT Retailer order access scope
+            DB-->>ShipStore: Access result
+            deactivate DB
+
+            ShipStore-->>ShipSvc: Authorized or Forbidden
+            deactivate ShipStore
+
+            %% ------------------------------------------
+            %% 14. VALIDATE QR LABELS
+            %% ------------------------------------------
+
+            ShipSvc->>+ShipStore: ListLabelsAsync(shipmentId)
+
+            ShipStore->>+DB: SELECT Shipment QR Labels and quantities
+            DB-->>ShipStore: Expected QR Labels
+            deactivate DB
+
+            ShipStore-->>ShipSvc: Shipment label details
+            deactivate ShipStore
+
+            %% ------------------------------------------
+            %% 15. CHECK ACTUAL RECEIPT
+            %% ------------------------------------------
+
+            alt Unauthorized, invalid QR or inconsistent quantities
+
+                Note right of ShipSvc: Reject receipt without side effects
+
+            else Actual receipt data is valid
+
+                %% ------------------------------------------
+                %% 16. LOCK ORDER FOR RECEIPT UPDATE
+                %% ------------------------------------------
+
+                ShipSvc->>+ShipStore: FindOrderForUpdateAsync(orderId)
+
+                ShipStore->>+DB: SELECT SalesOrder for transactional update
+                DB-->>ShipStore: SalesOrder
+                deactivate DB
+
+                ShipStore-->>ShipSvc: Order context
+                deactivate ShipStore
+
+                %% ------------------------------------------
+                %% 17. STAGE RECEIPT CONFIRMATION
+                %% ------------------------------------------
+
+                ShipSvc->>+ShipStore: AddReceipt(receiptConfirmation)
+
+                ShipStore-->>ShipSvc: ReceiptConfirmation staged
+                deactivate ShipStore
+
+                %% ------------------------------------------
+                %% 18. RECORD ACTUAL RECEIPT ITEMS
+                %% ------------------------------------------
+
+                loop For each received Batch portion
+
+                    ShipSvc->>+ShipStore: AddReceiptLine(receiptItem)
+
+                    ShipStore-->>ShipSvc: Actual quantities staged
+                    deactivate ShipStore
+
+                end
+
+                %% ------------------------------------------
+                %% 19. RECORD SCANNED QR LABELS
+                %% ------------------------------------------
+
+                loop For each confirmed QR Label
+
+                    ShipSvc->>+ShipStore: AddReceiptQrLabel(receiptQrLabel)
+
+                    ShipStore-->>ShipSvc: Receipt QR reference staged
+                    deactivate ShipStore
+
+                    ShipSvc->>+ShipStore: AddLabelEvent(qrLabelEvent)
+
+                    ShipStore-->>ShipSvc: QR Label event staged
+                    deactivate ShipStore
+
+                end
+
+                %% ------------------------------------------
+                %% 20. CHECK ALL WAREHOUSE RECEIPTS
+                %% ------------------------------------------
+
+                ShipSvc->>+ShipStore: ListByOrderAsync(orderId)
+
+                ShipStore->>+DB: SELECT all Shipments and receipt states
+                DB-->>ShipStore: Order shipment collection
+                deactivate DB
+
+                ShipStore-->>ShipSvc: Shipment receipt summary
+                deactivate ShipStore
+
+                %% ------------------------------------------
+                %% 21. UPDATE DELIVERY OUTCOME
+                %% ------------------------------------------
+
+                alt Receipt contains missing or damaged quantities
+
+                    Note right of ShipSvc: Record actual quantities
+
+                    Note right of ShipSvc: Mark affected Shipment as exception
+
+                    Note right of ShipSvc: Do not mark order fully Delivered
+
+                else Shipment fully received
+
+                    Note right of ShipSvc: Mark Shipment as Received
+
+                    opt All required Shipments are fully received
+
+                        Note right of ShipSvc: Set SalesOrder status to Delivered
+
+                    end
+
+                end
+
+                %% ------------------------------------------
+                %% 22. RECORD STATUS HISTORY
+                %% ------------------------------------------
+
+                ShipSvc->>+ShipStore: AddOrderHistory(orderHistory)
+
+                ShipStore-->>ShipSvc: Order status history staged
+                deactivate ShipStore
+
+                %% ------------------------------------------
+                %% 23. PERSIST ACTUAL RECEIPT
+                %% ------------------------------------------
+
+                ShipSvc->>+ShipStore: SaveChangesAsync()
+
+                ShipStore->>+DB: INSERT ReceiptConfirmation and receipt items
+                Note right of DB: INSERT scanned QR references and label events
+                Note right of DB: UPDATE Shipment, Order and receipt statuses
+
+                DB-->>ShipStore: Receipt transaction committed
+                deactivate DB
+
+                ShipStore-->>ShipSvc: Save successful
+                deactivate ShipStore
+
+                %% ------------------------------------------
+                %% 24. EVALUATE ORDER COMPLETION
+                %% ------------------------------------------
+
+                opt Receipt changes order completion eligibility
+
+                    ShipSvc->>+CompletionSvc: EvaluateAsync(orderId)
+
+                    Note right of CompletionSvc: Check delivered, payment and complaint conditions
+
+                    CompletionSvc-->>ShipSvc: Completion evaluation result
+                    deactivate CompletionSvc
+
+                end
+
+            end
+
+        end
+
+        %% ------------------------------------------
+        %% 25. RETURN RECEIPT RESULT
+        %% ------------------------------------------
+
+        ShipSvc-->>ShipAPI: Receipt result or business error
+        deactivate ShipSvc
+
+        ShipAPI-->>UI: Actual receipt response
+        deactivate ShipAPI
+
+        UI-->>Retailer: Display received quantities and Shipment status
+        deactivate UI
+
+    end
+
+    %% ==========================================
+    %% PART 4 - OPTIONAL COMPLAINT
+    %% ==========================================
+
+    opt Retailer files a separate complaint for missing or damaged goods
+
+        Note over Retailer,DB: PART 4 - COMPLAINT RECORDING
+
+        Retailer->>+UI: Submit discrepancy details and photo references
+
+        UI->>+ComplaintAPI: Create(complaintRequest)
+
+        ComplaintAPI->>+ComplaintSvc: CreateAsync(complaintData, actorContext)
+
+        ComplaintSvc->>+ComplaintStore: CreateAsync(complaintData)
+
+        ComplaintStore->>+DB: INSERT ReceiptDiscrepancy and affected items
+        Note right of DB: Persist evidence references and batch price snapshots
+
+        DB-->>ComplaintStore: Complaint persisted
+        deactivate DB
+
+        ComplaintStore-->>ComplaintSvc: Complaint result
+        deactivate ComplaintStore
+
+        ComplaintSvc-->>ComplaintAPI: Created complaint or error
+        deactivate ComplaintSvc
+
+        ComplaintAPI-->>UI: Complaint response
+        deactivate ComplaintAPI
+
+        UI-->>Retailer: Display complaint status
+        deactivate UI
+
+    end
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over PickSvc,DB: Picking validation must not deduct Physical Stock
+
+    Note over PickSvc,DB: Incomplete Picking cannot create a ready Shipment
+
+    Note over ShipSvc,DB: Flagging an exception does not automatically cancel Reservations
+
+    Note over ShipSvc,DB: Actual receipt records what the Retailer really received
+
+    Note over ShipSvc,DB: Missing or damaged items do not restore dispatched stock automatically
+
+    Note over ShipSvc,DB: Receipt confirmation must be idempotent
+
+    Note over ComplaintSvc,DB: Complaint resolution and financial adjustments are separate workflows

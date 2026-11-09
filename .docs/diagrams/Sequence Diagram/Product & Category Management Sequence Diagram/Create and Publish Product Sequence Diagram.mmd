@@ -1,0 +1,107 @@
+sequenceDiagram
+    autonumber
+
+    actor Staff as Administrator / Operator
+    participant UI as Web Portal
+    participant API as ProductsController
+    participant Service as CatalogService
+    participant Store as CatalogStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. CREATE PRODUCT DRAFT
+    %% ==========================================
+
+    Staff->>+UI: Open Create Product and enter product details
+
+    UI->>+API: Create(productData)
+    API->>+Service: CreateProductAsync(productData)
+
+    Service->>+Store: Validate Category and SKU uniqueness
+    Store->>+DB: SELECT Category and existing Product by SKU
+    DB-->>Store: Category and SKU information
+    deactivate DB
+
+    Store-->>Service: Validation data
+    deactivate Store
+
+    alt Valid Product information
+
+        Service->>+Store: AddProduct(Draft), AddPrice(), SaveChangesAsync()
+
+        Store->>+DB: INSERT Product and ProductPrice in transaction
+        DB-->>Store: Product Draft created
+        deactivate DB
+
+        Store-->>Service: Created Product
+        deactivate Store
+
+        Service-->>API: ProductResult (Draft)
+
+    else Invalid Category, duplicate SKU or invalid data
+
+        Service-->>API: Validation or conflict error
+
+    end
+
+    deactivate Service
+
+    API-->>UI: Creation response
+    deactivate API
+
+    UI-->>Staff: Display Draft Product or error
+    deactivate UI
+
+    %% ==========================================
+    %% 2. PUBLISH PRODUCT
+    %% ==========================================
+
+    opt Product Draft created successfully
+
+        Staff->>+UI: Select Publish Product
+
+        UI->>+API: Publish(productId)
+        API->>+Service: PublishProductAsync(productId)
+
+        Service->>+Store: Retrieve Product, Category and active Price
+        Store->>+DB: SELECT Product, Category and ProductPrice
+        DB-->>Store: Product and related information
+        deactivate DB
+
+        Store-->>Service: Product publication data
+        deactivate Store
+
+        alt Draft with valid required fields and active Price
+
+            Note over Service,DB: Replacement publication also inactivates<br/>the predecessor in the same transaction
+
+            Service->>+Store: Set Product status to Published and save
+
+            Store->>+DB: UPDATE Product status and publication timestamp
+            DB-->>Store: Publication committed
+            deactivate DB
+
+            Store-->>Service: Published Product
+            deactivate Store
+
+            Service-->>API: ProductResult (Published)
+
+        else Already Published
+
+            Service-->>API: Current Published Product
+
+        else Invalid Product status or missing requirements
+
+            Service-->>API: Publication rejected
+
+        end
+
+        deactivate Service
+
+        API-->>UI: Publication response
+        deactivate API
+
+        UI-->>Staff: Display Published Product or error
+        deactivate UI
+
+    end

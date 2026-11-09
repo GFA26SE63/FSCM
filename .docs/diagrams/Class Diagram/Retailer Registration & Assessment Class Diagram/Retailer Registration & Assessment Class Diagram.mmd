@@ -1,0 +1,261 @@
+classDiagram
+direction TB
+
+%% ==========================================
+%% API LAYER
+%% ==========================================
+
+namespace API {
+    class RetailersController {
+        +List()
+        +Get()
+        +Declare()
+        +UpdateDeclaration()
+        +SubmitForReview()
+        +Review()
+        +UpdateStatus()
+        +CheckOrderEligibility()
+        +ResolveMlor()
+    }
+}
+
+%% ==========================================
+%% APPLICATION LAYER
+%% ==========================================
+
+namespace Application {
+    class RetailerService {
+        <<Service>>
+        +DeclareAsync()
+        +UpdateDeclarationAsync()
+        +SubmitForReviewAsync()
+        +ReviewAsync()
+        +GetAsync()
+        +ListAsync()
+        +SearchAsync()
+        +SetActiveAsync()
+        +CheckOrderEligibilityAsync()
+        +ResolveMlorAsync()
+    }
+
+    class IRetailerStore {
+        <<Interface>>
+        +FindDuplicateAsync()
+        +FindViewAsync()
+        +FindForUpdateAsync()
+        +FindDeclarationContactForUpdateAsync()
+        +ListAsync()
+        +ListMlorDeclarationsAsync()
+        +FindCategoryAsync()
+        +FindProductAsync()
+        +NextDeclarationCodeAsync()
+        +NextBusinessCodeAsync()
+        +Add()
+        +AddDeclarationContact()
+        +AddAssignment()
+        +AddLocation()
+        +AddMlor()
+        +SaveChangesAsync()
+    }
+}
+
+%% ==========================================
+%% PERSISTENCE LAYER
+%% ==========================================
+
+namespace Persistence {
+    class RetailerStore {
+        <<Repository>>
+        +FindDuplicateAsync()
+        +FindForUpdateAsync()
+        +FindDeclarationContactForUpdateAsync()
+        +ListMlorDeclarationsAsync()
+        +NextDeclarationCodeAsync()
+        +NextBusinessCodeAsync()
+        +Add()
+        +AddDeclarationContact()
+        +AddAssignment()
+        +AddMlor()
+        +SaveChangesAsync()
+    }
+}
+
+%% ==========================================
+%% DOMAIN - RETAILER
+%% ==========================================
+
+namespace Domain_Retailer {
+    class Retailer {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +Address: string
+        +Status: string
+        +RetailerType: string
+        +RegionId: Guid
+        +UserAccountId: Guid
+        +ForecastRevenue: decimal
+        +StoreSizeSquareMeters: decimal
+        +StoreSizeCategory: string
+        +PurchasingCapacity: decimal
+        +PurchaseFrequencyPerMonth: int
+        +CreditTermDays: int
+        +RequestedCreditTermDays: int
+        +PotentialStatus: string
+        +PotentialScore: decimal
+        +AssessmentNote: string
+        +DeclaredByUserId: Guid
+        +ReviewedByUserId: Guid
+        +AssessedByUserId: Guid
+        +ReviewedAt: DateTimeOffset
+        +AssessedAt: DateTimeOffset
+        +ReviewReason: string
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class RetailerDeclarationContact {
+        +RetailerId: Guid
+        +ContactName: string
+        +Phone: string
+        +Email: string
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class RetailerProductMlor {
+        +Id: Guid
+        +RetailerId: Guid
+        +ProductCategoryId: Guid
+        +ProductId: Guid
+        +MinimumLifeRatio: decimal
+        +MinimumLifeHours: decimal
+        +Version: int
+        +EffectiveFrom: DateTimeOffset
+        +EffectiveTo: DateTimeOffset
+        +IsActive: bool
+        +UpdatedByUserId: Guid
+    }
+
+    class RetailerSalesAssignment {
+        +Id: Guid
+        +RetailerId: Guid
+        +SalesGroupId: Guid
+        +AssignedAt: DateTimeOffset
+        +UnassignedAt: DateTimeOffset
+        +IsActive: bool
+    }
+
+    class MapLocation {
+        +Id: Guid
+        +RetailerId: Guid
+        +Latitude: decimal
+        +Longitude: decimal
+        +FormattedAddress: string
+        +ProviderPlaceId: string
+        +Provider: string
+        +Version: int
+        +NormalizedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - RELATED ENTITIES
+%% ==========================================
+
+namespace Domain_References {
+    class UserAccount {
+        +Id: Guid
+        +FullName: string
+        +Email: string
+        +Phone: string
+        +Role: string
+        +IsActive: bool
+    }
+
+    class Region {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +IsActive: bool
+    }
+
+    class SalesGroup {
+        +Id: Guid
+        +RegionId: Guid
+        +Code: string
+        +Name: string
+        +IsActive: bool
+    }
+
+    class ProductCategory {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +IsActive: bool
+    }
+
+    class Product {
+        +Id: Guid
+        +ProductCategoryId: Guid
+        +Sku: string
+        +Name: string
+        +Status: string
+    }
+}
+
+%% ==========================================
+%% LAYER DEPENDENCIES
+%% ==========================================
+
+RetailersController ..> RetailerService : uses
+
+RetailerService ..> IRetailerStore : uses
+
+RetailerStore ..|> IRetailerStore : implements
+
+RetailerStore ..> Retailer : persists
+
+%% ==========================================
+%% RETAILER DOMAIN RELATIONSHIPS
+%% ==========================================
+
+Retailer "1" *-- "0..1" RetailerDeclarationContact : declaration contact
+
+Retailer "1" *-- "0..*" RetailerProductMlor : shelf-life requirements
+
+Retailer "1" -- "0..*" RetailerSalesAssignment : sales assignments
+
+Retailer "0..1" -- "0..*" MapLocation : locations
+
+%% ==========================================
+%% USER ACCOUNT RELATIONSHIPS
+%% ==========================================
+
+UserAccount "1" -- "0..*" Retailer : declares
+
+Retailer "0..*" --> "0..1" UserAccount : reviewed by
+
+Retailer "0..1" -- "0..1" UserAccount : linked account
+
+%% ==========================================
+%% TERRITORY RELATIONSHIPS
+%% ==========================================
+
+Region "1" -- "0..*" Retailer : contains
+
+Region "1" -- "0..*" SalesGroup : has
+
+SalesGroup "1" -- "0..*" RetailerSalesAssignment : manages
+
+%% ==========================================
+%% MLOR TARGET RELATIONSHIPS
+%% ==========================================
+
+ProductCategory "1" -- "0..*" Product : contains
+
+ProductCategory "0..1" -- "0..*" RetailerProductMlor : category MLOR
+
+Product "0..1" -- "0..*" RetailerProductMlor : SKU MLOR
+
+note for RetailerProductMlor "Each rule targets a Category or an SKU. SKU takes precedence over Category."

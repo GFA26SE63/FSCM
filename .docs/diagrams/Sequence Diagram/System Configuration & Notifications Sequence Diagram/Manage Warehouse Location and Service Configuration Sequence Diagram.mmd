@@ -1,0 +1,425 @@
+sequenceDiagram
+    autonumber
+
+    actor Admin as Administrator
+
+    participant UI as Web Portal
+    participant WarehouseAPI as WarehousesController
+    participant ConfigAPI as BusinessConfigurationsController
+    participant MapAPI as MapController
+    participant TransitAPI as TransitTablesController
+
+    participant WService as WarehouseConfigurationService
+    participant MService as MapService
+    participant TService as TransitTableService
+
+    participant WStore as WarehouseConfigurationStore
+    participant MStore as MapStore
+    participant TStore as TransitTableStore
+
+    participant Provider as GoogleMapsProvider
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. OPEN WAREHOUSE CONFIGURATION
+    %% ==========================================
+
+    Admin->>+UI: Open Warehouse Configuration
+
+    UI->>+WarehouseAPI: Get(warehouseId)
+    WarehouseAPI->>+WService: GetWarehouseAsync(warehouseId)
+
+    WService->>+WStore: FindWarehouseViewAsync(warehouseId)
+
+    WStore->>+DB: SELECT Warehouse and current location
+    DB-->>WStore: Warehouse information
+    deactivate DB
+
+    WStore-->>WService: WarehouseView
+    deactivate WStore
+
+    WService-->>WarehouseAPI: WarehouseResult
+    deactivate WService
+
+    WarehouseAPI-->>UI: Warehouse details
+    deactivate WarehouseAPI
+
+    UI-->>Admin: Display location and configuration options
+    deactivate UI
+
+    %% ==========================================
+    %% 2. SELECT CONFIGURATION ACTION
+    %% ==========================================
+
+    alt Update Warehouse Location
+
+        %% ==========================================
+        %% 3. SUBMIT WAREHOUSE LOCATION UPDATE
+        %% ==========================================
+
+        Admin->>+UI: Edit address and warehouse coordinates
+
+        UI->>+WarehouseAPI: Update(warehouseId, warehouseData)
+        WarehouseAPI->>+WService: UpdateWarehouseAsync(warehouseId, warehouseData)
+
+        %% ==========================================
+        %% 4. LOAD CURRENT WAREHOUSE
+        %% ==========================================
+
+        WService->>+WStore: FindWarehouseAsync(warehouseId)
+
+        WStore->>+DB: SELECT Warehouse by Id
+        DB-->>WStore: Warehouse record or null
+        deactivate DB
+
+        WStore-->>WService: Warehouse information
+        deactivate WStore
+
+        %% ==========================================
+        %% 5. LOAD CURRENT LOCATION
+        %% ==========================================
+
+        WService->>+WStore: FindWarehouseLocationAsync(warehouseId)
+
+        WStore->>+DB: SELECT current MapLocation
+        DB-->>WStore: Current location or null
+        deactivate DB
+
+        WStore-->>WService: MapLocation
+        deactivate WStore
+
+        %% ==========================================
+        %% 6. VALIDATE WAREHOUSE DATA
+        %% ==========================================
+
+        Note over WService,WStore: Validate warehouse fields and geographic coordinates
+
+        alt Warehouse not found or location invalid
+
+            WService-->>WarehouseAPI: Not Found or validation error
+
+        else Location update is valid
+
+            %% ==========================================
+            %% 7. PREPARE NEW LOCATION
+            %% ==========================================
+
+            WService->>+WStore: AddLocation(newLocation)
+
+            WStore-->>WService: Location staged
+            deactivate WStore
+
+            %% ==========================================
+            %% 8. SAVE WAREHOUSE LOCATION
+            %% ==========================================
+
+            WService->>+WStore: SaveChangesAsync()
+
+            WStore->>+DB: INSERT new MapLocation version
+            Note right of DB: UPDATE Warehouse location reference and fields
+
+            DB-->>WStore: Warehouse location saved
+            deactivate DB
+
+            WStore-->>WService: Save successful
+            deactivate WStore
+
+            WService-->>WarehouseAPI: Updated WarehouseResult
+
+        end
+
+        deactivate WService
+
+        WarehouseAPI-->>UI: Update result or error
+        deactivate WarehouseAPI
+
+        UI-->>Admin: Display updated Warehouse or validation error
+        deactivate UI
+
+        %% ==========================================
+        %% 9. REFRESH DISTANCE SEPARATELY
+        %% ==========================================
+
+        opt Administrator requests distance refresh after successful update
+
+            Admin->>+UI: Refresh distance for updated location
+
+            UI->>+MapAPI: RefreshDistance(originId, destinationId)
+            MapAPI->>+MService: RefreshDistanceAsync(originId, destinationId)
+
+            %% ==========================================
+            %% 10. LOAD SOURCE AND DESTINATION
+            %% ==========================================
+
+            MService->>+MStore: FindLocationAsync(originId)
+
+            MStore->>+DB: SELECT origin MapLocation
+            DB-->>MStore: Origin location
+            deactivate DB
+
+            MStore-->>MService: Origin MapLocation
+            deactivate MStore
+
+            MService->>+MStore: FindLocationAsync(destinationId)
+
+            MStore->>+DB: SELECT destination MapLocation
+            DB-->>MStore: Destination location
+            deactivate DB
+
+            MStore-->>MService: Destination MapLocation
+            deactivate MStore
+
+            alt Origin or destination is unavailable
+
+                MService-->>MapAPI: Location validation error
+
+            else Both locations are valid
+
+                %% ==========================================
+                %% 11. CHECK CURRENT DISTANCE CACHE
+                %% ==========================================
+
+                MService->>+MStore: FindActiveDistanceAsync(originId, destinationId)
+
+                MStore->>+DB: SELECT active distance and location versions
+                DB-->>MStore: Cached distance or null
+                deactivate DB
+
+                MStore-->>MService: Distance cache information
+                deactivate MStore
+
+                %% ==========================================
+                %% 12. REQUEST ROAD DISTANCE
+                %% ==========================================
+
+                MService->>+Provider: ComputeDistanceAsync(origin, destination)
+
+                Provider-->>MService: Distance result or provider error
+                deactivate Provider
+
+                alt Distance provider fails
+
+                    MService-->>MapAPI: Distance provider error
+
+                else Distance calculated successfully
+
+                    %% ==========================================
+                    %% 13. SAVE NEW DISTANCE CACHE
+                    %% ==========================================
+
+                    MService->>+MStore: AddDistance(newDistanceCache)
+
+                    MStore-->>MService: Distance cache staged
+                    deactivate MStore
+
+                    MService->>+MStore: SaveChangesAsync()
+
+                    MStore->>+DB: INSERT new MapDistanceCache record
+                    Note right of DB: Preserve origin and destination location versions
+
+                    DB-->>MStore: Distance cache saved
+                    deactivate DB
+
+                    MStore-->>MService: Save successful
+                    deactivate MStore
+
+                    MService-->>MapAPI: MapDistanceResult
+
+                end
+
+            end
+
+            deactivate MService
+
+            MapAPI-->>UI: Distance refresh result
+            deactivate MapAPI
+
+            UI-->>Admin: Display refreshed distance or error
+            deactivate UI
+
+        end
+
+    else Update Business Service Configuration
+
+        %% ==========================================
+        %% 14. SUBMIT CONFIGURATION CHANGE
+        %% ==========================================
+
+        Admin->>+UI: Edit service limits or business settings
+
+        UI->>+ConfigAPI: Update(configKey, configData)
+        ConfigAPI->>+WService: UpdateConfigurationAsync(configData)
+
+        %% ==========================================
+        %% 15. LOAD CONFIGURATION HISTORY
+        %% ==========================================
+
+        WService->>+WStore: ListConfigurationHistoryAsync(configKey)
+
+        WStore->>+DB: SELECT SystemConfiguration versions
+        DB-->>WStore: Configuration history
+        deactivate DB
+
+        WStore-->>WService: Configuration records
+        deactivate WStore
+
+        %% ==========================================
+        %% 16. VALIDATE NEW CONFIGURATION
+        %% ==========================================
+
+        Note over WService,WStore: Validate configuration value and effective version
+
+        Note right of WService: Validate weights and limits when applicable
+
+        alt Invalid value or conflicting configuration version
+
+            WService-->>ConfigAPI: Validation or conflict error
+
+        else Configuration change is valid
+
+            %% ==========================================
+            %% 17. PREPARE NEW CONFIGURATION VERSION
+            %% ==========================================
+
+            WService->>+WStore: AddConfiguration(newConfiguration)
+
+            WStore-->>WService: Configuration version staged
+            deactivate WStore
+
+            %% ==========================================
+            %% 18. SAVE CONFIGURATION
+            %% ==========================================
+
+            WService->>+WStore: SaveChangesAsync()
+
+            WStore->>+DB: UPDATE previous version and INSERT SystemConfiguration
+            DB-->>WStore: Configuration version saved
+            deactivate DB
+
+            WStore-->>WService: Save successful
+            deactivate WStore
+
+            WService-->>ConfigAPI: Updated ConfigurationResult
+
+        end
+
+        deactivate WService
+
+        ConfigAPI-->>UI: Configuration update result
+        deactivate ConfigAPI
+
+        UI-->>Admin: Display current configuration or error
+        deactivate UI
+
+    else Publish Transit Table
+
+        %% ==========================================
+        %% 19. SUBMIT TRANSIT TABLE
+        %% ==========================================
+
+        Admin->>+UI: Configure distance bands and transit estimates
+
+        UI->>+TransitAPI: Publish(transitTableData)
+        TransitAPI->>+TService: PublishAsync(transitTableData)
+
+        %% ==========================================
+        %% 20. LOAD CURRENT TABLE
+        %% ==========================================
+
+        TService->>+TStore: FindCurrentForUpdateAsync()
+
+        TStore->>+DB: SELECT current TransitTable FOR UPDATE
+        DB-->>TStore: Active TransitTable
+        deactivate DB
+
+        TStore-->>TService: Current table information
+        deactivate TStore
+
+        %% ==========================================
+        %% 21. RESOLVE NEXT VERSION
+        %% ==========================================
+
+        TService->>+TStore: MaxVersionAsync()
+
+        TStore->>+DB: SELECT MAX Version FROM TransitTable
+        DB-->>TStore: Latest version number
+        deactivate DB
+
+        TStore-->>TService: Current maximum version
+        deactivate TStore
+
+        %% ==========================================
+        %% 22. VALIDATE TRANSIT TABLE
+        %% ==========================================
+
+        Note over TService,TStore: Validate distance bands and transit estimates
+
+        Note right of TService: Reject overlapping or invalid ranges
+
+        alt Invalid bands or conflicting publication
+
+            TService-->>TransitAPI: Validation or conflict error
+
+        else Transit Table is valid
+
+            %% ==========================================
+            %% 23. PREPARE NEW TABLE VERSION
+            %% ==========================================
+
+            TService->>+TStore: AddTable(newTransitTable)
+
+            TStore-->>TService: TransitTable staged
+            deactivate TStore
+
+            TService->>+TStore: AddBands(newTransitBands)
+
+            TStore-->>TService: TransitTableBands staged
+            deactivate TStore
+
+            %% ==========================================
+            %% 24. RECORD AUDIT
+            %% ==========================================
+
+            TService->>+TStore: AddAuditLog(publicationAudit)
+
+            TStore-->>TService: Audit record staged
+            deactivate TStore
+
+            %% ==========================================
+            %% 25. PERSIST NEW TRANSIT TABLE
+            %% ==========================================
+
+            TService->>+TStore: SaveChangesAsync()
+
+            TStore->>+DB: UPDATE prior version and INSERT new table, bands and audit
+            DB-->>TStore: Transit Table version published
+            deactivate DB
+
+            TStore-->>TService: Save successful
+            deactivate TStore
+
+            TService-->>TransitAPI: TransitTableResult
+
+        end
+
+        deactivate TService
+
+        TransitAPI-->>UI: Publish result or error
+        deactivate TransitAPI
+
+        UI-->>Admin: Display published Transit Table or error
+        deactivate UI
+
+    end
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over Admin,DB: Only authorized administrators may change service configuration
+
+    Note over WService,DB: Changes apply to future evaluations under their effective versions
+
+    Note over MService,DB: Distance refresh is separate from warehouse configuration updates
+
+    Note over TService,DB: Previously finalized allocations and quotations are not recalculated automatically

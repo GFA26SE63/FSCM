@@ -1,0 +1,435 @@
+sequenceDiagram
+    autonumber
+
+    actor Manager as Administrator / Sales Manager
+    participant UI as Web Portal
+    participant GroupAPI as SalesGroupsController
+    participant AssignAPI as TerritoryAssignmentsController
+    participant Service as TerritoryService
+    participant Store as TerritoryStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. VIEW SALES GROUP MANAGEMENT
+    %% ==========================================
+
+    Manager->>+UI: Open Sales Group Management
+
+    UI->>+GroupAPI: List(filters)
+    GroupAPI->>+Service: ListSalesGroupsAsync(filters)
+
+    Service->>+Store: ListSalesGroupsAsync(filters)
+
+    Store->>+DB: SELECT SalesGroup and Region information
+    DB-->>Store: Sales Group records
+    deactivate DB
+
+    Store-->>Service: SalesGroupViews
+    deactivate Store
+
+    Service-->>GroupAPI: SalesGroupResults
+    deactivate Service
+
+    GroupAPI-->>UI: Sales Group list
+    deactivate GroupAPI
+
+    UI-->>Manager: Display Sales Groups and management actions
+    deactivate UI
+
+    %% ==========================================
+    %% 2. SELECT MANAGEMENT ACTION
+    %% ==========================================
+
+    alt Create Sales Group
+
+        Manager->>+UI: Enter group code, name and Region
+
+        UI->>+GroupAPI: Create(groupData)
+        GroupAPI->>+Service: CreateSalesGroupAsync(groupData)
+
+        %% ==========================================
+        %% 3. VALIDATE REGION
+        %% ==========================================
+
+        Service->>+Store: FindRegionAsync(regionId)
+
+        Store->>+DB: SELECT Region by Id
+        DB-->>Store: Region record or null
+        deactivate DB
+
+        Store-->>Service: Region information
+        deactivate Store
+
+        %% ==========================================
+        %% 4. CHECK DUPLICATE GROUP CODE
+        %% ==========================================
+
+        Service->>+Store: FindSalesGroupByCodeAsync(code)
+
+        Store->>+DB: SELECT SalesGroup by Code
+        DB-->>Store: Existing group or null
+        deactivate DB
+
+        Store-->>Service: Code lookup result
+        deactivate Store
+
+        alt Region valid and Sales Group code available
+
+            Service->>+Store: AddSalesGroup(newGroup)
+
+            Store-->>Service: Sales Group staged
+            deactivate Store
+
+            Service->>+Store: SaveChangesAsync()
+
+            Store->>+DB: INSERT SalesGroup
+            DB-->>Store: Sales Group saved
+            deactivate DB
+
+            Store-->>Service: Save successful
+            deactivate Store
+
+            Service-->>GroupAPI: Created SalesGroupResult
+
+        else Invalid Region or duplicate group code
+
+            Service-->>GroupAPI: Validation or conflict error
+
+        end
+
+        deactivate Service
+
+        GroupAPI-->>UI: Create result
+        deactivate GroupAPI
+
+        UI-->>Manager: Display created group or error
+        deactivate UI
+
+    else Update Sales Group
+
+        %% ==========================================
+        %% 5. UPDATE SALES GROUP DETAILS
+        %% ==========================================
+
+        Manager->>+UI: Edit Sales Group details
+
+        UI->>+GroupAPI: Update(groupId, updateData)
+        GroupAPI->>+Service: UpdateSalesGroupAsync(groupId, updateData)
+
+        Service->>+Store: FindSalesGroupAsync(groupId)
+
+        Store->>+DB: SELECT SalesGroup by Id
+        DB-->>Store: Sales Group record or null
+        deactivate DB
+
+        Store-->>Service: Sales Group information
+        deactivate Store
+
+        alt Group exists and update is valid
+
+            Note over Service,Store: Validate editable fields and preserve assignment history
+
+            Service->>+Store: SaveChangesAsync()
+
+            Store->>+DB: UPDATE SalesGroup details
+            DB-->>Store: Group updated
+            deactivate DB
+
+            Store-->>Service: Save successful
+            deactivate Store
+
+            Service-->>GroupAPI: Updated SalesGroupResult
+
+        else Group not found or invalid update
+
+            Service-->>GroupAPI: Not Found or validation error
+
+        end
+
+        deactivate Service
+
+        GroupAPI-->>UI: Update result
+        deactivate GroupAPI
+
+        UI-->>Manager: Display updated group or error
+        deactivate UI
+
+    else Activate or Deactivate Sales Group
+
+        %% ==========================================
+        %% 6. CHANGE SALES GROUP STATUS
+        %% ==========================================
+
+        Manager->>+UI: Change Sales Group status
+
+        UI->>+GroupAPI: UpdateStatus(groupId, isActive)
+        GroupAPI->>+Service: SetSalesGroupStatusAsync(groupId, isActive)
+
+        Service->>+Store: FindSalesGroupAsync(groupId)
+
+        Store->>+DB: SELECT SalesGroup and Region
+        DB-->>Store: Current group information
+        deactivate DB
+
+        Store-->>Service: Sales Group or null
+        deactivate Store
+
+        alt Sales Group not found
+
+            Service-->>GroupAPI: Not Found error
+
+        else Sales Group exists
+
+            Service->>+Store: SalesGroupHasActiveAssignmentsAsync(groupId)
+
+            Store->>+DB: SELECT active Sales and Retailer assignments
+            DB-->>Store: Active assignment check
+            deactivate DB
+
+            Store-->>Service: Assignment existence result
+            deactivate Store
+
+            alt Deactivation blocked by active assignments
+
+                Note right of Service: Reassign active Sales and Retailers first
+
+                Service-->>GroupAPI: Conflict error
+
+            else Status change permitted
+
+                Service->>+Store: SaveChangesAsync()
+
+                Store->>+DB: UPDATE SalesGroup IsActive and UpdatedAt
+                DB-->>Store: Status updated
+                deactivate DB
+
+                Store-->>Service: Save successful
+                deactivate Store
+
+                Service-->>GroupAPI: Updated SalesGroupResult
+
+            end
+
+        end
+
+        deactivate Service
+
+        GroupAPI-->>UI: Status update result
+        deactivate GroupAPI
+
+        UI-->>Manager: Display Sales Group status or error
+        deactivate UI
+
+    else Transfer Sales to Another Group
+
+        %% ==========================================
+        %% 7. TRANSFER SALES MEMBERSHIP
+        %% ==========================================
+
+        Manager->>+UI: Select Sales and target Sales Group
+
+        UI->>+AssignAPI: TransferSales(groupId, transferData)
+        AssignAPI->>+Service: TransferSalesAsync(transferData, actorContext)
+
+        %% ==========================================
+        %% 8. VALIDATE SALES AND TARGET GROUP
+        %% ==========================================
+
+        Service->>+Store: FindUserAsync(salesUserId)
+
+        Store->>+DB: SELECT UserAccount
+        DB-->>Store: Sales user information
+        deactivate DB
+
+        Store-->>Service: UserAccount or null
+        deactivate Store
+
+        Service->>+Store: FindSalesGroupAsync(targetGroupId)
+
+        Store->>+DB: SELECT target SalesGroup and Region
+        DB-->>Store: Target group information
+        deactivate DB
+
+        Store-->>Service: Target SalesGroup or null
+        deactivate Store
+
+        %% ==========================================
+        %% 9. VERIFY MANAGER SCOPE
+        %% ==========================================
+
+        opt Actor requires regional membership validation
+
+            Service->>+Store: IsActiveMemberAsync(actorId, regionId)
+
+            Store->>+DB: SELECT active manager membership
+            DB-->>Store: Scope membership result
+            deactivate DB
+
+            Store-->>Service: Access scope result
+            deactivate Store
+
+        end
+
+        alt Actor unauthorized or target assignment invalid
+
+            Service-->>AssignAPI: Forbidden or validation error
+
+        else Transfer is permitted
+
+            %% ==========================================
+            %% 10. FIND CURRENT SALES MEMBERSHIP
+            %% ==========================================
+
+            Service->>+Store: ListActiveMembershipsAsync(salesUserId)
+
+            Store->>+DB: SELECT active SalesGroupMember records
+            DB-->>Store: Active membership records
+            deactivate DB
+
+            Store-->>Service: Current memberships
+            deactivate Store
+
+            Note over Service,Store: End previous active membership and preserve history
+
+            %% ==========================================
+            %% 11. ADD NEW SALES MEMBERSHIP
+            %% ==========================================
+
+            Service->>+Store: AddMembership(newMembership)
+
+            Store-->>Service: New membership staged
+            deactivate Store
+
+            Service->>+Store: SaveChangesAsync()
+
+            Store->>+DB: UPDATE old SalesGroupMember and INSERT new membership
+            DB-->>Store: Membership transfer saved
+            deactivate DB
+
+            Store-->>Service: Save successful
+            deactivate Store
+
+            Service-->>AssignAPI: SalesGroupMembershipResult
+
+        end
+
+        deactivate Service
+
+        AssignAPI-->>UI: Sales transfer result
+        deactivate AssignAPI
+
+        UI-->>Manager: Display updated Sales assignment
+        deactivate UI
+
+    else Assign or Transfer Retailer Coverage
+
+        %% ==========================================
+        %% 12. ASSIGN RETAILER TO SALES GROUP
+        %% ==========================================
+
+        Manager->>+UI: Select Retailer and target Sales Group
+
+        UI->>+AssignAPI: AssignRetailer(groupId, assignmentData)
+        AssignAPI->>+Service: AssignRetailerAsync(assignmentData, actorContext)
+
+        %% ==========================================
+        %% 13. VALIDATE RETAILER AND GROUP
+        %% ==========================================
+
+        Service->>+Store: FindRetailerAsync(retailerId)
+
+        Store->>+DB: SELECT Retailer and current Region
+        DB-->>Store: Retailer information
+        deactivate DB
+
+        Store-->>Service: Retailer or null
+        deactivate Store
+
+        Service->>+Store: FindSalesGroupAsync(targetGroupId)
+
+        Store->>+DB: SELECT target SalesGroup and Region
+        DB-->>Store: Target SalesGroup information
+        deactivate DB
+
+        Store-->>Service: SalesGroup or null
+        deactivate Store
+
+        %% ==========================================
+        %% 14. VERIFY MANAGER SCOPE
+        %% ==========================================
+
+        opt Actor requires regional membership validation
+
+            Service->>+Store: IsActiveMemberAsync(actorId, regionId)
+
+            Store->>+DB: SELECT active manager membership
+            DB-->>Store: Scope membership result
+            deactivate DB
+
+            Store-->>Service: Access scope result
+            deactivate Store
+
+        end
+
+        alt Actor unauthorized or coverage invalid
+
+            Service-->>AssignAPI: Forbidden or validation error
+
+        else Retailer assignment permitted
+
+            %% ==========================================
+            %% 15. FIND CURRENT RETAILER COVERAGE
+            %% ==========================================
+
+            Service->>+Store: ListActiveRetailerAssignmentsAsync(retailerId)
+
+            Store->>+DB: SELECT active RetailerSalesAssignment records
+            DB-->>Store: Current Retailer coverage
+            deactivate DB
+
+            Store-->>Service: Active assignments
+            deactivate Store
+
+            Note over Service,Store: Close previous coverage and preserve assignment history
+
+            %% ==========================================
+            %% 16. CREATE RETAILER ASSIGNMENT
+            %% ==========================================
+
+            Service->>+Store: AddRetailerAssignment(newAssignment)
+
+            Store-->>Service: New assignment staged
+            deactivate Store
+
+            Service->>+Store: SaveChangesAsync()
+
+            Store->>+DB: UPDATE old coverage and INSERT new assignment
+            DB-->>Store: Retailer coverage saved
+            deactivate DB
+
+            Store-->>Service: Save successful
+            deactivate Store
+
+            Service-->>AssignAPI: RetailerTerritoryAssignmentResult
+
+        end
+
+        deactivate Service
+
+        AssignAPI-->>UI: Retailer assignment result
+        deactivate AssignAPI
+
+        UI-->>Manager: Display updated Retailer coverage
+        deactivate UI
+
+    end
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over Service,DB: Coverage changes affect future access decisions
+
+    Note over Service,DB: Existing SalesOrder creator and group snapshots remain unchanged
+
+    Note over Service,DB: Assignment history is retained for audit and reporting

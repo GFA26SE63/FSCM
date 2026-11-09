@@ -1,0 +1,273 @@
+sequenceDiagram
+    autonumber
+
+    actor Keeper as Warehouse Keeper
+    participant UI as Warehouse Mobile App
+    participant API as PickingListsController
+    participant Service as CurrentPickingService
+    participant Store as PickingStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. OPEN ASSIGNED PICKING LIST
+    %% ==========================================
+
+    Keeper->>+UI: Open assigned Picking List
+
+    UI->>+API: Get(pickingCode)
+    API->>+Service: GetAsync(pickingCode)
+
+    Service->>+Store: FindAsync(pickingCode)
+
+    Store->>+DB: SELECT PickingList and PickingItems
+    DB-->>Store: Picking details
+    deactivate DB
+
+    Store-->>Service: PickingView
+    deactivate Store
+
+    Service->>+Store: CanAccessWarehouseAsync(userId, warehouseId)
+
+    Store->>+DB: SELECT warehouse assignment
+    DB-->>Store: Authorization information
+    deactivate DB
+
+    Store-->>Service: Access result
+    deactivate Store
+
+    alt Authorized and Picking List found
+
+        Service-->>API: CurrentPickingResult
+
+    else Unauthorized or Picking List not found
+
+        Service-->>API: Forbidden or Not Found error
+
+    end
+
+    deactivate Service
+
+    API-->>UI: Picking List response
+    deactivate API
+
+    UI-->>Keeper: Display required batches and quantities
+    deactivate UI
+
+    %% ==========================================
+    %% 2. SCAN SOURCE BATCH QR
+    %% ==========================================
+
+    loop For each Picking Item
+
+        Keeper->>+UI: Scan Batch QR and enter picked quantity
+
+        UI->>+API: Scan(pickingCode, scanData, operationKey)
+        API->>+Service: ScanAsync(pickingCode, scanData, operationKey)
+
+        %% ==========================================
+        %% 3. CHECK DUPLICATE SCAN
+        %% ==========================================
+
+        Service->>+Store: FindOperationAsync(operationKey)
+
+        Store->>+DB: SELECT existing scan operation
+        DB-->>Store: Existing operation or null
+        deactivate DB
+
+        Store-->>Service: Scan operation result
+        deactivate Store
+
+        alt Scan already processed
+
+            Note right of Service: Avoid recording the same scan twice
+
+            Service-->>API: Existing picking result
+
+        else New scan operation
+
+            %% ==========================================
+            %% 4. VALIDATE PICKING AND QR
+            %% ==========================================
+
+            Service->>+Store: FindAsync(pickingCode)
+
+            Store->>+DB: SELECT current PickingList and items
+            DB-->>Store: Current picking information
+            deactivate DB
+
+            Store-->>Service: PickingView
+            deactivate Store
+
+            Service->>+Store: FindLabelForUpdateAsync(qrCode)
+
+            Store->>+DB: SELECT BatchQrLabel FOR UPDATE
+            DB-->>Store: QR label and Batch information
+            deactivate DB
+
+            Store-->>Service: BatchQrLabel
+            deactivate Store
+
+            Note over Service,Store: Validate warehouse, assigned Batch, QR status and picked quantity
+
+            alt QR matches assigned Batch and quantity is valid
+
+                %% ==========================================
+                %% 5. HANDLE PARTIAL BATCH PICKING
+                %% ==========================================
+
+                opt Partial quantity requires QR label split
+
+                    Service->>+Store: NextQrCodeAsync()
+
+                    Store->>+DB: Generate next QR identifier
+                    DB-->>Store: QR identifier
+                    deactivate DB
+
+                    Store-->>Service: New QR code
+                    deactivate Store
+
+                    Service->>+Store: AddLabel() and AddLabelEvent()
+
+                    Store-->>Service: Stock-out label staged
+                    deactivate Store
+
+                    Note right of Service: Preserve source Batch traceability
+
+                end
+
+                %% ==========================================
+                %% 6. SAVE PICKING PROGRESS
+                %% ==========================================
+
+                Service->>+Store: SaveChangesAsync()
+
+                Store->>+DB: UPDATE PickingItem and QR label records
+                Note right of DB: INSERT QR events and picking history as applicable
+
+                DB-->>Store: Picking progress committed
+                deactivate DB
+
+                Store-->>Service: Updated picking result
+                deactivate Store
+
+                Service-->>API: Scan successful
+
+            else Invalid QR, wrong Batch or quantity exceeded
+
+                Note right of Service: Do not substitute another Batch automatically
+
+                Service-->>API: Validation or conflict error
+
+            end
+
+        end
+
+        deactivate Service
+
+        API-->>UI: Scan result
+        deactivate API
+
+        UI-->>Keeper: Display picked quantity or validation error
+        deactivate UI
+
+    end
+
+    %% ==========================================
+    %% 7. COMPLETE PICKING LIST
+    %% ==========================================
+
+    Keeper->>+UI: Confirm Picking List completion
+
+    UI->>+API: Complete(pickingCode)
+    API->>+Service: CompleteAsync(pickingCode)
+
+    %% ==========================================
+    %% 8. REVALIDATE PICKING COMPLETION
+    %% ==========================================
+
+    Service->>+Store: FindAsync(pickingCode)
+
+    Store->>+DB: SELECT PickingList, PickingItems and current status
+    DB-->>Store: Current picking data
+    deactivate DB
+
+    Store-->>Service: PickingView
+    deactivate Store
+
+    alt Picking List already completed
+
+        Service-->>API: Existing completed result
+
+    else All items picked and no unresolved exception
+
+        %% ==========================================
+        %% 9. PREVENT DUPLICATE SHIPMENT
+        %% ==========================================
+
+        Service->>+Store: ShipmentExistsAsync(orderId, warehouseId)
+
+        Store->>+DB: SELECT existing Shipment for order and warehouse
+        DB-->>Store: Shipment existence result
+        deactivate DB
+
+        Store-->>Service: Shipment exists or not
+        deactivate Store
+
+        opt Shipment does not exist
+
+            Service->>+Store: NextShipmentCodeAsync()
+
+            Store->>+DB: Generate next Shipment code
+            DB-->>Store: Shipment code
+            deactivate DB
+
+            Store-->>Service: New Shipment code
+            deactivate Store
+
+            Service->>+Store: AddShipment()
+
+            Store-->>Service: Shipment staged
+            deactivate Store
+
+        end
+
+        %% ==========================================
+        %% 10. SAVE PICKING COMPLETION
+        %% ==========================================
+
+        Service->>+Store: SaveChangesAsync()
+
+        Store->>+DB: UPDATE PickingList status and completion time
+        Note right of DB: INSERT Shipment and order history as applicable
+
+        DB-->>Store: Completion committed
+        deactivate DB
+
+        Store-->>Service: Completed Picking List
+        deactivate Store
+
+        Service-->>API: Picking completion successful
+
+    else Incomplete picking or unresolved exception
+
+        Note right of Service: Picking List cannot be completed
+
+        Service-->>API: Conflict - Picking not ready
+
+    end
+
+    deactivate Service
+
+    API-->>UI: Completion result
+    deactivate API
+
+    UI-->>Keeper: Display Picking List completion status
+    deactivate UI
+
+    %% ==========================================
+    %% 11. BUSINESS CONSTRAINT
+    %% ==========================================
+
+    Note over Keeper,DB: Picking does not decrease Physical Stock
+
+    Note over Service,DB: Physical Stock is deducted only during Dispatch Confirmation

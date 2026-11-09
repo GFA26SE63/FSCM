@@ -1,0 +1,412 @@
+classDiagram
+direction TB
+
+%% ==========================================
+%% API LAYER
+%% ==========================================
+
+namespace API {
+
+    class LoyaltyController {
+        <<Controller>>
+        +List()
+        +Get()
+        +Create()
+        +Update()
+        +Activate()
+        +Deactivate()
+    }
+
+    class LoyaltyCardsController {
+        <<Controller>>
+        +List()
+        +Get()
+        +GetByCode()
+        +Me()
+    }
+
+    class LoyaltyRewardsController {
+        <<Controller>>
+        +List()
+        +Get()
+        +Create()
+        +Update()
+        +Activate()
+        +Deactivate()
+    }
+
+    class LoyaltyRedemptionsController {
+        <<Controller>>
+        +List()
+        +Create()
+    }
+
+    class LoyaltyRedemptionWorkflowController {
+        <<Controller>>
+        +Approve()
+        +Reject()
+        +Deliver()
+        +Complete()
+    }
+}
+
+%% ==========================================
+%% APPLICATION SERVICES
+%% ==========================================
+
+namespace Application_Services {
+
+    class LoyaltyService {
+        <<Service>>
+        +ListAsync()
+        +GetAsync()
+        +CreateAsync()
+        +UpdateAsync()
+        +ActivateAsync()
+        +DeactivateAsync()
+    }
+
+    class LoyaltyCardService {
+        <<Service>>
+        +ListAsync()
+        +GetAsync()
+        +GetByCodeAsync()
+    }
+
+    class RewardService {
+        <<Service>>
+        +ListAsync()
+        +GetAsync()
+        +CreateAsync()
+        +UpdateAsync()
+        +ActivateAsync()
+        +DeactivateAsync()
+    }
+
+    class RedemptionService {
+        <<Service>>
+        +ListAsync()
+        +CreateAsync()
+    }
+
+    class RedemptionWorkflowService {
+        <<Service>>
+        +ApproveAsync()
+        +RejectAsync()
+        +DeliverAsync()
+        +CompleteAsync()
+    }
+
+    class LoyaltyAccrualService {
+        <<Service>>
+        +EvaluateAsync()
+        +AdjustAsync()
+    }
+}
+
+%% ==========================================
+%% APPLICATION INTERFACES
+%% ==========================================
+
+namespace Application_Interfaces {
+
+    class ILoyaltyStore {
+        <<interface>>
+        +ListProgramsAsync()
+        +FindProgramAsync()
+        +AddProgram()
+        +AddProgramRetailers()
+        +RemoveProgramRetailers()
+        +SaveChangesAsync()
+    }
+
+    class ILoyaltyCardStore {
+        <<interface>>
+        +ListAsync()
+        +GetAsync()
+        +FindRetailerIdByCodeAsync()
+    }
+
+    class IRewardStore {
+        <<interface>>
+        +ListAsync()
+        +FindAsync()
+        +FindProgramAsync()
+        +Add()
+        +SaveChangesAsync()
+    }
+
+    class IRedemptionStore {
+        <<interface>>
+        +ListForAdminAsync()
+        +ListForUserAsync()
+        +CreateAsync()
+    }
+
+    class IRedemptionWorkflowStore {
+        <<interface>>
+        +TransitionAsync()
+    }
+
+    class ILoyaltyAccrualStore {
+        <<interface>>
+        +FindAsync()
+        +EnsureBalanceAsync()
+        +AppendAsync()
+        +SaveChangesAsync()
+    }
+}
+
+%% ==========================================
+%% PERSISTENCE LAYER
+%% ==========================================
+
+namespace Persistence {
+
+    class LoyaltyStore {
+        <<Repository>>
+        +ListProgramsAsync()
+        +FindProgramAsync()
+        +AddProgram()
+        +AddProgramRetailers()
+        +RemoveProgramRetailers()
+        +SaveChangesAsync()
+    }
+
+    class LoyaltyCardStore {
+        <<Repository>>
+        +ListAsync()
+        +GetAsync()
+        +FindRetailerIdByCodeAsync()
+    }
+
+    class RewardStore {
+        <<Repository>>
+        +ListAsync()
+        +FindAsync()
+        +FindProgramAsync()
+        +Add()
+        +SaveChangesAsync()
+    }
+
+    class RedemptionStore {
+        <<Repository>>
+        +ListForAdminAsync()
+        +ListForUserAsync()
+        +CreateAsync()
+        +TransitionAsync()
+    }
+
+    class LoyaltyAccrualStore {
+        <<Repository>>
+        +FindAsync()
+        +EnsureBalanceAsync()
+        +AppendAsync()
+        +SaveChangesAsync()
+    }
+}
+
+%% ==========================================
+%% DOMAIN - LOYALTY PROGRAM
+%% ==========================================
+
+namespace Domain_LoyaltyProgram {
+
+    class LoyaltyProgram {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +Description: string
+        +SpendAmountPerPoint: decimal
+        +MinimumRedeemPoints: int
+        +StartAt: DateTimeOffset
+        +EndAt: DateTimeOffset
+        +PointsExpireAt: DateTimeOffset
+        +IsActive: bool
+    }
+
+    class LoyaltyProgramRetailer {
+        +Id: Guid
+        +LoyaltyProgramId: Guid
+        +RetailerId: Guid
+    }
+}
+
+%% ==========================================
+%% DOMAIN - LOYALTY POINTS
+%% ==========================================
+
+namespace Domain_LoyaltyPoints {
+
+    class RetailerLoyalty {
+        +Id: Guid
+        +RetailerId: Guid
+        +CurrentPoints: int
+        +HeldPoints: int
+        +LifetimeEarnedPoints: int
+        +LifetimeRedeemedPoints: int
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class LoyaltyTransaction {
+        +Id: Guid
+        +RetailerLoyaltyId: Guid
+        +LoyaltyProgramId: Guid
+        +SalesOrderId: Guid
+        +TransactionType: string
+        +Points: int
+        +BalanceAfter: int
+        +Note: string
+        +CreatedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - REWARDS
+%% ==========================================
+
+namespace Domain_Rewards {
+
+    class LoyaltyReward {
+        +Id: Guid
+        +LoyaltyProgramId: Guid
+        +Code: string
+        +Name: string
+        +Description: string
+        +RewardType: string
+        +RequiredPoints: int
+        +AvailableQuantity: int
+        +DiscountAmount: decimal
+        +DiscountPercent: decimal
+        +IsActive: bool
+    }
+
+    class RewardRedemption {
+        +Id: Guid
+        +RetailerId: Guid
+        +LoyaltyRewardId: Guid
+        +LoyaltyTransactionId: Guid
+        +SalesOrderId: Guid
+        +ClientRequestId: string
+        +RedeemedPoints: int
+        +Status: string
+        +CreatedAt: DateTimeOffset
+        +RedeemedAt: DateTimeOffset
+        +FulfilledAt: DateTimeOffset
+        +CancelledAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - REFERENCES
+%% ==========================================
+
+namespace Domain_References {
+
+    class Retailer {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +Status: string
+    }
+
+    class SalesOrder {
+        +Id: Guid
+        +OrderCode: string
+        +RetailerId: Guid
+        +FinalAmount: decimal
+        +Status: string
+    }
+}
+
+%% ==========================================
+%% API DEPENDENCIES
+%% ==========================================
+
+LoyaltyController ..> LoyaltyService : uses
+
+LoyaltyCardsController ..> LoyaltyCardService : uses
+
+LoyaltyRewardsController ..> RewardService : uses
+
+LoyaltyRedemptionsController ..> RedemptionService : uses
+
+LoyaltyRedemptionWorkflowController ..> RedemptionWorkflowService : uses
+
+%% ==========================================
+%% APPLICATION DEPENDENCIES
+%% ==========================================
+
+LoyaltyService ..> ILoyaltyStore : uses
+
+LoyaltyCardService ..> ILoyaltyCardStore : uses
+
+RewardService ..> IRewardStore : uses
+
+RedemptionService ..> IRedemptionStore : uses
+
+RedemptionWorkflowService ..> IRedemptionWorkflowStore : uses
+
+LoyaltyAccrualService ..> ILoyaltyAccrualStore : uses
+
+%% ==========================================
+%% INTERFACE REALIZATION
+%% ==========================================
+
+LoyaltyStore ..|> ILoyaltyStore : implements
+
+LoyaltyCardStore ..|> ILoyaltyCardStore : implements
+
+RewardStore ..|> IRewardStore : implements
+
+RedemptionStore ..|> IRedemptionStore : implements
+
+RedemptionStore ..|> IRedemptionWorkflowStore : implements
+
+LoyaltyAccrualStore ..|> ILoyaltyAccrualStore : implements
+
+%% ==========================================
+%% LOYALTY PROGRAM RELATIONSHIPS
+%% ==========================================
+
+LoyaltyProgram "1" -- "0..*" LoyaltyProgramRetailer : enrollments
+
+Retailer "1" -- "0..*" LoyaltyProgramRetailer : participates in
+
+LoyaltyProgram "1" -- "0..*" LoyaltyReward : offers
+
+%% ==========================================
+%% LOYALTY ACCOUNT RELATIONSHIPS
+%% ==========================================
+
+Retailer "1" -- "0..1" RetailerLoyalty : loyalty account
+
+RetailerLoyalty "1" -- "0..*" LoyaltyTransaction : transaction history
+
+LoyaltyProgram "1" -- "0..*" LoyaltyTransaction : points program
+
+SalesOrder "0..1" -- "0..*" LoyaltyTransaction : earning source
+
+%% ==========================================
+%% REWARD REDEMPTION RELATIONSHIPS
+%% ==========================================
+
+Retailer "1" -- "0..*" RewardRedemption : requests
+
+LoyaltyReward "1" -- "0..*" RewardRedemption : redeemed reward
+
+LoyaltyTransaction "0..1" -- "0..*" RewardRedemption : points movement
+
+SalesOrder "0..1" -- "0..*" RewardRedemption : related order
+
+%% ==========================================
+%% BUSINESS CONSTRAINTS
+%% ==========================================
+
+note for RetailerLoyalty "Available points are current points minus held points."
+
+note for LoyaltyTransaction "Point movements must be traceable and idempotent."
+
+note for LoyaltyAccrualService "Award points only after delivery, settlement and complaint conditions are satisfied."
+
+note for RewardRedemption "Redemption workflow manages point holds, approval, delivery and completion."

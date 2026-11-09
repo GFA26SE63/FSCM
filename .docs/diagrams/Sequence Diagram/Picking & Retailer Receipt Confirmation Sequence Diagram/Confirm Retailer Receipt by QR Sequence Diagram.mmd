@@ -1,0 +1,237 @@
+sequenceDiagram
+    autonumber
+
+    actor Retailer
+    participant UI as Retailer Mobile App
+    participant API as ShipmentsController
+    participant Service as ShipmentService
+    participant Store as ShipmentStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. VIEW DISPATCHED SHIPMENT
+    %% ==========================================
+
+    Retailer->>+UI: Open Order Delivery Details
+
+    UI->>+API: Get(shipmentId)
+    API->>+Service: GetAsync(shipmentId)
+
+    Service->>+Store: FindByIdAsync(shipmentId)
+    Store->>+DB: SELECT Shipment and dispatched lines
+    DB-->>Store: Shipment information
+    deactivate DB
+
+    Store-->>Service: ShipmentView
+    deactivate Store
+
+    Service->>+Store: CanViewOrderAsync(orderId, retailerId)
+    Store->>+DB: SELECT order ownership and access scope
+    DB-->>Store: Authorization result
+    deactivate DB
+
+    Store-->>Service: Access result
+    deactivate Store
+
+    alt Shipment exists and Retailer is authorized
+        Service-->>API: Shipment details
+    else Shipment not found or access denied
+        Service-->>API: Not Found or Forbidden error
+    end
+
+    deactivate Service
+
+    API-->>UI: Shipment details or error
+    deactivate API
+
+    UI-->>Retailer: Display dispatched batches and quantities
+    deactivate UI
+
+    %% ==========================================
+    %% 2. SCAN QR AND ENTER ACTUAL QUANTITIES
+    %% ==========================================
+
+    opt Retailer proceeds with an accessible shipment
+
+        Retailer->>+UI: Start Receipt Confirmation
+
+        loop For each received batch or QR label
+            Retailer->>UI: Scan stock-out QR label
+            Retailer->>UI: Enter received and damaged quantities
+        end
+
+        Note over Retailer,UI: Missing quantity is calculated from dispatched and received quantities
+
+        UI-->>Retailer: Display scanned items and receipt summary
+        deactivate UI
+
+        %% ==========================================
+        %% 3. SUBMIT RECEIPT CONFIRMATION
+        %% ==========================================
+
+        Retailer->>+UI: Confirm Actual Receipt
+
+        UI->>+API: ConfirmReceipt(shipmentId, receiptData, operationKey)
+        API->>+Service: ConfirmReceiptAsync(shipmentId, receiptData, operationKey)
+
+        %% ==========================================
+        %% 4. CHECK IDEMPOTENCY
+        %% ==========================================
+
+        Service->>+Store: FindByReceiptOperationKeyAsync(operationKey)
+        Store->>+DB: SELECT existing ReceiptConfirmation
+        DB-->>Store: Existing confirmation or null
+        deactivate DB
+
+        Store-->>Service: Existing receipt information
+        deactivate Store
+
+        alt Same request already processed
+
+            Note right of Service: Return the recorded result without duplicate effects
+
+            Service-->>API: Existing receipt confirmation
+
+        else Operation key conflicts with different data
+
+            Service-->>API: Conflict error
+
+        else New receipt confirmation
+
+            %% ==========================================
+            %% 5. VERIFY RETAILER ACCESS
+            %% ==========================================
+
+            Service->>+Store: CanViewOrderAsync(orderId, retailerId)
+            Store->>+DB: SELECT Retailer ownership and order scope
+            DB-->>Store: Authorization result
+            deactivate DB
+
+            Store-->>Service: Access allowed or denied
+            deactivate Store
+
+            alt Retailer is not authorized
+
+                Service-->>API: Forbidden error
+
+            else Retailer is authorized
+
+                %% ==========================================
+                %% 6. LOAD AND VALIDATE RECEIPT
+                %% ==========================================
+
+                Service->>+Store: ExecuteInTransactionAsync(receiptOperation)
+
+                Store->>+DB: BEGIN TRANSACTION
+                DB-->>Store: Transaction started
+                deactivate DB
+
+                Store->>+DB: SELECT Shipment, dispatched items and issued QR labels
+                DB-->>Store: Current Shipment and QR information
+                deactivate DB
+
+                Note over Service,Store: Validate shipment status, QR ownership and batch identity
+
+                Note over Service,Store: Validate damaged <= received <= dispatched
+
+                alt Invalid QR, shipment status or quantities
+
+                    Store->>+DB: ROLLBACK TRANSACTION
+                    DB-->>Store: No receipt changes saved
+                    deactivate DB
+
+                    Store-->>Service: Receipt validation error
+
+                else Valid receipt information
+
+                    %% ==========================================
+                    %% 7. SAVE ACTUAL RECEIPT
+                    %% ==========================================
+
+                    Note over Service,DB: Calculate missing = dispatched - received for each line
+
+                    Store->>+DB: INSERT ReceiptConfirmation and ReceiptConfirmationItems
+                    DB-->>Store: Receipt records persisted
+                    deactivate DB
+
+                    Store->>+DB: INSERT scanned QR references and label events
+                    DB-->>Store: QR receipt records persisted
+                    deactivate DB
+
+                    Store->>+DB: UPDATE Shipment and received QR label statuses
+                    DB-->>Store: Shipment receipt recorded
+                    deactivate DB
+
+                    %% ==========================================
+                    %% 8. CHECK ORDER RECEIPT COMPLETENESS
+                    %% ==========================================
+
+                    Store->>+DB: SELECT all Shipments and receipt results for the order
+                    DB-->>Store: Order delivery progress
+                    deactivate DB
+
+                    alt At least one line has missing quantity
+
+                        Store->>+DB: UPDATE SalesOrder status to ReceiptException
+                        DB-->>Store: Receipt exception recorded
+                        deactivate DB
+
+                        Note right of Service: Preserve actual shortage for discrepancy handling
+
+                    else All Shipments fully received
+
+                        Store->>+DB: UPDATE SalesOrder status to Delivered
+                        DB-->>Store: Final receipt status recorded
+                        deactivate DB
+
+                        Note right of Service: Damaged goods remain traceable for complaint handling
+
+                    else Other Shipments are still pending receipt
+
+                        Note right of Service: Keep the order in its current delivery stage
+
+                    end
+
+                    %% ==========================================
+                    %% 9. COMMIT RECEIPT CONFIRMATION
+                    %% ==========================================
+
+                    Store->>+DB: INSERT OrderStatusHistory and save changes
+                    DB-->>Store: Receipt changes saved
+                    deactivate DB
+
+                    Store->>+DB: COMMIT TRANSACTION
+                    DB-->>Store: Transaction committed
+                    deactivate DB
+
+                    Store-->>Service: ReceiptConfirmationResult
+
+                end
+
+                deactivate Store
+
+                Service-->>API: Receipt result or validation error
+
+            end
+
+        end
+
+        deactivate Service
+
+        API-->>UI: Receipt confirmation response
+        deactivate API
+
+        UI-->>Retailer: Display actual receipt and updated order status
+        deactivate UI
+
+    end
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over Retailer,DB: One Shipment can have only one confirmed receipt
+
+    Note over Service,DB: Receipt confirmation does not deduct physical stock again
+
+    Note over Service,DB: A confirmed shortage does not qualify the order as Delivered

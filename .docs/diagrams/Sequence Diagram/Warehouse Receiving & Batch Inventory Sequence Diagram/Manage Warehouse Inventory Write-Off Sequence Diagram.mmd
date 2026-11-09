@@ -1,0 +1,230 @@
+sequenceDiagram
+    autonumber
+
+    actor Keeper as Warehouse Keeper
+    actor Admin as Administrator
+
+    participant UI as Web Portal / Warehouse App
+    participant ImageAPI as Image Upload API (design)
+    participant Blob as Azure Blob Storage
+    participant API as WriteOffController (design)
+    participant Service as WriteOffService (design)
+    participant Store as WriteOffStore (design)
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. CREATE WRITE-OFF REQUEST
+    %% ==========================================
+
+    Keeper->>+UI: Create Write-Off Request
+
+    Note over Keeper,UI: Select batches, quantities, reason,<br/>disposal method and evidence image
+
+    %% ==========================================
+    %% 2. UPLOAD EVIDENCE
+    %% ==========================================
+
+    UI->>+ImageAPI: UploadEvidence(image)
+
+    ImageAPI->>+Blob: Store evidence image
+    Blob-->>ImageAPI: Image reference or upload error
+    deactivate Blob
+
+    ImageAPI-->>UI: Evidence upload result
+    deactivate ImageAPI
+
+    alt Evidence uploaded successfully
+
+        %% ==========================================
+        %% 3. SUBMIT WRITE-OFF REQUEST
+        %% ==========================================
+
+        UI->>+API: Create(writeOffData, evidenceRef)
+        API->>+Service: CreateAsync(writeOffData)
+
+        Service->>+Store: Validate request and warehouse access
+
+        Store->>+DB: SELECT warehouse, batches, balances and reservations
+        DB-->>Store: Current inventory and access information
+        deactivate DB
+
+        Store-->>Service: Validation data
+        deactivate Store
+
+        alt Duplicate request already exists
+
+            Service-->>API: Return existing WriteOff
+
+        else Valid request without reservation conflict
+
+            Note right of Service: Validate quantity, disposal method,<br/>reason and evidence reference
+
+            Service->>+Store: Save WriteOff, items and attachments
+
+            Store->>+DB: INSERT WriteOff, WriteOffItems and attachments
+            Note right of DB: Status = Pending Admin Approval<br/>No inventory quantity is changed
+
+            DB-->>Store: Write-Off request created
+            deactivate DB
+
+            Store-->>Service: Pending WriteOff
+            deactivate Store
+
+            Service-->>API: WriteOffResult
+
+        else Invalid request or reserved stock conflict
+
+            Service-->>API: Validation or conflict error
+
+        end
+
+        deactivate Service
+
+        API-->>UI: Creation result
+        deactivate API
+
+    else Evidence upload failed
+
+        Note over UI,Blob: Do not submit a Write-Off request without valid evidence
+
+    end
+
+    UI-->>Keeper: Display submission result
+    deactivate UI
+
+    %% ==========================================
+    %% 4. ADMINISTRATOR REVIEWS WRITE-OFF
+    %% ==========================================
+
+    Admin->>+UI: Open pending Write-Off
+
+    UI->>+API: Get(writeOffId)
+    API->>+Service: GetAsync(writeOffId)
+
+    Service->>+Store: FindAsync(writeOffId)
+
+    Store->>+DB: SELECT WriteOff, items and evidence references
+    DB-->>Store: Write-Off details
+    deactivate DB
+
+    Store-->>Service: Write-Off information
+    deactivate Store
+
+    Service-->>API: WriteOffResult
+    deactivate Service
+
+    API-->>UI: Write-Off details
+    deactivate API
+
+    UI-->>Admin: Display batches, quantities and evidence
+    deactivate UI
+
+    %% ==========================================
+    %% 5. ADMINISTRATOR MAKES DECISION
+    %% ==========================================
+
+    Admin->>+UI: Approve or Reject Write-Off
+
+    alt Administrator approves
+
+        UI->>+API: Approve(writeOffId, version)
+        API->>+Service: ApproveAsync(writeOffId, version)
+
+        %% ==========================================
+        %% 6. REVALIDATE INVENTORY
+        %% ==========================================
+
+        Service->>+Store: ApproveAndPostAsync(writeOffId, version)
+
+        Store->>+DB: BEGIN TRANSACTION and SELECT affected rows FOR UPDATE
+        DB-->>Store: Locked WriteOff, balances and reservation data
+        deactivate DB
+
+        Note over Store,DB: Recheck approval status, stock quantity,<br/>active reservations and inventory locks
+
+        alt Write-Off already approved
+
+            Store->>+DB: COMMIT without additional stock movement
+            DB-->>Store: Existing result preserved
+            deactivate DB
+
+            Store-->>Service: Already approved
+
+        else Eligible for write-off
+
+            %% ==========================================
+            %% 7. COMMIT INVENTORY WRITE-OFF
+            %% ==========================================
+
+            Note over Store,DB: Quantity must not exceed unreserved stock
+
+            Store->>+DB: UPDATE physical stock and matching inventory locks
+            Note right of DB: Close affected locks and invalidate<br/>related QR labels
+
+            DB-->>Store: Inventory updates applied
+            deactivate DB
+
+            Store->>+DB: INSERT inventory movements and audit records
+            Note right of DB: Mark WriteOff as Approved
+
+            DB-->>Store: Write-Off records persisted
+            deactivate DB
+
+            Store->>+DB: COMMIT TRANSACTION
+            DB-->>Store: Write-Off committed
+            deactivate DB
+
+            Store-->>Service: Approval successful
+
+        else Invalid status, stale version or reserved stock conflict
+
+            Store->>+DB: ROLLBACK TRANSACTION
+            DB-->>Store: No stock changes committed
+            deactivate DB
+
+            Store-->>Service: Approval rejected with reason
+
+        end
+
+        deactivate Store
+
+        Service-->>API: Approval result
+        deactivate Service
+
+        API-->>UI: Approval response
+        deactivate API
+
+    else Administrator rejects
+
+        %% ==========================================
+        %% 8. REJECT WRITE-OFF REQUEST
+        %% ==========================================
+
+        UI->>+API: Reject(writeOffId, reason)
+        API->>+Service: RejectAsync(writeOffId, reason)
+
+        Note right of Service: Rejection requires a reason<br/>and a pending request
+
+        Service->>+Store: RejectPendingAsync(writeOffId, reason)
+
+        Store->>+DB: UPDATE WriteOff status and INSERT audit record
+        Note right of DB: Do not modify physical stock<br/>or active reservations
+
+        DB-->>Store: Rejected or validation conflict
+        deactivate DB
+
+        Store-->>Service: Rejection result
+        deactivate Store
+
+        Service-->>API: Rejection result
+        deactivate Service
+
+        API-->>UI: Rejection response
+        deactivate API
+
+    end
+
+    UI-->>Admin: Display final Write-Off status
+    deactivate UI
+
+    Note over Service,DB: An approved Write-Off decreases physical stock exactly once

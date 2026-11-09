@@ -1,0 +1,84 @@
+@startuml
+title F4 - Quote Acceptance, Payment, PO, Picking and Delivery
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam ActivityBackgroundColor #F5F5F5
+skinparam ActivityBorderColor #333333
+skinparam RoundCorner 15
+skinparam wrapWidth 220
+
+|Retailer|
+start
+:Open final quote (lines, batches, list price, quantity promotion, shelf-life discount, total);
+if (Accept the valid quote?) then (accept)
+else (reject / expired)
+  |System|
+  :Release reservations once, SO = QuoteRejected / QuoteExpired;
+  stop
+endif
+
+|Retailer|
+:Choose payment method (no COD);
+if (Payment method?) then (Prepaid)
+  |System|
+  :Create payment request for the exact quote total with deadline N days;
+  |Retailer|
+  :Transfer the amount and submit proof;
+  |Operator|
+  :Verify amount and reference;
+  if (Paid in full before deadline?) then (yes)
+  else (no / expired)
+    |System|
+    :Close payment, release reservations;
+    stop
+  endif
+else (Credit)
+  |System|
+  :Revalidate account, term, limit, overdue and outstanding debt;
+  if (Credit valid?) then (yes)
+  else (no)
+    :Retailer may switch to Prepaid within the quote deadline;
+    stop
+  endif
+endif
+
+|System|
+:Convert quote to PO once (idempotent), SO = ConvertedToPo;
+:Issue one PickingList per PO + Warehouse, SO = Picking;
+
+|Warehouse Keeper|
+repeat
+  :Open picking list of own warehouse, scan batch QR;
+  :System blocks wrong warehouse / SKU / batch, expired or locked batch, over quantity;
+repeat while (All items picked?) is (no)
+:Confirm PickingList Completed;
+
+|System|
+if (All warehouses of the PO Completed, no Exception?) then (yes)
+else (no)
+  :Block dispatch, log exception, notify Operator and Retailer;
+  stop
+endif
+
+|Warehouse Keeper|
+:Confirm issue per shipment;
+|System|
+:Reduce Physical, consume Reservation, write SalesIssue ONCE, SO = Issued;
+
+|Operator|
+:Assign driver and vehicle per shipment, SO = Delivering;
+
+|Retailer|
+repeat
+  :Confirm each shipment (scan QR, received / damaged / missing);
+repeat while (All shipments received?) is (no)
+
+|System|
+:SO = Delivered (never earlier than the last shipment);
+if (Credit order?) then (yes)
+  :Fix DeliveredDate and DueDate from the term snapshot;
+else (no - Prepaid)
+endif
+:Hand over receipt events, receivable and exceptions to F5;
+stop
+@enduml

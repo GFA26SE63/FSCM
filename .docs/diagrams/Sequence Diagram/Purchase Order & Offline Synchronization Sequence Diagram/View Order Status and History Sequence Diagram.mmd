@@ -1,0 +1,153 @@
+sequenceDiagram
+    autonumber
+
+    actor User as Authorized User
+    participant UI as Web Portal / Mobile App
+    participant API as OrdersController
+    participant Service as OrderService
+    participant Store as OrderStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. VIEW ORDER LIST AND HISTORY
+    %% ==========================================
+
+    User->>+UI: Open Order History
+
+    UI->>+API: List(filters)
+    API->>+Service: ListAsync(query)
+
+    Note over Service,Store: Apply role-based order visibility
+
+    Service->>+Store: ListAsync(query, actorScope)
+    Store->>+DB: SELECT orders by status, date and authorized scope
+    DB-->>Store: Matching order records
+    deactivate DB
+
+    Store-->>Service: Order list
+    deactivate Store
+
+    Service-->>API: PagedOrderResult
+    deactivate Service
+
+    API-->>UI: Order list response
+    deactivate API
+
+    UI-->>User: Display orders and current statuses
+    deactivate UI
+
+    %% ==========================================
+    %% 2. VIEW ORDER DETAILS
+    %% ==========================================
+
+    opt User selects an order
+
+        User->>+UI: Select order to view details
+
+        UI->>+API: Get(orderId)
+        API->>+Service: GetAsync(orderId)
+
+        Service->>+Store: FindAsync(orderId)
+        Store->>+DB: SELECT order, lines, prices and fulfillment details
+        DB-->>Store: Order data or null
+        deactivate DB
+
+        Store-->>Service: OrderView or null
+        deactivate Store
+
+        alt Order exists
+
+            Service->>+Store: CanViewAsync(orderId, actor)
+            Store->>+DB: SELECT order ownership and access scope
+            DB-->>Store: Authorization result
+            deactivate DB
+
+            Store-->>Service: Access allowed or denied
+            deactivate Store
+
+            alt User is authorized
+
+                Note right of Service: Include allocation, quotation,<br/>payment and delivery progress
+
+                Service-->>API: OrderDetailResult
+
+            else Order outside authorized scope
+
+                Service-->>API: 403 Forbidden
+
+            end
+
+        else Order not found
+
+            Service-->>API: 404 Not Found
+
+        end
+
+        deactivate Service
+
+        API-->>UI: Order details or error
+        deactivate API
+
+        UI-->>User: Display order details or error
+        deactivate UI
+
+    end
+
+    %% ==========================================
+    %% 3. VIEW ORDER STATUS TIMELINE
+    %% ==========================================
+
+    opt User opens timeline for an accessible order
+
+        User->>+UI: View Order Status Timeline
+
+        UI->>+API: Timeline(orderId)
+        API->>+Service: GetTimelineAsync(orderId)
+
+        Service->>+Store: FindAsync(orderId)
+        Store->>+DB: SELECT order and related status history
+        DB-->>Store: Order and timeline records
+        deactivate DB
+
+        Store-->>Service: OrderView or null
+        deactivate Store
+
+        alt Order exists
+
+            Service->>+Store: CanViewAsync(orderId, actor)
+            Store->>+DB: SELECT user access to requested order
+            DB-->>Store: Authorization result
+            deactivate DB
+
+            Store-->>Service: Access allowed or denied
+            deactivate Store
+
+            alt User is authorized
+
+                Note over Service,Store: Build timeline from recorded status,<br/>allocation, shipment and receipt data
+
+                Service-->>API: OrderTimelineResult
+
+            else Access denied
+
+                Service-->>API: 403 Forbidden
+
+            end
+
+        else Order not found
+
+            Service-->>API: 404 Not Found
+
+        end
+
+        deactivate Service
+
+        API-->>UI: Timeline result or error
+        deactivate API
+
+        UI-->>User: Display chronological order history
+        deactivate UI
+
+    end
+
+    Note over User,DB: Order status, delivery progress and financial completion are displayed separately

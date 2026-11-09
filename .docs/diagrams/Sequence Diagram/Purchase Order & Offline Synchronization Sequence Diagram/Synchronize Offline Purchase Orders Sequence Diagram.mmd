@@ -1,0 +1,253 @@
+sequenceDiagram
+    autonumber
+
+    actor Sales as Sales Representative
+    participant UI as Sales Mobile App
+    participant Sync as SyncService
+    participant DAO as OfflineOrderDao
+    participant SQLite as SQLite Database
+    participant Remote as OrdersApi
+    participant API as OrdersController
+    participant Service as OrderService
+    participant Store as OrderStore
+    participant Allocation as RealTimeAllocationService
+    participant AllocationStore as RealTimeAllocationStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. VIEW OFFLINE SYNC QUEUE
+    %% ==========================================
+
+    Sales->>+UI: Open Offline Sync Queue
+
+    UI->>+DAO: all()
+    DAO->>+SQLite: SELECT locally saved orders
+    SQLite-->>DAO: Offline order records
+    deactivate SQLite
+
+    DAO-->>UI: Offline orders and sync statuses
+    deactivate DAO
+
+    UI-->>Sales: Display pending, conflict and failed orders
+    deactivate UI
+
+    %% ==========================================
+    %% 2. MANUALLY START SYNCHRONIZATION
+    %% ==========================================
+
+    Sales->>+UI: Tap Send
+
+    UI->>+Sync: syncAll()
+
+    Sync->>+DAO: all()
+    DAO->>+SQLite: SELECT orders pending synchronization
+    SQLite-->>DAO: Pending offline drafts
+    deactivate SQLite
+
+    DAO-->>Sync: Offline drafts in creation order
+    deactivate DAO
+
+    %% ==========================================
+    %% 3. SYNCHRONIZE EACH OFFLINE ORDER
+    %% ==========================================
+
+    loop Each pending draft in creation order
+
+        Sync->>+DAO: update(status = Sending)
+        DAO->>+SQLite: UPDATE offline order sync status
+        SQLite-->>DAO: Status saved
+        deactivate SQLite
+
+        DAO-->>Sync: Draft marked as Sending
+        deactivate DAO
+
+        alt Network available
+
+            Sync->>+Remote: syncOffline(payload, draftId, idempotencyKey)
+
+            Remote->>+API: SubmitOffline(request)
+            API->>+Service: SubmitOfflineAsync(request)
+
+            %% ==========================================
+            %% 4. SERVER VALIDATION
+            %% ==========================================
+
+            Service->>+Store: Check duplicate request and current conditions
+            Store->>+DB: SELECT existing order, Retailer, products, prices and MLOR
+            DB-->>Store: Existing order and validation data
+            deactivate DB
+
+            Store-->>Service: Duplicate check and current conditions
+            deactivate Store
+
+            alt Draft already synchronized
+
+                Note right of Service: Return existing order instead of creating a duplicate
+
+                Service-->>API: Existing SalesOrder and order code
+
+            else Server conditions have changed
+
+                Note over Service,DB: Price, promotion, MLOR or Retailer status differs
+
+                Service-->>API: 409 Conflict with updated conditions
+
+            else Invalid order or unauthorized Retailer
+
+                Service-->>API: Validation or authorization error
+
+            else New valid offline order
+
+                %% ==========================================
+                %% 5. CREATE SALES ORDER
+                %% ==========================================
+
+                Service->>+Store: Save SalesOrder and idempotency information
+                Store->>+DB: INSERT SalesOrder, lines and status history
+                DB-->>Store: SalesOrder created
+                deactivate DB
+
+                Store-->>Service: Created SalesOrder and order code
+                deactivate Store
+
+                %% ==========================================
+                %% 6. REAL-TIME ALLOCATION
+                %% ==========================================
+
+                Service->>+Allocation: AllocateAsync(orderId)
+
+                Allocation->>+AllocationStore: Evaluate eligible inventory and allocate
+
+                AllocationStore->>+DB: SELECT eligible batches and available stock
+                DB-->>AllocationStore: Inventory and batch information
+                deactivate DB
+
+                Note over Allocation,AllocationStore: Reserve only when all lines can be fulfilled
+
+                alt Sufficient eligible stock
+
+                    AllocationStore->>+DB: INSERT allocations, reservations and final quote
+                    DB-->>AllocationStore: Allocation committed
+                    deactivate DB
+
+                else Insufficient eligible stock
+
+                    AllocationStore->>+DB: UPDATE order allocation status
+                    DB-->>AllocationStore: Shortage recorded without reservation
+                    deactivate DB
+
+                end
+
+                AllocationStore-->>Allocation: Allocation result
+                deactivate AllocationStore
+
+                Allocation-->>Service: Quotation ready or insufficient stock
+                deactivate Allocation
+
+                Service-->>API: Created SalesOrder and allocation status
+
+            end
+
+            deactivate Service
+
+            API-->>Remote: Server response
+            deactivate API
+
+            alt Response received
+
+                Remote-->>Sync: Synchronization result
+
+            else Response lost or timeout
+
+                Remote-->>Sync: Unconfirmed request outcome
+
+            end
+
+            deactivate Remote
+
+        else Network unavailable
+
+            Note right of Sync: Keep draft locally for later retry
+
+        end
+
+        %% ==========================================
+        %% 7. UPDATE LOCAL SYNC STATUS
+        %% ==========================================
+
+        alt Accepted or existing server order
+
+            Sync->>+DAO: update(status = Accepted, serverOrderCode)
+            DAO->>+SQLite: UPDATE order and server reference
+            SQLite-->>DAO: Status saved
+            deactivate SQLite
+
+            DAO-->>Sync: Order synchronized
+            deactivate DAO
+
+        else Server conditions changed
+
+            Sync->>+DAO: update(status = Conflict, serverConditions)
+            DAO->>+SQLite: UPDATE conflict status and details
+            SQLite-->>DAO: Conflict saved
+            deactivate SQLite
+
+            DAO-->>Sync: Confirmation required
+            deactivate DAO
+
+        else Server rejected the order
+
+            Sync->>+DAO: update(status = Rejected, reason)
+            DAO->>+SQLite: UPDATE rejection status and reason
+            SQLite-->>DAO: Rejection saved
+            deactivate SQLite
+
+            DAO-->>Sync: Rejected draft retained locally
+            deactivate DAO
+
+        else Network failure or unconfirmed response
+
+            Sync->>+DAO: update(status = Pending, retryInfo)
+            DAO->>+SQLite: UPDATE pending status and retain request key
+            SQLite-->>DAO: Draft preserved
+            deactivate SQLite
+
+            DAO-->>Sync: Available for manual retry
+            deactivate DAO
+
+        end
+
+    end
+
+    %% ==========================================
+    %% 8. DISPLAY SYNCHRONIZATION RESULT
+    %% ==========================================
+
+    Sync-->>UI: Synchronization summary
+    deactivate Sync
+
+    UI-->>Sales: Display Accepted, Conflict, Rejected or Pending
+    deactivate UI
+
+    %% ==========================================
+    %% 9. HANDLE CHANGED SERVER CONDITIONS
+    %% ==========================================
+
+    opt Sales confirms updated conditions
+
+        Sales->>+UI: Review and confirm server changes
+
+        UI->>+DAO: Update draft with confirmed conditions
+        DAO->>+SQLite: UPDATE payload and new idempotency key
+        SQLite-->>DAO: Confirmed draft saved
+        deactivate SQLite
+
+        DAO-->>UI: Draft ready for resubmission
+        deactivate DAO
+
+        UI-->>Sales: Ready to send again manually
+        deactivate UI
+
+        Note over Sales,DB: Resend uses the same DraftId and a new idempotency key
+
+    end

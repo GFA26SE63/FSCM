@@ -1,0 +1,180 @@
+%% FSCM CORE BUSINESS ERD -- Report 3 / Report 4 / draw.io
+%% Only selected core tables and columns; these are real table/column names.
+%% "column" is a placeholder: the GraphML does not export SQL types.
+%% Lines marked [logical] have matching columns but NO edge in GraphML export.
+%% Cardinalities express high-level one-to-many, not verified nullability.
+erDiagram
+    RETAILER {
+        column Id PK
+        column Code
+        column Name
+        column Status
+    }
+
+    PRODUCT {
+        column Id PK
+        column Sku
+        column Name
+        column ProductCategoryId FK
+    }
+
+    WAREHOUSE {
+        column Id PK
+        column Code
+        column Name
+    }
+
+    BATCH {
+        column Id PK
+        column ProductId FK
+        column WarehouseId FK
+        column ExpirationDate
+    }
+
+    INVENTORY_BALANCE {
+        column Id PK
+        column BatchId FK
+        column PhysicalQuantity
+        column ReservedQuantity
+        column AvailableQuantity
+    }
+
+    SALES_ORDER {
+        column Id PK
+        column OrderCode
+        column RetailerId FK
+        column Status
+        column FinalAmount
+    }
+
+    SALES_ORDER_LINE {
+        column Id PK
+        column SalesOrderId FK
+        column ProductId FK
+        column OrderedQuantity
+    }
+
+    ALLOCATION_RUN {
+        column Id PK
+        column SalesOrderId FK
+        column Status
+        column StartedAt
+    }
+
+    ALLOCATION {
+        column Id PK
+        column SalesOrderLineId FK
+        column BatchId FK
+        column WarehouseId FK
+        column AllocatedQuantity
+    }
+
+    RESERVATION {
+        column Id PK
+        column AllocationId FK
+        column BatchId FK
+        column Quantity
+        column Status
+    }
+
+    SALES_ORDER_QUOTE {
+        column Id PK
+        column SalesOrderId
+        column AllocationRunId
+        column Status
+        column TotalAmount
+    }
+
+    PURCHASE_ORDER {
+        column Id PK
+        column SalesOrderId
+        column SalesOrderQuoteId
+        column Status
+    }
+
+    PICKING_LIST {
+        column Id PK
+        column PurchaseOrderId FK
+        column WarehouseId FK
+        column Status
+    }
+
+    SHIPMENT {
+        column Id PK
+        column SalesOrderId FK
+        column WarehouseId FK
+        column PickingListId FK
+        column Status
+    }
+
+    RECEIPT_CONFIRMATION {
+        column Id PK
+        column SalesOrderId FK
+        column ShipmentId FK
+        column Status
+    }
+
+    PAYMENT {
+        column Id PK
+        column SalesOrderId FK
+        column Status
+        column Amount
+    }
+
+    PAYMENT_RECEIPT {
+        column Id PK
+        column RetailerId FK
+        column ReceivedAmount
+        column Status
+    }
+
+    PAYMENT_RECEIPT_ALLOCATION {
+        column Id PK
+        column PaymentReceiptId FK
+        column PaymentId FK
+        column Amount
+    }
+
+    RETAILER_LOYALTY {
+        column Id PK
+        column RetailerId FK
+        column CurrentPoints
+    }
+
+    LOYALTY_TRANSACTION {
+        column Id PK
+        column RetailerLoyaltyId FK
+        column SalesOrderId FK
+        column Points
+    }
+
+    RETAILER ||..o{ SALES_ORDER : "RetailerId"
+    RETAILER ||..o{ PAYMENT_RECEIPT : "RetailerId"
+    RETAILER ||..o{ RETAILER_LOYALTY : "RetailerId"
+    PRODUCT ||..o{ BATCH : "ProductId"
+    PRODUCT ||..o{ SALES_ORDER_LINE : "ProductId"
+    WAREHOUSE ||..o{ BATCH : "WarehouseId"
+    WAREHOUSE ||..o{ ALLOCATION : "WarehouseId"
+    WAREHOUSE ||..o{ PICKING_LIST : "WarehouseId"
+    WAREHOUSE ||..o{ SHIPMENT : "WarehouseId"
+    BATCH ||..o{ INVENTORY_BALANCE : "BatchId"
+    BATCH ||..o{ ALLOCATION : "BatchId"
+    BATCH ||..o{ RESERVATION : "BatchId"
+    SALES_ORDER ||..o{ SALES_ORDER_LINE : "SalesOrderId"
+    SALES_ORDER ||..o{ ALLOCATION_RUN : "SalesOrderId"
+    SALES_ORDER ||..o{ SHIPMENT : "SalesOrderId"
+    SALES_ORDER ||..o{ RECEIPT_CONFIRMATION : "SalesOrderId"
+    SALES_ORDER ||..o{ PAYMENT : "SalesOrderId"
+    SALES_ORDER ||..o{ LOYALTY_TRANSACTION : "SalesOrderId"
+    SALES_ORDER_LINE ||..o{ ALLOCATION : "SalesOrderLineId"
+    ALLOCATION ||..o{ RESERVATION : "AllocationId"
+    PURCHASE_ORDER ||..o{ PICKING_LIST : "PurchaseOrderId"
+    PICKING_LIST ||..o{ SHIPMENT : "PickingListId"
+    SHIPMENT ||..o{ RECEIPT_CONFIRMATION : "ShipmentId"
+    PAYMENT ||..o{ PAYMENT_RECEIPT_ALLOCATION : "PaymentId"
+    PAYMENT_RECEIPT ||..o{ PAYMENT_RECEIPT_ALLOCATION : "PaymentReceiptId"
+    RETAILER_LOYALTY ||..o{ LOYALTY_TRANSACTION : "RetailerLoyaltyId"
+    SALES_ORDER ||..o{ SALES_ORDER_QUOTE : "SalesOrderId [logical]"
+    ALLOCATION_RUN ||..o{ SALES_ORDER_QUOTE : "AllocationRunId [logical]"
+    SALES_ORDER ||..o{ PURCHASE_ORDER : "SalesOrderId [logical]"
+    SALES_ORDER_QUOTE ||..o{ PURCHASE_ORDER : "SalesOrderQuoteId [logical]"

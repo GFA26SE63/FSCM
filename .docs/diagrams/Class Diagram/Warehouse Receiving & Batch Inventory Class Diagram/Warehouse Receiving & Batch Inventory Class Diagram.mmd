@@ -1,0 +1,466 @@
+classDiagram
+direction TB
+
+%% ==========================================
+%% 1. API LAYER
+%% ==========================================
+
+namespace API {
+
+    class GoodsReceiptsController {
+        <<Controller>>
+        +List()
+        +Get()
+        +Create()
+        +Approve()
+    }
+
+    class InventoryController {
+        <<Controller>>
+        +List()
+        +GetBatch()
+        +History()
+        +ExpiryHealth()
+    }
+
+    class QrLabelsController {
+        <<Controller>>
+        +List()
+        +Get()
+        +Generate()
+        +PrintBatch()
+        +Scan()
+        +Split()
+    }
+
+    class InventoryLocksController {
+        <<Controller>>
+        +List()
+        +Get()
+        +Create()
+        +Release()
+    }
+}
+
+%% ==========================================
+%% 2. APPLICATION LAYER
+%% ==========================================
+
+namespace Application {
+
+    class InventoryService {
+        <<Service>>
+        +CreateReceiptAsync()
+        +ApproveReceiptAsync()
+        +ListReceiptsAsync()
+        +GetReceiptAsync()
+        +ListInventoryAsync()
+        +GetBatchAsync()
+        +ListHistoryAsync()
+        +GetExpiryHealthAsync()
+        -ValidateLine()
+        -CalculateExpiryStatus()
+    }
+
+    class QrLabelService {
+        <<Service>>
+        +ListAsync()
+        +GetAsync()
+        +GenerateAsync()
+        +RenderBatchPrintableAsync()
+        +ScanAsync()
+        +SplitAsync()
+    }
+
+    class InventoryLockService {
+        <<Service>>
+        +CreateAsync()
+        +ReleaseAsync()
+        +GetAsync()
+        +ListAsync()
+    }
+
+    class InventoryExpirySweepService {
+        <<Service>>
+        +RunAsync()
+        -CalculateExpiryStatus()
+    }
+
+    class IInventoryStore {
+        <<interface>>
+        +FindReceiptAsync()
+        +FindReceiptForApprovalAsync()
+        +FindBatchForUpdateAsync()
+        +FindBalanceForUpdateAsync()
+        +ListInventoryAsync()
+        +AddReceipt()
+        +AddReceiptLine()
+        +AddBatch()
+        +AddBalance()
+        +AddTransaction()
+        +SaveChangesAsync()
+    }
+
+    class IQrLabelStore {
+        <<interface>>
+        +FindByIdAsync()
+        +FindBatchAsync()
+        +ListAsync()
+        +AddLabel()
+        +AddEvent()
+        +SaveChangesAsync()
+    }
+
+    class IInventoryLockStore {
+        <<interface>>
+        +FindAsync()
+        +FindBatchContextAsync()
+        +FindForUpdateAsync()
+        +ListAsync()
+        +Add()
+        +SaveChangesAsync()
+    }
+
+    class IBatchExpiryStore {
+        <<interface>>
+        +ListBatchesForExpirySweepAsync()
+        +AddInventoryLock()
+        +AddSweepRun()
+        +SaveChangesAsync()
+    }
+
+    class IQrCodeRenderer {
+        <<interface>>
+        +RenderPng()
+        +RenderSvg()
+    }
+}
+
+%% ==========================================
+%% 3. PERSISTENCE LAYER
+%% ==========================================
+
+namespace Persistence {
+
+    class InventoryStore {
+        <<Repository>>
+        +FindReceiptAsync()
+        +FindReceiptForApprovalAsync()
+        +FindBatchForUpdateAsync()
+        +FindBalanceForUpdateAsync()
+        +ListInventoryAsync()
+        +AddReceipt()
+        +AddReceiptLine()
+        +AddBatch()
+        +AddBalance()
+        +AddTransaction()
+        +SaveChangesAsync()
+    }
+
+    class QrLabelStore {
+        <<Repository>>
+        +FindByIdAsync()
+        +FindBatchAsync()
+        +ListAsync()
+        +AddLabel()
+        +AddEvent()
+        +SaveChangesAsync()
+    }
+
+    class InventoryLockStore {
+        <<Repository>>
+        +FindAsync()
+        +FindBatchContextAsync()
+        +FindForUpdateAsync()
+        +ListAsync()
+        +Add()
+        +SaveChangesAsync()
+    }
+}
+
+%% ==========================================
+%% 4. INFRASTRUCTURE LAYER
+%% ==========================================
+
+namespace Infrastructure {
+
+    class QrCoderQrCodeRenderer {
+        <<Service>>
+        +RenderPng()
+        +RenderSvg()
+    }
+}
+
+%% ==========================================
+%% 5. DOMAIN - GOODS RECEIVING
+%% ==========================================
+
+namespace Domain_Receiving {
+
+    class GoodsReceipt {
+        +Id: Guid
+        +ReceiptCode: string
+        +WarehouseId: Guid
+        +CreatedByUserId: Guid
+        +IdempotencyKey: string
+        +RequestHash: string
+        +Status: string
+        +ReceivedAt: DateTimeOffset
+        +ApprovedByUserId: Guid
+        +ApprovedAt: DateTimeOffset
+        +Version: int
+        +CreatedAt: DateTimeOffset
+    }
+
+    class GoodsReceiptLine {
+        +Id: Guid
+        +GoodsReceiptId: Guid
+        +ProductId: Guid
+        +SourceLotCode: string
+        +ReceivedQuantity: int
+        +ProductionDate: DateOnly
+        +ExpirationDate: DateOnly
+        +CreatedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% 6. DOMAIN - BATCH INVENTORY
+%% ==========================================
+
+namespace Domain_Inventory {
+
+    class Warehouse {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +RegionId: Guid
+        +IsActive: bool
+    }
+
+    class Product {
+        +Id: Guid
+        +Sku: string
+        +Name: string
+        +ShelfLifeHours: int
+        +Status: string
+    }
+
+    class Batch {
+        +Id: Guid
+        +WarehouseId: Guid
+        +ProductId: Guid
+        +BatchCode: string
+        +ProductionDate: DateOnly
+        +ExpirationDate: DateOnly
+        +Quantity: int
+        +StockStatus: string
+        +ExpiryStatus: string
+        +Version: int
+    }
+
+    class InventoryBalance {
+        +Id: Guid
+        +BatchId: Guid
+        +PhysicalQuantity: int
+        +ReservedQuantity: int
+        +AvailableQuantity: int
+        +Version: int
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class InventoryTransaction {
+        +Id: Guid
+        +BatchId: Guid
+        +WarehouseId: Guid
+        +ProductId: Guid
+        +GoodsReceiptLineId: Guid
+        +TransactionType: string
+        +SourceType: string
+        +PhysicalQuantityDelta: int
+        +ReservedQuantityDelta: int
+        +PhysicalQuantityAfter: int
+        +ReservedQuantityAfter: int
+        +OccurredAt: DateTimeOffset
+    }
+
+    class InventoryLock {
+        +Id: Guid
+        +BatchId: Guid
+        +WarehouseId: Guid
+        +LockedQuantity: int
+        +Reason: string
+        +Status: string
+        +RequiresResolution: bool
+        +LockedByUserId: Guid
+        +ReleasedAt: DateTimeOffset
+        +Version: int
+    }
+}
+
+%% ==========================================
+%% 7. DOMAIN - QR LABELS
+%% ==========================================
+
+namespace Domain_QR {
+
+    class BatchQrLabel {
+        +Id: Guid
+        +BatchId: Guid
+        +GoodsReceiptId: Guid
+        +CurrentWarehouseId: Guid
+        +QrCode: string
+        +Quantity: int
+        +Status: string
+        +ParentLabelId: Guid
+        +RootLabelId: Guid
+        +GeneratedAt: DateTimeOffset
+        +Version: int
+    }
+
+    class QrLabelEvent {
+        +Id: Guid
+        +BatchQrLabelId: Guid
+        +WarehouseId: Guid
+        +EventType: string
+        +FromStatus: string
+        +ToStatus: string
+        +Quantity: int
+        +OccurredAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% 8. DOMAIN - INVENTORY WRITE-OFF
+%% ==========================================
+
+namespace Domain_WriteOff {
+
+    class WriteOff {
+        +Id: Guid
+        +WriteOffCode: string
+        +WarehouseId: Guid
+        +CreatedByUserId: Guid
+        +Reason: string
+        +Status: string
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class WriteOffItem {
+        +Id: Guid
+        +WriteOffId: Guid
+        +BatchId: Guid
+        +Quantity: int
+        +Reason: string
+        +CreatedAt: DateTimeOffset
+    }
+
+    class WriteOffAttachment {
+        +Id: Guid
+        +WriteOffId: Guid
+        +FileName: string
+        +ContentType: string
+        +BlobUrl: string
+        +UploadedByUserId: Guid
+        +UploadedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% 9. API TO APPLICATION DEPENDENCIES
+%% ==========================================
+
+GoodsReceiptsController ..> InventoryService : uses
+InventoryController ..> InventoryService : uses
+QrLabelsController ..> QrLabelService : uses
+InventoryLocksController ..> InventoryLockService : uses
+
+%% ==========================================
+%% 10. APPLICATION TO STORE DEPENDENCIES
+%% ==========================================
+
+InventoryService ..> IInventoryStore : uses
+QrLabelService ..> IQrLabelStore : uses
+InventoryLockService ..> IInventoryLockStore : uses
+InventoryExpirySweepService ..> IBatchExpiryStore : uses
+
+QrLabelService ..> IQrCodeRenderer : renders QR
+
+%% ==========================================
+%% 11. INTERFACE REALIZATION
+%% ==========================================
+
+InventoryStore ..|> IInventoryStore : implements
+InventoryStore ..|> IBatchExpiryStore : implements
+
+QrLabelStore ..|> IQrLabelStore : implements
+InventoryLockStore ..|> IInventoryLockStore : implements
+
+QrCoderQrCodeRenderer ..|> IQrCodeRenderer : implements
+
+%% ==========================================
+%% 12. GOODS RECEIPT RELATIONSHIPS
+%% ==========================================
+
+Warehouse "1" -- "0..*" GoodsReceipt : receives goods
+
+GoodsReceipt "1" *-- "1..*" GoodsReceiptLine : contains
+
+Product "1" -- "0..*" GoodsReceiptLine : received product
+
+GoodsReceiptLine "1" -- "0..*" InventoryTransaction : receipt movements
+
+%% ==========================================
+%% 13. BATCH AND INVENTORY RELATIONSHIPS
+%% ==========================================
+
+Warehouse "1" -- "0..*" Batch : stores
+
+Product "1" -- "0..*" Batch : has batches
+
+Batch "1" -- "0..1" InventoryBalance : stock balance
+
+Batch "1" -- "0..*" InventoryTransaction : stock movements
+
+Batch "1" -- "0..*" InventoryLock : unavailable stock
+
+%% ==========================================
+%% 14. QR LABEL RELATIONSHIPS
+%% ==========================================
+
+Batch "1" -- "0..*" BatchQrLabel : identified by labels
+
+GoodsReceipt "1" -- "0..*" BatchQrLabel : receipt labels
+
+BatchQrLabel "1" *-- "0..*" QrLabelEvent : event history
+
+%% ==========================================
+%% 15. WRITE-OFF RELATIONSHIPS
+%% ==========================================
+
+Warehouse "1" -- "0..*" WriteOff : records write-offs
+
+WriteOff "1" *-- "0..*" WriteOffItem : contains
+
+WriteOff "1" *-- "0..*" WriteOffAttachment : evidence
+
+Batch "1" -- "0..*" WriteOffItem : affected batch
+
+%% ==========================================
+%% 16. BUSINESS CONSTRAINTS
+%% ==========================================
+
+note for GoodsReceipt "Stock increases only after approval. Repeated approval must not post inventory twice."
+
+note for Batch "Batch identity follows warehouse, product and expiry rules."
+
+note for InventoryBalance "Physical stock, reserved stock and available stock must remain consistent."
+
+note for InventoryLock "Unavailable stock cannot be allocated. Overlapping locked and reserved quantities are not deducted twice."
+
+note for BatchQrLabel "QR content and printing must follow the approved goods identification rules."
+
+note for WriteOff "An approved write-off reduces physical stock exactly once."
+
+note for WriteOffAttachment "Evidence images are stored through the image storage service."

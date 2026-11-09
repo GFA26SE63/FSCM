@@ -1,0 +1,183 @@
+sequenceDiagram
+    autonumber
+
+    actor Retailer
+    actor PayOS as Payment Gateway
+    participant UI as Retailer Mobile App
+    participant QuoteAPI as QuotesController
+    participant QuoteService
+    participant QuoteStore
+    participant PaymentAPI as PaymentsController
+    participant PaymentService
+    participant PaymentStore
+    participant Gate as PurchaseOrderGateService
+    participant GateStore as PurchaseOrderGateStore
+    participant DB as PostgreSQL Database
+
+    Note over Retailer,DB: SalesOrder has already been allocated and a final quotation issued
+
+    %% ==========================================
+    %% 1. ACCEPT FINAL QUOTATION
+    %% ==========================================
+
+    Retailer->>+UI: Accept quotation and select payment method
+
+    UI->>+QuoteAPI: Accept(quoteId, paymentMethod)
+    QuoteAPI->>+QuoteService: AcceptAsync(quoteId, paymentMethod)
+
+    QuoteService->>+QuoteStore: FindAsync(quoteId, forUpdate = true)
+    QuoteStore->>+DB: SELECT quotation, order and current status
+    DB-->>QuoteStore: Quotation information
+    deactivate DB
+
+    QuoteStore-->>QuoteService: Quotation details
+    deactivate QuoteStore
+
+    alt Valid pending quotation
+
+        QuoteService->>+QuoteStore: Save quotation acceptance
+        QuoteStore->>+DB: UPDATE quotation status and payment method
+        DB-->>QuoteStore: Acceptance committed
+        deactivate DB
+
+        QuoteStore-->>QuoteService: Quotation accepted
+        deactivate QuoteStore
+
+        %% ==========================================
+        %% 2. CHECK PURCHASE ORDER ELIGIBILITY
+        %% ==========================================
+
+        QuoteService->>+Gate: TryCreateAsync(orderId)
+
+        Gate->>+GateStore: LoadForUpdateAsync(orderId)
+        GateStore->>+DB: SELECT quotation, payment, credit and existing PO
+        DB-->>GateStore: Purchase Order eligibility data
+        deactivate DB
+
+        GateStore-->>Gate: Current order conditions
+        deactivate GateStore
+
+        alt Purchase Order already exists
+
+            Gate-->>QuoteService: Existing Purchase Order
+
+        else Quote accepted and payment or credit verified
+
+            Gate->>+GateStore: Create Purchase Order and picking lists
+
+            GateStore->>+DB: INSERT PurchaseOrder, PickingLists and PickingItems
+            Note right of DB: Save order status history in the same transaction
+            DB-->>GateStore: Transaction committed
+            deactivate DB
+
+            GateStore-->>Gate: Purchase Order issued
+            deactivate GateStore
+
+            Gate-->>QuoteService: Purchase Order created
+
+        else Payment or credit confirmation pending
+
+            Gate-->>QuoteService: Purchase Order not yet eligible
+
+        end
+
+        deactivate Gate
+
+        QuoteService-->>QuoteAPI: Accepted quotation and issuance status
+
+    else Unauthorized, expired or invalid quotation
+
+        QuoteService-->>QuoteAPI: Validation or conflict error
+
+    end
+
+    deactivate QuoteService
+
+    QuoteAPI-->>UI: Acceptance result
+    deactivate QuoteAPI
+
+    UI-->>Retailer: Display Purchase Order or pending payment
+    deactivate UI
+
+    %% ==========================================
+    %% 3. LATER PREPAYMENT CONFIRMATION
+    %% ==========================================
+
+    opt Prepayment confirmation received later
+
+        PayOS->>+PaymentAPI: PayOsWebhook(paymentData)
+
+        PaymentAPI->>+PaymentService: HandlePayOsWebhookAsync(paymentData)
+
+        PaymentService->>+PaymentStore: FindByPayOsOrderCodeAsync(orderCode)
+        PaymentStore->>+DB: SELECT payment and related order
+        DB-->>PaymentStore: Payment record
+        deactivate DB
+
+        PaymentStore-->>PaymentService: Payment information
+        deactivate PaymentStore
+
+        alt Valid and fully verified prepayment
+
+            PaymentService->>+PaymentStore: Save verified payment status
+            PaymentStore->>+DB: UPDATE payment verification and paid amount
+            DB-->>PaymentStore: Payment confirmed
+            deactivate DB
+
+            PaymentStore-->>PaymentService: Verified payment
+            deactivate PaymentStore
+
+            %% ==========================================
+            %% 4. RECHECK PURCHASE ORDER GATE
+            %% ==========================================
+
+            PaymentService->>+Gate: TryCreateAsync(orderId)
+
+            Gate->>+GateStore: LoadForUpdateAsync(orderId)
+            GateStore->>+DB: SELECT quotation, verified payment and existing PO
+            DB-->>GateStore: Updated eligibility information
+            deactivate DB
+
+            GateStore-->>Gate: Current order conditions
+            deactivate GateStore
+
+            alt Eligible and Purchase Order not yet issued
+
+                Gate->>+GateStore: Add PurchaseOrder, PickingLists and history
+                GateStore->>+DB: INSERT PurchaseOrder and warehouse picking records
+                DB-->>GateStore: Transaction committed
+                deactivate DB
+
+                GateStore-->>Gate: Purchase Order issued
+                deactivate GateStore
+
+                Gate-->>PaymentService: Purchase Order created
+
+            else Purchase Order already exists
+
+                Gate-->>PaymentService: Existing Purchase Order
+
+            else Other issuance requirements not satisfied
+
+                Gate-->>PaymentService: Purchase Order not yet eligible
+
+            end
+
+            deactivate Gate
+
+            PaymentService-->>PaymentAPI: Payment confirmed and issuance result
+
+        else Invalid or incomplete payment
+
+            PaymentService-->>PaymentAPI: Payment not confirmed
+
+        end
+
+        deactivate PaymentService
+
+        PaymentAPI-->>PayOS: Webhook processing response
+        deactivate PaymentAPI
+
+    end
+
+    Note over Gate,DB: No manual order approval or scheduled allocation cutoff

@@ -1,0 +1,525 @@
+classDiagram
+direction TB
+
+%% ==========================================
+%% API LAYER
+%% ==========================================
+
+namespace API {
+
+    class InventoryController {
+        <<Controller>>
+        +List()
+        +GetBatch()
+        +History()
+        +ExpiryHealth()
+    }
+
+    class InventoryLocksController {
+        <<Controller>>
+        +List()
+        +Get()
+        +Create()
+        +Release()
+    }
+}
+
+%% ==========================================
+%% APPLICATION SERVICES
+%% ==========================================
+
+namespace Application_Services {
+
+    class InventoryService {
+        <<Service>>
+        +ListInventoryAsync()
+        +GetBatchAsync()
+        +ListHistoryAsync()
+        +GetExpiryHealthAsync()
+    }
+
+    class InventoryExpirySweepService {
+        <<Service>>
+        +RunAsync()
+        -CalculateExpiryStatus()
+        -BuildExpiryLock()
+        -BuildBatchExpiredMessage()
+    }
+
+    class InventoryLockService {
+        <<Service>>
+        +ListAsync()
+        +GetAsync()
+        +CreateAsync()
+        +ReleaseAsync()
+        -EnsureWarehouseAccessAsync()
+        -EnsureWriteRole()
+    }
+
+    class InventoryLifecycleService {
+        <<Service>>
+        +GetAsync()
+        +ReserveAsync()
+        +ReleaseAsync()
+        +IssueAsync()
+    }
+
+    class InventoryOutboxDispatcher {
+        <<Service>>
+        +DispatchAsync()
+    }
+}
+
+%% ==========================================
+%% APPLICATION INTERFACES
+%% ==========================================
+
+namespace Application_Interfaces {
+
+    class IInventoryStore {
+        <<interface>>
+        +ListInventoryAsync()
+        +FindBatchInventoryAsync()
+        +ListHistoryAsync()
+        +FindLatestExpirySweepRunAsync()
+        +CountOutboxMessagesAsync()
+        +CanAccessWarehouseAsync()
+        +FindBalanceForUpdateAsync()
+        +AddTransaction()
+        +SaveChangesAsync()
+    }
+
+    class IBatchExpiryStore {
+        <<interface>>
+        +ListBatchesForExpirySweepAsync()
+        +AddSweepRun()
+        +AddInventoryLock()
+        +AddOutboxMessage()
+        +SaveChangesAsync()
+    }
+
+    class IInventoryLockStore {
+        <<interface>>
+        +ListAsync()
+        +FindAsync()
+        +FindBatchContextAsync()
+        +FindForUpdateAsync()
+        +CanAccessWarehouseAsync()
+        +Add()
+        +SaveChangesAsync()
+    }
+
+    class IInventoryLifecycleStore {
+        <<interface>>
+        +FindForUpdateAsync()
+        +AddReservation()
+        +AddTransaction()
+        +SaveChangesAsync()
+    }
+
+    class IInventoryOutboxStore {
+        <<interface>>
+        +ListPendingBatchExpiredMessagesAsync()
+        +ListExpiryNotificationRecipientsAsync()
+        +NotificationExistsAsync()
+        +AddNotification()
+        +SaveChangesAsync()
+    }
+}
+
+%% ==========================================
+%% PERSISTENCE LAYER
+%% ==========================================
+
+namespace Persistence {
+
+    class InventoryStore {
+        <<Repository>>
+        +ListInventoryAsync()
+        +FindBatchInventoryAsync()
+        +ListHistoryAsync()
+        +FindLatestExpirySweepRunAsync()
+        +ListBatchesForExpirySweepAsync()
+        +FindForUpdateAsync()
+        +FindBalanceForUpdateAsync()
+        +AddSweepRun()
+        +AddInventoryLock()
+        +AddOutboxMessage()
+        +AddReservation()
+        +AddTransaction()
+        +SaveChangesAsync()
+    }
+
+    class InventoryLockStore {
+        <<Repository>>
+        +ListAsync()
+        +FindAsync()
+        +FindBatchContextAsync()
+        +FindForUpdateAsync()
+        +CanAccessWarehouseAsync()
+        +Add()
+        +SaveChangesAsync()
+    }
+
+    class InventoryOutboxStore {
+        <<Repository>>
+        +ListPendingBatchExpiredMessagesAsync()
+        +ListExpiryNotificationRecipientsAsync()
+        +NotificationExistsAsync()
+        +AddNotification()
+        +SaveChangesAsync()
+    }
+}
+
+%% ==========================================
+%% INFRASTRUCTURE - BACKGROUND JOBS
+%% ==========================================
+
+namespace Infrastructure {
+
+    class DateTrackerHostedService {
+        <<BackgroundJob>>
+        #ExecuteAsync()
+        -RunSweepAsync()
+        -GetDelayUntilNextRun()
+    }
+
+    class InventoryOutboxHostedService {
+        <<BackgroundJob>>
+        #ExecuteAsync()
+    }
+}
+
+%% ==========================================
+%% DOMAIN - INVENTORY
+%% ==========================================
+
+namespace Domain_Inventory {
+
+    class Batch {
+        +Id: Guid
+        +ProductId: Guid
+        +WarehouseId: Guid
+        +BatchCode: string
+        +ProductionDate: DateOnly
+        +ExpirationDate: DateOnly
+        +Quantity: int
+        +StockStatus: string
+        +ExpiryStatus: string
+        +ParentBatchId: Guid
+        +RootBatchId: Guid
+        +Version: int
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class InventoryBalance {
+        +Id: Guid
+        +BatchId: Guid
+        +PhysicalQuantity: int
+        +ReservedQuantity: int
+        +AvailableQuantity: int
+        +Version: int
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class InventoryLock {
+        +Id: Guid
+        +BatchId: Guid
+        +ProductId: Guid
+        +WarehouseId: Guid
+        +LockedQuantity: int
+        +Reason: string
+        +Note: string
+        +RequiresResolution: bool
+        +Status: string
+        +LockedByUserId: Guid
+        +ReleasedByUserId: Guid
+        +ReleasedAt: DateTimeOffset
+        +Version: int
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class Reservation {
+        +Id: Guid
+        +BatchId: Guid
+        +AllocationId: Guid
+        +Quantity: int
+        +Status: string
+        +ReservedAt: DateTimeOffset
+        +ReleasedAt: DateTimeOffset
+        +ConsumedAt: DateTimeOffset
+    }
+
+    class InventoryTransaction {
+        +Id: Guid
+        +ProductId: Guid
+        +BatchId: Guid
+        +WarehouseId: Guid
+        +TransactionType: string
+        +SourceType: string
+        +SourceId: Guid
+        +ReferenceCode: string
+        +PhysicalQuantityDelta: int
+        +ReservedQuantityDelta: int
+        +PhysicalQuantityAfter: int
+        +ReservedQuantityAfter: int
+        +AvailableQuantityAfter: int
+        +OccurredAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - EXPIRY MONITORING
+%% ==========================================
+
+namespace Domain_Expiry {
+
+    class ExpirySweepRun {
+        +Id: Guid
+        +BusinessDate: DateOnly
+        +Status: string
+        +BatchesScanned: int
+        +StatusesUpdated: int
+        +BatchesExpired: int
+        +StartedAt: DateTimeOffset
+        +CompletedAt: DateTimeOffset
+        +Error: string
+    }
+}
+
+%% ==========================================
+%% DOMAIN - WRITE OFF
+%% ==========================================
+
+namespace Domain_WriteOff {
+
+    class WriteOff {
+        +Id: Guid
+        +WriteOffCode: string
+        +WarehouseId: Guid
+        +CreatedByUserId: Guid
+        +Reason: string
+        +Status: string
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class WriteOffItem {
+        +Id: Guid
+        +WriteOffId: Guid
+        +BatchId: Guid
+        +Quantity: int
+        +Reason: string
+        +CreatedAt: DateTimeOffset
+    }
+
+    class WriteOffAttachment {
+        +Id: Guid
+        +WriteOffId: Guid
+        +BlobUrl: string
+        +FileName: string
+        +ContentType: string
+        +UploadedByUserId: Guid
+        +UploadedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - NOTIFICATIONS
+%% ==========================================
+
+namespace Domain_Notifications {
+
+    class OutboxMessage {
+        +Id: Guid
+        +AggregateType: string
+        +AggregateId: Guid
+        +EventType: string
+        +Payload: string
+        +Status: string
+        +RetryCount: int
+        +LastError: string
+        +CreatedAt: DateTimeOffset
+        +ProcessedAt: DateTimeOffset
+    }
+
+    class Notification {
+        +Id: Guid
+        +UserAccountId: Guid
+        +OutboxMessageId: Guid
+        +Type: string
+        +Title: string
+        +Message: string
+        +RelatedEntityType: string
+        +RelatedEntityId: Guid
+        +IsRead: bool
+        +ReadAt: DateTimeOffset
+        +CreatedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - REFERENCES
+%% ==========================================
+
+namespace Domain_References {
+
+    class Warehouse {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +IsActive: bool
+    }
+
+    class UserAccount {
+        +Id: Guid
+        +FullName: string
+        +IsActive: bool
+    }
+
+    class Allocation {
+        +Id: Guid
+        +BatchId: Guid
+        +WarehouseId: Guid
+        +AllocatedQuantity: int
+        +Status: string
+    }
+}
+
+%% ==========================================
+%% API DEPENDENCIES
+%% ==========================================
+
+InventoryController ..> InventoryService : uses
+
+InventoryLocksController ..> InventoryLockService : uses
+
+%% ==========================================
+%% APPLICATION DEPENDENCIES
+%% ==========================================
+
+InventoryService ..> IInventoryStore : uses
+
+InventoryExpirySweepService ..> IBatchExpiryStore : uses
+
+InventoryLockService ..> IInventoryLockStore : uses
+
+InventoryLifecycleService ..> IInventoryLifecycleStore : uses
+
+InventoryOutboxDispatcher ..> IInventoryOutboxStore : uses
+
+%% ==========================================
+%% BACKGROUND JOB DEPENDENCIES
+%% ==========================================
+
+DateTrackerHostedService ..> InventoryExpirySweepService : executes
+
+InventoryOutboxHostedService ..> InventoryOutboxDispatcher : executes
+
+%% ==========================================
+%% INTERFACE REALIZATION
+%% ==========================================
+
+InventoryStore ..|> IInventoryStore : implements
+
+InventoryStore ..|> IBatchExpiryStore : implements
+
+InventoryStore ..|> IInventoryLifecycleStore : implements
+
+InventoryLockStore ..|> IInventoryLockStore : implements
+
+InventoryOutboxStore ..|> IInventoryOutboxStore : implements
+
+%% ==========================================
+%% INVENTORY STORE DEPENDENCIES
+%% ==========================================
+
+InventoryStore ..> Batch : manages
+
+InventoryStore ..> InventoryBalance : manages
+
+InventoryStore ..> Reservation : manages
+
+InventoryStore ..> InventoryTransaction : records
+
+InventoryStore ..> ExpirySweepRun : records
+
+InventoryStore ..> OutboxMessage : publishes
+
+%% ==========================================
+%% INVENTORY LOCK DEPENDENCIES
+%% ==========================================
+
+InventoryLockStore ..> InventoryLock : manages
+
+InventoryLockStore ..> Batch : reads
+
+InventoryLockStore ..> InventoryBalance : validates
+
+%% ==========================================
+%% OUTBOX DEPENDENCIES
+%% ==========================================
+
+InventoryOutboxStore ..> OutboxMessage : processes
+
+InventoryOutboxStore ..> Notification : creates
+
+%% ==========================================
+%% WAREHOUSE AND BATCH RELATIONSHIPS
+%% ==========================================
+
+Warehouse "1" -- "0..*" Batch : stores
+
+Batch "1" -- "0..1" InventoryBalance : has balance
+
+%% ==========================================
+%% BATCH LOCKING
+%% ==========================================
+
+Batch "1" -- "0..*" InventoryLock : has locks
+
+Warehouse "1" -- "0..*" InventoryLock : lock location
+
+UserAccount "1" -- "0..*" InventoryLock : created by
+
+%% ==========================================
+%% RESERVATION RELATIONSHIPS
+%% ==========================================
+
+Batch "1" -- "0..*" Reservation : reserved from
+
+Allocation "0..1" -- "0..*" Reservation : related allocation
+
+Batch "1" -- "0..*" Allocation : allocated portions
+
+%% ==========================================
+%% INVENTORY TRANSACTION RELATIONSHIPS
+%% ==========================================
+
+Batch "1" -- "0..*" InventoryTransaction : stock history
+
+Warehouse "1" -- "0..*" InventoryTransaction : movements
+
+%% ==========================================
+%% WRITE OFF RELATIONSHIPS
+%% ==========================================
+
+Warehouse "1" -- "0..*" WriteOff : write off requests
+
+UserAccount "1" -- "0..*" WriteOff : requested by
+
+WriteOff "1" *-- "0..*" WriteOffItem : contains
+
+WriteOff "1" *-- "0..*" WriteOffAttachment : evidence
+
+Batch "1" -- "0..*" WriteOffItem : affected batch
+
+%% ==========================================
+%% NOTIFICATION RELATIONSHIPS
+%% ==========================================
+
+OutboxMessage "0..1" -- "0..*" Notification : produces
+
+UserAccount "1" -- "0..*" Notification : receives

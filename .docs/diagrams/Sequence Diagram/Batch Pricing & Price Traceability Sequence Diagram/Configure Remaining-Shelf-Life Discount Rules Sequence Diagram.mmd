@@ -1,0 +1,231 @@
+sequenceDiagram
+    autonumber
+
+    actor Admin as Administrator
+    participant UI as Web Portal
+    participant API as ShelfLifeDiscountsController
+    participant Service as ShelfLifeDiscountService
+    participant Store as ShelfLifeDiscountStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. VIEW CURRENT DISCOUNT CONFIGURATION
+    %% ==========================================
+
+    Admin->>+UI: Open Shelf-Life Discount Configuration
+
+    UI->>+API: Current()
+    API->>+Service: GetCurrentAsync()
+
+    Service->>+Store: FindCurrentAsync()
+
+    Store->>+DB: SELECT current discount table and tiers
+    DB-->>Store: Active table and discount tiers
+    deactivate DB
+
+    Store-->>Service: ShelfLifeDiscountTableView
+    deactivate Store
+
+    Service-->>API: ShelfLifeDiscountTableResult
+    deactivate Service
+
+    API-->>UI: Current discount configuration
+    deactivate API
+
+    UI-->>Admin: Display current discount rules
+    deactivate UI
+
+    %% ==========================================
+    %% 2. OPTIONAL VIEW CONFIGURATION HISTORY
+    %% ==========================================
+
+    opt Administrator reviews previous versions
+
+        Admin->>+UI: View discount configuration history
+
+        UI->>+API: History()
+        API->>+Service: ListHistoryAsync()
+
+        Service->>+Store: ListAsync()
+
+        Store->>+DB: SELECT historical discount tables
+        DB-->>Store: Previous versions and effective dates
+        deactivate DB
+
+        Store-->>Service: Discount table history
+        deactivate Store
+
+        Service-->>API: ShelfLifeDiscountHistoryResult
+        deactivate Service
+
+        API-->>UI: Configuration history
+        deactivate API
+
+        UI-->>Admin: Display previous versions
+        deactivate UI
+
+    end
+
+    %% ==========================================
+    %% 3. CONFIGURE DISCOUNT RULES
+    %% ==========================================
+
+    Admin->>+UI: Configure discount tiers and effective date
+
+    Note over Admin,UI: Select Global, Category or SKU scope
+
+    loop For each discount tier
+        Admin->>UI: Enter remaining-life range and discount percent
+    end
+
+    UI-->>Admin: Display discount table preview
+
+    %% ==========================================
+    %% 4. SUBMIT NEW CONFIGURATION
+    %% ==========================================
+
+    Admin->>UI: Publish discount configuration
+
+    UI->>+API: Publish(request)
+    API->>+Service: PublishAsync(data, actorId)
+
+    %% ==========================================
+    %% 5. VALIDATE DISCOUNT CONFIGURATION
+    %% ==========================================
+
+    Service->>+Service: Validate(data)
+
+    Note right of Service: Validate scope and target references
+    Note right of Service: Validate percentage ranges and discount values
+    Note right of Service: Reject overlapping tiers within the same scope
+
+    Service-->>Service: Validation result
+    deactivate Service
+
+    alt Invalid discount configuration
+
+        Note right of Service: Return validation error without saving
+
+    else Configuration is valid
+
+        %% ==========================================
+        %% 6. LOAD CURRENT TABLE FOR UPDATE
+        %% ==========================================
+
+        Service->>+Store: FindCurrentForUpdateAsync()
+
+        Store->>+DB: SELECT current ShelfLifeDiscountTable
+        DB-->>Store: Current table and version
+        deactivate DB
+
+        Store-->>Service: Current discount table
+        deactivate Store
+
+        %% ==========================================
+        %% 7. RESOLVE NEXT VERSION
+        %% ==========================================
+
+        Service->>+Store: MaxVersionAsync()
+
+        Store->>+DB: SELECT MAX Version FROM ShelfLifeDiscountTable
+        DB-->>Store: Latest version number
+        deactivate DB
+
+        Store-->>Service: Current maximum version
+        deactivate Store
+
+        %% ==========================================
+        %% 8. VALIDATE PUBLICATION CONFLICTS
+        %% ==========================================
+
+        alt Conflicting effective version or publication
+
+            Note right of Service: Reject conflicting publication
+
+        else New version can be published
+
+            %% ==========================================
+            %% 9. PREPARE NEW DISCOUNT TABLE
+            %% ==========================================
+
+            Service->>+Store: AddTable(newDiscountTable)
+
+            Store-->>Service: Table staged
+            deactivate Store
+
+            %% ==========================================
+            %% 10. PREPARE DISCOUNT TIERS
+            %% ==========================================
+
+            Service->>+Store: AddTiers(newDiscountTiers)
+
+            Store-->>Service: Discount tiers staged
+            deactivate Store
+
+            %% ==========================================
+            %% 11. RECORD AUDIT INFORMATION
+            %% ==========================================
+
+            Service->>+Store: AddAuditLog(publicationAudit)
+
+            Store-->>Service: Audit record staged
+            deactivate Store
+
+            %% ==========================================
+            %% 12. PERSIST CONFIGURATION VERSION
+            %% ==========================================
+
+            Service->>+Store: SaveChangesAsync()
+
+            Store->>+DB: INSERT ShelfLifeDiscountTable and tiers
+            Note right of DB: Save audit and update prior version as applicable
+
+            DB-->>Store: New configuration version saved
+            deactivate DB
+
+            Store-->>Service: Save successful
+            deactivate Store
+
+            %% ==========================================
+            %% 13. RETRIEVE PUBLISHED VERSION
+            %% ==========================================
+
+            Service->>+Store: FindByVersionAsync(newVersion)
+
+            Store->>+DB: SELECT published table and discount tiers
+            DB-->>Store: Published configuration
+            deactivate DB
+
+            Store-->>Service: ShelfLifeDiscountTableView
+            deactivate Store
+
+            Note right of Service: Build published configuration result
+
+        end
+
+    end
+
+    %% ==========================================
+    %% 14. RETURN PUBLICATION RESULT
+    %% ==========================================
+
+    Service-->>API: Published configuration or business error
+    deactivate Service
+
+    API-->>UI: Publication response
+    deactivate API
+
+    UI-->>Admin: Display published version or validation errors
+    deactivate UI
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over Service,DB: Only authorized Administrators may publish rules
+
+    Note over Service,DB: Published versions remain traceable
+
+    Note over Service,DB: New rules do not reprice finalized quotations
+
+    Note over Service,DB: Shelf-life discounts never override MLOR eligibility

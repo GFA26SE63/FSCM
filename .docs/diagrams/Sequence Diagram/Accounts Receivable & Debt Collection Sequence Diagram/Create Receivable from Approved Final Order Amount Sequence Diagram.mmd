@@ -1,0 +1,306 @@
+sequenceDiagram
+    autonumber
+
+    actor Retailer as Retailer
+    participant UI as Retailer Mobile App
+    participant API as QuotesController
+    participant QuoteSvc as QuoteService
+    participant PaymentPlan as PaymentPlanService
+    participant GateSvc as PurchaseOrderGateService
+    participant QuoteStore as QuoteStore
+    participant PaymentStore as PaymentStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. ACCEPT FINAL QUOTATION
+    %% ==========================================
+
+    Retailer->>+UI: Accept Final Quotation
+
+    Note right of UI: Submit QuoteId, Version and PaymentMethod
+
+    UI->>+API: Accept(quoteId, request)
+
+    API->>+QuoteSvc: AcceptAsync(quoteId, version, paymentMethod, actorId, role)
+
+    %% ==========================================
+    %% 2. VALIDATE RETAILER ROLE
+    %% ==========================================
+
+    QuoteSvc->>+QuoteSvc: EnsureRetailer(actorRole)
+
+    QuoteSvc-->>QuoteSvc: Role validation result
+    deactivate QuoteSvc
+
+    alt Actor is not Retailer
+
+        Note right of QuoteSvc: Return Forbidden
+
+    else Retailer role is valid
+
+        %% ==========================================
+        %% 3. LOAD FINAL QUOTATION
+        %% ==========================================
+
+        QuoteSvc->>+QuoteStore: FindAsync(quoteId)
+
+        QuoteStore->>+DB: SELECT SalesOrderQuote and SalesOrder
+
+        DB-->>QuoteStore: Quotation and order or null
+        deactivate DB
+
+        QuoteStore-->>QuoteSvc: Quote context
+        deactivate QuoteStore
+
+        alt Quotation does not exist
+
+            Note right of QuoteSvc: Return Not Found
+
+        else Quotation exists
+
+            %% ==========================================
+            %% 4. VERIFY RETAILER ACCESS
+            %% ==========================================
+
+            QuoteSvc->>+QuoteStore: CanRetailerAccessAsync(orderId, actorId)
+
+            QuoteStore->>+DB: SELECT Retailer ownership and access scope
+
+            DB-->>QuoteStore: Access result
+            deactivate DB
+
+            QuoteStore-->>QuoteSvc: Authorized or Forbidden
+            deactivate QuoteStore
+
+            alt Retailer cannot access SalesOrder
+
+                Note right of QuoteSvc: Return Forbidden
+
+            else Retailer is authorized
+
+                %% ==========================================
+                %% 5. VALIDATE QUOTATION STATE
+                %% ==========================================
+
+                QuoteSvc->>+QuoteSvc: RequirePending(quotation)
+
+                QuoteSvc-->>QuoteSvc: Quotation state result
+                deactivate QuoteSvc
+
+                Note right of QuoteSvc: Validate expiry and expected Version
+
+                alt Quotation expired, stale or not pending
+
+                    Note right of QuoteSvc: Reject acceptance without creating Payment
+
+                else Quotation is valid
+
+                    %% ==========================================
+                    %% 6. NORMALIZE PAYMENT METHOD
+                    %% ==========================================
+
+                    QuoteSvc->>+QuoteSvc: NormalizePaymentMethod(paymentMethod)
+
+                    QuoteSvc-->>QuoteSvc: Normalized payment method
+                    deactivate QuoteSvc
+
+                    %% ==========================================
+                    %% 7. PREPARE PAYMENT OBLIGATION
+                    %% ==========================================
+
+                    QuoteSvc->>+PaymentPlan: CreateForFinalApprovedOrderAsync(order, actorId, acceptedAt, method)
+
+                    %% ==========================================
+                    %% 8. CHECK EXISTING PAYMENT
+                    %% ==========================================
+
+                    PaymentPlan->>+PaymentStore: FindByOrderAsync(orderId)
+
+                    PaymentStore->>+DB: SELECT Payment WHERE SalesOrderId = orderId
+
+                    DB-->>PaymentStore: Existing Payment or null
+                    deactivate DB
+
+                    PaymentStore-->>PaymentPlan: Payment or null
+                    deactivate PaymentStore
+
+                    %% ==========================================
+                    %% 9. HANDLE PAYMENT EXISTENCE
+                    %% ==========================================
+
+                    alt Existing Payment conflicts with accepted quotation
+
+                        Note right of PaymentPlan: Reject inconsistent obligation
+
+                    else Existing compatible Payment
+
+                        Note right of PaymentPlan: Do not create a duplicate Payment
+
+                    else No Payment exists
+
+                        %% ==========================================
+                        %% 10. INITIALIZE PAYMENT AMOUNT
+                        %% ==========================================
+
+                        Note over PaymentPlan,PaymentStore: Use finalized order amount and selected payment method
+
+                        alt Payment Method is Prepaid
+
+                            Note right of PaymentPlan: Create prepaid payment obligation
+
+                            Note right of PaymentPlan: Full verified payment is required before PO release
+
+                        else Payment Method is Credit
+
+                            Note right of PaymentPlan: Create credit payment obligation
+
+                            Note right of PaymentPlan: Preserve SalesOrder credit term snapshot
+
+                            Note right of PaymentPlan: DueDate is not determined at quotation acceptance
+
+                        end
+
+                        %% ==========================================
+                        %% 11. STAGE PAYMENT ENTITY
+                        %% ==========================================
+
+                        PaymentPlan->>+PaymentStore: Add(payment)
+
+                        PaymentStore-->>PaymentPlan: Payment staged
+                        deactivate PaymentStore
+
+                        %% ==========================================
+                        %% 12. STAGE PAYMENT AUDIT
+                        %% ==========================================
+
+                        PaymentPlan->>+PaymentStore: AddAuditLog(paymentAudit)
+
+                        PaymentStore-->>PaymentPlan: AuditLog staged
+                        deactivate PaymentStore
+
+                    end
+
+                    %% ==========================================
+                    %% 13. RETURN PAYMENT PLAN RESULT
+                    %% ==========================================
+
+                    PaymentPlan-->>QuoteSvc: Payment preparation result or conflict
+                    deactivate PaymentPlan
+
+                    alt Payment preparation failed
+
+                        Note right of QuoteSvc: Do not finalize quotation acceptance
+
+                    else Payment obligation is prepared
+
+                        %% ==========================================
+                        %% 14. ACCEPT QUOTATION
+                        %% ==========================================
+
+                        Note right of QuoteSvc: Set quotation status to Accepted
+
+                        Note right of QuoteSvc: Record AcceptedAt and AcceptedByUserId
+
+                        Note right of QuoteSvc: Record selected payment method on order
+
+                        %% ==========================================
+                        %% 15. RECORD ORDER HISTORY
+                        %% ==========================================
+
+                        QuoteSvc->>+QuoteStore: AddHistory(orderStatusHistory)
+
+                        QuoteStore-->>QuoteSvc: Order history staged
+                        deactivate QuoteStore
+
+                        %% ==========================================
+                        %% 16. PERSIST ACCEPTANCE AND PAYMENT
+                        %% ==========================================
+
+                        QuoteSvc->>+QuoteStore: SaveChangesAsync()
+
+                        QuoteStore->>+DB: UPDATE SalesOrderQuote and SalesOrder
+
+                        Note right of DB: Persist staged Payment, AuditLog and OrderStatusHistory
+
+                        alt Database save succeeds
+
+                            DB-->>QuoteStore: Acceptance and payment data saved
+
+                        else Database save fails
+
+                            DB-->>QuoteStore: Persistence exception
+
+                        end
+
+                        deactivate DB
+
+                        QuoteStore-->>QuoteSvc: Save result or exception
+                        deactivate QuoteStore
+
+                        %% ==========================================
+                        %% 17. EVALUATE PO RELEASE
+                        %% ==========================================
+
+                        alt Acceptance and payment obligation saved
+
+                            QuoteSvc->>+GateSvc: TryCreateAsync(orderId)
+
+                            Note over GateSvc,DB: Purchase Order Gate checks payment or credit eligibility
+
+                            alt Prepaid is not fully verified
+
+                                Note right of GateSvc: Do not create PO or Picking Lists
+
+                            else Credit or verified Prepaid is eligible
+
+                                Note right of GateSvc: PO release is handled by the gate workflow
+
+                            end
+
+                            GateSvc-->>QuoteSvc: PO gate evaluation completed
+                            deactivate GateSvc
+
+                        else Persistence failed
+
+                            Note right of QuoteSvc: Do not invoke Purchase Order Gate
+
+                        end
+
+                    end
+
+                end
+
+            end
+
+        end
+
+    end
+
+    %% ==========================================
+    %% 18. RETURN QUOTATION ACCEPTANCE
+    %% ==========================================
+
+    QuoteSvc-->>API: Acceptance result or business error
+    deactivate QuoteSvc
+
+    API-->>UI: Quotation acceptance response
+    deactivate API
+
+    UI-->>Retailer: Display payment obligation and quotation status
+    deactivate UI
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over PaymentPlan,DB: One Payment obligation is associated with each SalesOrder
+
+    Note over PaymentPlan,DB: Payment creation does not mean money has been received
+
+    Note over PaymentPlan,DB: Credit DueDate is determined by a later delivery workflow
+
+    Note over QuoteSvc,DB: Existing finalized Batch prices must not be recalculated
+
+    Note over GateSvc,DB: PO and Picking Lists require a successful payment or credit gate
+
+    Note over QuoteSvc,DB: No Daily Allocation Run approval is involved

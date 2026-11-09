@@ -1,0 +1,153 @@
+sequenceDiagram
+    autonumber
+
+    participant Order as OrderService
+    participant Allocation as RealTimeAllocationService
+    participant Store as RealTimeAllocationStore
+    participant DB as PostgreSQL Database
+    participant Engine as AllocationEngine
+    participant Pricing as AllocationPricingService
+
+    %% ==========================================
+    %% 1. START RESERVATION PROCESS
+    %% ==========================================
+
+    Note over Order,Allocation: Triggered during real-time allocation
+
+    Order->>+Allocation: AllocateAsync(orderId)
+
+    loop Until terminal result or retry limit reached
+
+        Allocation->>+Store: ExecuteInTransactionAsync(allocationCallback)
+
+        Store->>+DB: BEGIN TRANSACTION
+        DB-->>Store: Transaction started
+        deactivate DB
+
+        %% ==========================================
+        %% 2. REVALIDATE ORDER AND INVENTORY
+        %% ==========================================
+
+        Store->>+Allocation: Execute allocation callback
+
+        Allocation->>+Store: LoadForUpdateAsync(orderId)
+
+        Store->>+DB: SELECT order, batches and inventory FOR UPDATE
+        DB-->>Store: Locked records and current balances
+        deactivate DB
+
+        Store-->>Allocation: RealTimeAllocationContext
+        deactivate Store
+
+        Note over Allocation,DB: Revalidate available stock, batch status, ETA, MLOR and order status
+
+        %% ==========================================
+        %% 3. EVALUATE CURRENT ALLOCATION
+        %% ==========================================
+
+        Allocation->>+Engine: Allocate(request, latestCandidates)
+
+        Engine-->>Allocation: AllocationResult
+        deactivate Engine
+
+        alt Order already allocated and reserved
+
+            Note right of Allocation: Reuse existing allocation and quotation
+
+            Allocation-->>Store: Existing allocation result
+
+        else All order lines can be fulfilled
+
+            %% ==========================================
+            %% 4. CALCULATE FINAL PRICES
+            %% ==========================================
+
+            Allocation->>+Pricing: PriceAsync(selectedBatchParts)
+
+            Note right of Pricing: Apply quantity promotion first,<br/>then shelf-life percentage discount
+
+            Pricing-->>Allocation: Final batch price snapshots
+            deactivate Pricing
+
+            %% ==========================================
+            %% 5. SAVE RESERVATIONS AND QUOTATION
+            %% ==========================================
+
+            Allocation->>+Store: AddRun(), AddAllocation(), AddReservation()
+
+            Note over Allocation,Store: Save all order lines and reservations in one transaction
+
+            Allocation->>Store: AddTransaction(), AddQuote(), AddHistory()
+
+            Allocation->>Store: SaveChangesAsync()
+
+            Store->>+DB: INSERT allocations and reservations
+            Note right of DB: UPDATE reserved stock and<br/>INSERT inventory transactions
+
+            DB-->>Store: Stock reservations persisted
+            deactivate DB
+
+            Store-->>Allocation: Reservation and quotation saved
+            deactivate Store
+
+            Allocation-->>Store: Complete allocation result
+
+        else Insufficient eligible stock
+
+            Note over Allocation,Store: No partial reservation is retained
+
+            Allocation->>+Store: AddHistory(), SaveChangesAsync()
+
+            Store->>+DB: UPDATE order status to Insufficient Stock
+            DB-->>Store: Shortage recorded without reservation
+            deactivate DB
+
+            Store-->>Allocation: Shortage result saved
+            deactivate Store
+
+            Allocation-->>Store: Insufficient stock result
+
+        else Concurrent inventory change detected
+
+            Note right of Allocation: Signal retryable concurrency conflict
+
+            Allocation-->>Store: AllocationConcurrencyException
+
+        end
+
+        deactivate Allocation
+
+        %% ==========================================
+        %% 6. COMMIT OR ROLLBACK TRANSACTION
+        %% ==========================================
+
+        alt Concurrency conflict
+
+            Store->>+DB: ROLLBACK TRANSACTION
+            DB-->>Store: All tentative changes reverted
+            deactivate DB
+
+            Store-->>Allocation: Retryable concurrency conflict
+
+        else Transaction completed successfully
+
+            Store->>+DB: COMMIT TRANSACTION
+            DB-->>Store: Transaction committed
+            deactivate DB
+
+            Store-->>Allocation: Committed allocation result
+
+        end
+
+        deactivate Store
+
+    end
+
+    %% ==========================================
+    %% 7. RETURN FINAL ALLOCATION RESULT
+    %% ==========================================
+
+    Allocation-->>Order: Final quotation, shortage or concurrency error
+    deactivate Allocation
+
+    Note over Order,DB: Physical stock is deducted only when dispatch is confirmed

@@ -1,0 +1,215 @@
+sequenceDiagram
+    autonumber
+
+    actor Sales as Sales Representative
+    actor Retailer
+    participant UI as Mobile App
+    participant OrderAPI as OrdersController
+    participant OrderService
+    participant OrderStore
+    participant Allocation as RealTimeAllocationService
+    participant AllocationStore as RealTimeAllocationStore
+    participant QuoteAPI as QuotesController
+    participant QuoteService
+    participant QuoteStore
+    participant Gate as PurchaseOrderGateService
+    participant GateStore as PurchaseOrderGateStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. CREATE ORDER REQUEST
+    %% ==========================================
+
+    alt Sales-assisted ordering
+        Sales->>+UI: Select Retailer and enter order details
+    else Retailer self-ordering
+        Retailer->>+UI: Select products and enter quantities
+    end
+
+    UI->>+OrderAPI: Create(orderData)
+    OrderAPI->>+OrderService: CreateAsync(orderData)
+
+    OrderService->>+OrderStore: Validate Retailer, products and request
+    OrderStore->>+DB: SELECT Retailer, products, MLOR and existing request
+    DB-->>OrderStore: Validation and reference data
+    deactivate DB
+
+    OrderStore-->>OrderService: Validation information
+    deactivate OrderStore
+
+    alt Valid order and authorized Retailer
+
+        Note over OrderService,OrderStore: Validate quantities, promotions and ordering scope
+
+        OrderService->>+OrderStore: Save SalesOrder and order lines
+        OrderStore->>+DB: INSERT SalesOrder, lines and status history
+        DB-->>OrderStore: Order persisted
+        deactivate DB
+
+        OrderStore-->>OrderService: Created SalesOrder
+        deactivate OrderStore
+
+        %% ==========================================
+        %% 2. REAL-TIME ALLOCATION
+        %% ==========================================
+
+        OrderService->>+Allocation: AllocateAsync(orderId)
+
+        Allocation->>+AllocationStore: LoadForUpdateAsync(orderId)
+        AllocationStore->>+DB: SELECT eligible batches, stock and allocation context
+        DB-->>AllocationStore: Inventory and order data
+        deactivate DB
+
+        AllocationStore-->>Allocation: Allocation candidates
+        deactivate AllocationStore
+
+        Note over Allocation,AllocationStore: Apply MLOR, service radius, expiry and stock constraints
+
+        alt All order lines can be fulfilled
+
+            Allocation->>+AllocationStore: Save allocation, reservations and quotation
+            AllocationStore->>+DB: INSERT allocations, reservations and quote
+            Note right of DB: Update reserved stock atomically
+            DB-->>AllocationStore: Allocation committed
+            deactivate DB
+
+            AllocationStore-->>Allocation: Final quotation created
+            deactivate AllocationStore
+
+            Allocation-->>OrderService: Allocation successful and quote ready
+
+        else Insufficient eligible stock
+
+            Allocation->>+AllocationStore: Record insufficient stock result
+            AllocationStore->>+DB: UPDATE order allocation status
+            DB-->>AllocationStore: Shortage status recorded
+            deactivate DB
+
+            AllocationStore-->>Allocation: Insufficient stock
+            deactivate AllocationStore
+
+            Allocation-->>OrderService: Allocation failed without reservation
+
+        end
+
+        deactivate Allocation
+
+    else Invalid request or unauthorized Retailer
+
+        Note right of OrderService: Reject invalid order without creating SalesOrder
+
+    end
+
+    OrderService-->>OrderAPI: Order result or business error
+    deactivate OrderService
+
+    OrderAPI-->>UI: Order creation response
+    deactivate OrderAPI
+
+    UI-->>Sales: Show result if ordered by Sales
+    UI-->>Retailer: Show result if ordered by Retailer
+    deactivate UI
+
+    %% ==========================================
+    %% 3. VIEW AND ACCEPT FINAL QUOTATION
+    %% ==========================================
+
+    opt Final quotation issued successfully
+
+        Retailer->>+UI: Open final quotation
+
+        UI->>+QuoteAPI: ForOrder(orderId)
+        QuoteAPI->>+QuoteService: ListForOrderAsync(orderId)
+
+        QuoteService->>+QuoteStore: ListForOrderAsync(orderId)
+        QuoteStore->>+DB: SELECT quotation and allocated batch prices
+        DB-->>QuoteStore: Final quotation details
+        deactivate DB
+
+        QuoteStore-->>QuoteService: Quotation data
+        deactivate QuoteStore
+
+        QuoteService-->>QuoteAPI: Quotation result
+        deactivate QuoteService
+
+        QuoteAPI-->>UI: Final quotation
+        deactivate QuoteAPI
+
+        UI-->>Retailer: Display prices and payment options
+        deactivate UI
+
+        Retailer->>+UI: Accept quotation and select payment method
+
+        UI->>+QuoteAPI: Accept(quoteId, paymentMethod)
+        QuoteAPI->>+QuoteService: AcceptAsync(quoteId, paymentMethod)
+
+        QuoteService->>+QuoteStore: FindAsync(quoteId)
+        QuoteStore->>+DB: SELECT quotation and current status
+        DB-->>QuoteStore: Quotation record
+        deactivate DB
+
+        QuoteStore-->>QuoteService: Quotation details
+        deactivate QuoteStore
+
+        alt Quotation is valid and awaiting acceptance
+
+            QuoteService->>+QuoteStore: Save quotation acceptance
+            QuoteStore->>+DB: UPDATE quote status and acceptance details
+            DB-->>QuoteStore: Acceptance saved
+            deactivate DB
+
+            QuoteStore-->>QuoteService: Quotation accepted
+            deactivate QuoteStore
+
+            %% ==========================================
+            %% 4. PURCHASE ORDER ISSUANCE GATE
+            %% ==========================================
+
+            QuoteService->>+Gate: TryCreateAsync(orderId)
+
+            Gate->>+GateStore: LoadForUpdateAsync(orderId)
+            GateStore->>+DB: SELECT quote, payment and credit confirmation
+            DB-->>GateStore: Purchase Order eligibility data
+            deactivate DB
+
+            GateStore-->>Gate: Eligibility result
+            deactivate GateStore
+
+            alt Full prepayment verified or credit confirmed
+
+                Gate->>+GateStore: Create PurchaseOrder and picking lists
+                GateStore->>+DB: INSERT PurchaseOrder and warehouse picking lists
+                DB-->>GateStore: Purchase Order issued
+                deactivate DB
+
+                GateStore-->>Gate: Purchase Order confirmation
+                deactivate GateStore
+
+                Gate-->>QuoteService: Purchase Order created
+
+            else Payment or credit confirmation pending
+
+                Gate-->>QuoteService: Awaiting payment confirmation
+
+            end
+
+            deactivate Gate
+
+        else Invalid, expired or previously processed quote
+
+            Note right of QuoteService: Reject invalid quotation acceptance
+
+        end
+
+        QuoteService-->>QuoteAPI: Acceptance and issuance result
+        deactivate QuoteService
+
+        QuoteAPI-->>UI: Quotation acceptance response
+        deactivate QuoteAPI
+
+        UI-->>Retailer: Display Purchase Order or pending payment
+        deactivate UI
+
+    end
+
+    Note over Gate,DB: Later verified payment can trigger Purchase Order issuance again

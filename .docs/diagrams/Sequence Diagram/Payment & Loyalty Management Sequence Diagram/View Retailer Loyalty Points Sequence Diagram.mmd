@@ -1,0 +1,145 @@
+sequenceDiagram
+    autonumber
+
+    actor Retailer
+    actor Staff as Sales / Administrator
+
+    participant UI as Mobile App / Web Portal
+    participant API as LoyaltyCardsController
+    participant Service as LoyaltyCardService
+    participant Store as LoyaltyCardStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. ACCESS RETAILER LOYALTY
+    %% ==========================================
+
+    alt Retailer views own Loyalty Points
+
+        Retailer->>+UI: Open My Loyalty Points
+
+        UI->>+API: Me()
+        API->>+Service: GetAsync(actorId, role)
+
+        %% ==========================================
+        %% 2. VERIFY RETAILER ACCESS
+        %% ==========================================
+
+        Service->>+Store: GetAsync(retailerId, actorScope)
+
+        Store->>+DB: SELECT Retailer and authorized loyalty account
+        DB-->>Store: Retailer access information
+        deactivate DB
+
+        alt Retailer is authorized
+
+            %% ==========================================
+            %% 3. RETRIEVE POINTS AND LEDGER
+            %% ==========================================
+
+            Store->>+DB: SELECT RetailerLoyalty and LoyaltyTransactions
+            DB-->>Store: Point balance and transaction records
+            deactivate DB
+
+            Note right of Store: Available = CurrentPoints - HeldPoints
+
+            Store-->>Service: LoyaltyCardData
+
+            Service-->>API: LoyaltyCardResult
+
+        else Loyalty account unavailable or access denied
+
+            Store-->>Service: Not Found or Forbidden error
+
+            Service-->>API: Loyalty operation error
+
+        end
+
+        deactivate Store
+        deactivate Service
+
+        API-->>UI: Loyalty result or error
+        deactivate API
+
+        UI-->>Retailer: Display balance and points history
+        deactivate UI
+
+    else Sales or Administrator views Retailer Loyalty
+
+        %% ==========================================
+        %% 4. LOOK UP RETAILER
+        %% ==========================================
+
+        Staff->>+UI: Search Retailer and open Loyalty
+
+        UI->>+API: GetByCode(retailerCode)
+        API->>+Service: GetByCodeAsync(retailerCode, actorContext)
+
+        Service->>+Store: FindRetailerIdByCodeAsync(retailerCode)
+
+        Store->>+DB: SELECT RetailerId by RetailerCode
+        DB-->>Store: RetailerId or null
+        deactivate DB
+
+        Store-->>Service: Retailer identifier
+        deactivate Store
+
+        alt Retailer exists
+
+            %% ==========================================
+            %% 5. CHECK ACCESS AND LOAD LOYALTY
+            %% ==========================================
+
+            Service->>+Store: GetAsync(retailerId, actorScope)
+
+            Store->>+DB: SELECT Retailer ownership and Sales assignment
+            DB-->>Store: Access scope information
+            deactivate DB
+
+            alt User has permission
+
+                Store->>+DB: SELECT RetailerLoyalty and LoyaltyTransactions
+                DB-->>Store: Loyalty balance and ledger
+                deactivate DB
+
+                Note right of Store: Available = CurrentPoints - HeldPoints
+
+                Store-->>Service: LoyaltyCardData
+
+                Service-->>API: LoyaltyCardResult
+
+            else User is outside authorized scope
+
+                Store-->>Service: Forbidden error
+
+                Service-->>API: 403 Forbidden
+
+            end
+
+            deactivate Store
+
+        else Retailer not found
+
+            Service-->>API: 404 Not Found
+
+        end
+
+        deactivate Service
+
+        API-->>UI: Loyalty result or error
+        deactivate API
+
+        UI-->>Staff: Display Retailer points and history
+        deactivate UI
+
+    end
+
+    %% ==========================================
+    %% 6. BUSINESS RULES
+    %% ==========================================
+
+    Note over UI,DB: All operations in this diagram are read-only
+
+    Note over UI,DB: Negative corrected balances remain visible and disable redemption
+
+    Note over Service,DB: Viewing Loyalty does not create or modify point transactions

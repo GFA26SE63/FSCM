@@ -1,0 +1,407 @@
+classDiagram
+direction TB
+
+%% ==========================================
+%% MOBILE APPLICATION
+%% ==========================================
+
+namespace Mobile {
+
+    class OrderRepository {
+        <<repository>>
+        +createOnline()
+        +createOffline()
+        +listOrders()
+        +getOrder()
+        +removeFromQueue()
+    }
+
+    class OfflineOrder {
+        +id: int
+        +localCode: String
+        +payload: OfflineOrderPayload
+        +status: String
+        +retryCount: int
+        +serverOrderCode: String
+        +error: String
+        +createdAt: DateTime
+        +lastAttemptAt: DateTime
+        +syncedAt: DateTime
+        +copyWith()
+    }
+
+    class OfflineOrderPayload {
+        +clientRequestId: String
+        +offlineCode: String
+        +retailerCode: String
+        +retailerName: String
+        +lines: List
+        +localTotal: double
+        +localDiscount: double
+        +localPromoIds: List
+        +createdAt: DateTime
+        +toJson()
+        +fromJson()
+    }
+
+    class OfflineOrderDao {
+        <<DAO>>
+        +insert()
+        +update()
+        +all()
+        +byStatus()
+        +byLocalCode()
+        +delete()
+    }
+
+    class SyncService {
+        <<service>>
+        +syncAll()
+        +refreshSnapshot()
+        -_push()
+        -_pull()
+        -_recoverStale()
+    }
+
+    class SyncQueueLogic {
+        +inCreationOrder()
+        +dueForPush()
+        +markSyncing()
+        +applyResult()
+        +markFailed()
+        +recoverStale()
+    }
+
+    class AppDatabase {
+        <<SQLite>>
+        +close()
+        +clearCache()
+    }
+
+    class ApiClient {
+        <<HTTP Client>>
+    }
+}
+
+%% ==========================================
+%% API LAYER
+%% ==========================================
+
+namespace API {
+
+    class OrdersController {
+        <<controller>>
+        +List()
+        +Get()
+        +GetByCode()
+        +Create()
+        +SubmitOffline()
+        +Cancel()
+        +Timeline()
+    }
+}
+
+%% ==========================================
+%% APPLICATION LAYER
+%% ==========================================
+
+namespace Application {
+
+    class OrderService {
+        <<service>>
+        +ListAsync()
+        +GetAsync()
+        +GetByCodeAsync()
+        +CreateAsync()
+        +SubmitOfflineAsync()
+        +CancelAsync()
+        +GetTimelineAsync()
+    }
+
+    class IOrderStore {
+        <<interface>>
+        +FindAsync()
+        +FindByClientOrderKeyAsync()
+        +FindRetailerContextAsync()
+        +FindPublishedProductAsync()
+        +ResolveMlorAsync()
+        +NextOrderCodeAsync()
+        +AddOrder()
+        +AddLine()
+        +AddPromotion()
+        +AddHistory()
+        +SaveChangesAsync()
+    }
+
+    class IOrderPricingService {
+        <<interface>>
+        +CalculateAsync()
+    }
+
+    class OrderPricingService {
+        <<service>>
+        +CalculateAsync()
+    }
+
+    class IRealTimeAllocationService {
+        <<interface>>
+        +AllocateAsync()
+    }
+
+    class RealTimeAllocationService {
+        <<service>>
+        +AllocateAsync()
+    }
+}
+
+%% ==========================================
+%% PERSISTENCE LAYER
+%% ==========================================
+
+namespace Persistence {
+
+    class OrderStore {
+        <<repository>>
+        +FindAsync()
+        +FindByClientOrderKeyAsync()
+        +FindRetailerContextAsync()
+        +FindPublishedProductAsync()
+        +ResolveMlorAsync()
+        +NextOrderCodeAsync()
+        +AddOrder()
+        +AddLine()
+        +AddPromotion()
+        +AddHistory()
+        +SaveChangesAsync()
+    }
+}
+
+%% ==========================================
+%% DOMAIN - SALES ORDER
+%% ==========================================
+
+namespace Domain_Order {
+
+    class SalesOrder {
+        +Id: Guid
+        +OrderCode: string
+        +RetailerId: Guid
+        +SalesGroupId: Guid
+        +CreatedByUserId: Guid
+        +ClientOrderKey: string
+        +Source: string
+        +Status: string
+        +ServerReceivedAt: DateTimeOffset
+        +OfflineEstimatedAmount: decimal
+        +HasOfflineDifference: bool
+        +SubtotalAmount: decimal
+        +DiscountAmount: decimal
+        +FinalAmount: decimal
+        +Version: int
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+
+    class SalesOrderLine {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +ProductId: Guid
+        +LineNumber: int
+        +SkuSnapshot: string
+        +ProductNameSnapshot: string
+        +OrderedQuantity: int
+        +UnitPrice: decimal
+        +MlorMinimumLifeRatio: decimal
+        +DiscountAmount: decimal
+        +NetAmount: decimal
+        +FinalPricePendingAllocation: bool
+        +CreatedAt: DateTimeOffset
+    }
+
+    class OrderPromotion {
+        +Id: Guid
+        +SalesOrderLineId: Guid
+        +PromotionId: Guid
+        +PromotionCodeSnapshot: string
+        +PromotionNameSnapshot: string
+        +DiscountPercent: decimal
+        +DiscountAmount: decimal
+        +IsServerFinal: bool
+        +AppliedAt: DateTimeOffset
+    }
+
+    class OrderStatusHistory {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +FromStatus: string
+        +ToStatus: string
+        +Reason: string
+        +ChangedByUserId: Guid
+        +ChangedAt: DateTimeOffset
+    }
+
+    class IdempotencyKey {
+        +Id: Guid
+        +Key: string
+        +Scope: string
+        +UserAccountId: Guid
+        +SalesOrderId: Guid
+        +Status: string
+        +CreatedAt: DateTimeOffset
+        +ExpiresAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - PURCHASE ORDER
+%% ==========================================
+
+namespace Domain_PurchaseOrder {
+
+    class SalesOrderQuote {
+        +Id: Guid
+        +SalesOrderId: Guid
+        +RevisionNumber: int
+        +Status: string
+        +TotalAmount: decimal
+        +IssuedAt: DateTimeOffset
+        +ExpiresAt: DateTimeOffset
+        +AcceptedAt: DateTimeOffset
+        +AcceptedByUserId: Guid
+    }
+
+    class PurchaseOrder {
+        +Id: Guid
+        +PurchaseOrderCode: string
+        +SalesOrderId: Guid
+        +SalesOrderQuoteId: Guid
+        +PaymentMethod: string
+        +Status: string
+        +IssuedAt: DateTimeOffset
+        +IssuedByUserId: Guid
+        +Version: int
+        +CreatedAt: DateTimeOffset
+        +UpdatedAt: DateTimeOffset
+    }
+}
+
+%% ==========================================
+%% DOMAIN - REFERENCES
+%% ==========================================
+
+namespace Domain_References {
+
+    class Retailer {
+        +Id: Guid
+        +Code: string
+        +Name: string
+        +Status: string
+    }
+
+    class Product {
+        +Id: Guid
+        +Sku: string
+        +Name: string
+        +Status: string
+    }
+}
+
+%% ==========================================
+%% MOBILE DEPENDENCIES
+%% ==========================================
+
+OrderRepository ..> OfflineOrderDao : manages offline orders
+OrderRepository ..> ApiClient : sends online requests
+
+SyncService ..> OfflineOrderDao : reads and updates queue
+SyncService ..> SyncQueueLogic : manages synchronization
+SyncService ..> ApiClient : submits queued orders
+
+OfflineOrderDao ..> AppDatabase : uses SQLite
+OfflineOrderDao ..> OfflineOrder : persists
+
+%% ==========================================
+%% MOBILE DATA RELATIONSHIPS
+%% ==========================================
+
+OfflineOrder "1" *-- "1" OfflineOrderPayload : contains
+
+%% ==========================================
+%% API DEPENDENCIES
+%% ==========================================
+
+ApiClient ..> OrdersController : REST integration
+OrdersController ..> OrderService : uses
+
+%% ==========================================
+%% APPLICATION DEPENDENCIES
+%% ==========================================
+
+OrderService ..> IOrderStore : accesses order data
+OrderService ..> IOrderPricingService : calculates prices
+OrderService ..> IRealTimeAllocationService : requests allocation
+
+%% ==========================================
+%% INTERFACE REALIZATION
+%% ==========================================
+
+OrderStore ..|> IOrderStore : implements
+OrderPricingService ..|> IOrderPricingService : implements
+RealTimeAllocationService ..|> IRealTimeAllocationService : implements
+
+%% ==========================================
+%% PERSISTENCE DEPENDENCIES
+%% ==========================================
+
+OrderStore ..> SalesOrder : persists
+OrderStore ..> SalesOrderLine : persists
+OrderStore ..> OrderPromotion : persists
+OrderStore ..> OrderStatusHistory : persists
+
+%% ==========================================
+%% SALES ORDER COMPOSITION
+%% ==========================================
+
+SalesOrder "1" *-- "1..*" SalesOrderLine : contains
+
+SalesOrderLine "1" *-- "0..*" OrderPromotion : applied promotions
+
+SalesOrder "1" *-- "0..*" OrderStatusHistory : status changes
+
+%% ==========================================
+%% IDEMPOTENCY RELATIONSHIP
+%% ==========================================
+
+IdempotencyKey "0..*" --> "0..1" SalesOrder : references
+
+%% ==========================================
+%% BUSINESS REFERENCES
+%% ==========================================
+
+Retailer "1" -- "0..*" SalesOrder : places orders
+
+Product "1" -- "0..*" SalesOrderLine : ordered product
+
+%% ==========================================
+%% PURCHASE ORDER RELATIONSHIPS
+%% ==========================================
+
+SalesOrder "1" -- "0..*" SalesOrderQuote : quotations
+
+SalesOrder "1" -- "0..1" PurchaseOrder : generates
+
+SalesOrderQuote "1" -- "0..1" PurchaseOrder : accepted quotation
+
+%% ==========================================
+%% BUSINESS CONSTRAINTS
+%% ==========================================
+
+note for OfflineOrder "Mobile-side draft. Stored locally in SQLite before successful synchronization."
+
+note for IdempotencyKey "Prevents duplicate server orders when the same request is retried."
+
+note for SalesOrder "Supports Sales-assisted and Retailer-direct orders. Valid orders enter real-time allocation."
+
+note for SalesOrderQuote "Final quotation follows successful batch allocation and pricing."
+
+note for PurchaseOrder "Created only after quote acceptance and verified payment or valid credit confirmation."

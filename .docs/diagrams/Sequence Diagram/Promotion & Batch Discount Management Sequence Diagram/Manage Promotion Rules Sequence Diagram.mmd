@@ -1,0 +1,167 @@
+sequenceDiagram
+    autonumber
+
+    actor Admin as Administrator
+    participant UI as Web Portal
+    participant API as PromotionsController
+    participant Service as PromotionService
+    participant Store as PromotionStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. VIEW PROMOTION LIST
+    %% ==========================================
+
+    Admin->>+UI: Open Promotion Management
+
+    UI->>+API: List(filters)
+    API->>+Service: ListAsync(filters)
+
+    Service->>+Store: ListPromotionsAsync(filters)
+    Store->>+DB: SELECT promotions and applicable scopes
+    DB-->>Store: Promotion records
+    deactivate DB
+
+    Store-->>Service: Promotion list
+    deactivate Store
+
+    Service-->>API: Promotion results
+    deactivate Service
+
+    API-->>UI: Promotion list response
+    deactivate API
+
+    UI-->>Admin: Display promotion list
+    deactivate UI
+
+    %% ==========================================
+    %% 2. MANAGE PROMOTION RULES
+    %% ==========================================
+
+    opt Administrator manages promotion rules
+
+        Admin->>+UI: Select promotion management action
+
+        alt Create Promotion
+
+            Admin->>UI: Enter promotion details and conditions
+
+            UI->>+API: Create(promotionData)
+            API->>+Service: CreateAsync(promotionData)
+
+            Service->>+Store: Validate promotion targets and uniqueness
+            Store->>+DB: SELECT products, categories, retailers and promotion codes
+            DB-->>Store: Validation data
+            deactivate DB
+
+            Store-->>Service: Validation information
+            deactivate Store
+
+            alt Valid promotion rules
+
+                Note over Service,Store: Validate period, discount percent and eligible scope
+
+                Service->>+Store: AddPromotion() and SaveChangesAsync()
+                Store->>+DB: INSERT promotion and applicable scope records
+                DB-->>Store: Promotion created
+                deactivate DB
+
+                Store-->>Service: Created promotion
+                deactivate Store
+
+                Service-->>API: PromotionResult
+
+            else Invalid rules or duplicate promotion
+
+                Service-->>API: Validation or conflict error
+
+            end
+
+            deactivate Service
+
+            API-->>UI: Creation response
+            deactivate API
+
+        else Update Promotion
+
+            Admin->>UI: Edit promotion rules and conditions
+
+            UI->>+API: Update(promotionId, updatedData)
+            API->>+Service: UpdateAsync(promotionId, updatedData)
+
+            Service->>+Store: FindPromotionAsync(promotionId)
+            Store->>+DB: SELECT promotion and current scope
+            DB-->>Store: Existing promotion
+            deactivate DB
+
+            Store-->>Service: Promotion information
+            deactivate Store
+
+            alt Valid update and permitted state
+
+                Service->>+Store: Update promotion and scope associations
+                Store->>+DB: UPDATE promotion and applicable scope records
+                DB-->>Store: Changes committed
+                deactivate DB
+
+                Store-->>Service: Updated promotion
+                deactivate Store
+
+                Service-->>API: PromotionResult
+
+            else Invalid update or conflicting version
+
+                Service-->>API: Validation or conflict error
+
+            end
+
+            deactivate Service
+
+            API-->>UI: Update response
+            deactivate API
+
+        else Activate or Deactivate Promotion
+
+            Admin->>UI: Select Activate or Deactivate
+
+            UI->>+API: Activate(promotionId) / Deactivate(promotionId)
+
+            API->>+Service: ActivateAsync() / DeactivateAsync()
+
+            Service->>+Store: FindPromotionAsync(promotionId)
+            Store->>+DB: SELECT promotion and current status
+            DB-->>Store: Promotion record
+            deactivate DB
+
+            Store-->>Service: Current promotion
+            deactivate Store
+
+            alt Promotion exists and status change is valid
+
+                Service->>+Store: Update promotion status
+                Store->>+DB: UPDATE promotion status
+                DB-->>Store: Status committed
+                deactivate DB
+
+                Store-->>Service: Updated promotion
+                deactivate Store
+
+                Service-->>API: Status update successful
+
+            else Promotion not found or operation rejected
+
+                Service-->>API: Status update error
+
+            end
+
+            deactivate Service
+
+            API-->>UI: Status update response
+            deactivate API
+
+        end
+
+        UI-->>Admin: Display operation result
+        deactivate UI
+
+    end

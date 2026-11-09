@@ -1,0 +1,154 @@
+sequenceDiagram
+    autonumber
+
+    actor Retailer
+    participant UI as Retailer Mobile App
+    participant ShipmentAPI as ShipmentsController
+    participant ShipmentService
+    participant ShipmentStore
+    participant ComplaintAPI as ComplaintsController
+    participant ComplaintService
+    participant ComplaintStore
+    participant DB as PostgreSQL Database
+
+    %% ==========================================
+    %% 1. VIEW SHIPMENT DETAILS
+    %% ==========================================
+
+    Retailer->>+UI: Open Order Delivery Details
+
+    UI->>+ShipmentAPI: Get(shipmentId)
+    ShipmentAPI->>+ShipmentService: GetAsync(shipmentId)
+
+    ShipmentService->>+ShipmentStore: FindByIdAsync(shipmentId)
+
+    ShipmentStore->>+DB: SELECT Shipment and dispatched items
+    DB-->>ShipmentStore: Shipment information
+    deactivate DB
+
+    ShipmentStore-->>ShipmentService: ShipmentView
+    deactivate ShipmentStore
+
+    ShipmentService-->>ShipmentAPI: Shipment details
+    deactivate ShipmentService
+
+    ShipmentAPI-->>UI: Shipment response
+    deactivate ShipmentAPI
+
+    UI-->>Retailer: Display dispatched and received quantities
+    deactivate UI
+
+    %% ==========================================
+    %% 2. REPORT RECEIPT DISCREPANCY
+    %% ==========================================
+
+    Retailer->>+UI: Select Report Issue
+
+    Retailer->>UI: Select affected shipment items
+
+    Retailer->>UI: Enter issue type, quantity and reason
+
+    Retailer->>UI: Attach evidence images
+
+    Note over Retailer,UI: Issue types include missing, damaged or incorrect goods
+
+    Note over UI,ComplaintAPI: Evidence images are uploaded separately and referenced in the complaint request
+
+    %% ==========================================
+    %% 3. SUBMIT COMPLAINT
+    %% ==========================================
+
+    UI->>+ComplaintAPI: Create(complaintData)
+
+    ComplaintAPI->>+ComplaintService: CreateAsync(complaintData)
+
+    ComplaintService->>+ComplaintStore: CreateAsync(actorId, complaintData)
+
+    %% ==========================================
+    %% 4. VALIDATE ORDER AND SHIPMENT
+    %% ==========================================
+
+    ComplaintStore->>+DB: SELECT SalesOrder, Shipment and Retailer
+    DB-->>ComplaintStore: Order ownership and shipment status
+    deactivate DB
+
+    ComplaintStore->>+DB: SELECT dispatched and received batch quantities
+    DB-->>ComplaintStore: Shipment line and receipt information
+    deactivate DB
+
+    alt Retailer is not authorized
+
+        ComplaintStore-->>ComplaintService: Forbidden error
+
+    else Shipment is not eligible for complaint
+
+        ComplaintStore-->>ComplaintService: Conflict error
+
+    else Retailer and Shipment are valid
+
+        %% ==========================================
+        %% 5. VALIDATE DISCREPANCY ITEMS
+        %% ==========================================
+
+        ComplaintStore->>+DB: SELECT existing discrepancies for affected items
+        DB-->>ComplaintStore: Previously reported quantities
+        deactivate DB
+
+        Note over ComplaintStore,DB: Validate affected Batch, quantity, issue type and evidence
+
+        alt Invalid quantity, evidence or duplicate claim
+
+            ComplaintStore-->>ComplaintService: Validation or conflict error
+
+        else Complaint information is valid
+
+            %% ==========================================
+            %% 6. CALCULATE DISPUTED VALUE
+            %% ==========================================
+
+            ComplaintStore->>+DB: SELECT actual final batch prices
+            DB-->>ComplaintStore: Batch price snapshots
+            deactivate DB
+
+            Note right of ComplaintStore: Calculate disputed value from affected quantities and actual net prices
+
+            %% ==========================================
+            %% 7. SAVE RECEIPT DISCREPANCY
+            %% ==========================================
+
+            ComplaintStore->>+DB: INSERT ReceiptDiscrepancy and ReceiptDiscrepancyItems
+            Note right of DB: Save issue details, quantities, evidence references and reported value
+
+            DB-->>ComplaintStore: Complaint created
+            deactivate DB
+
+            ComplaintStore-->>ComplaintService: ComplaintResult
+
+        end
+
+    end
+
+    deactivate ComplaintStore
+
+    %% ==========================================
+    %% 8. RETURN COMPLAINT RESULT
+    %% ==========================================
+
+    ComplaintService-->>ComplaintAPI: Complaint result or business error
+    deactivate ComplaintService
+
+    ComplaintAPI-->>UI: Complaint submission response
+    deactivate ComplaintAPI
+
+    UI-->>Retailer: Display complaint status or error
+    deactivate UI
+
+    %% ==========================================
+    %% BUSINESS CONSTRAINTS
+    %% ==========================================
+
+    Note over ComplaintService,DB: Complaint submission does not change physical inventory
+
+    Note over ComplaintService,DB: Actual receipt quantities and delivery history remain unchanged
+
+    Note over Retailer,DB: Complaint investigation and resolution are handled separately

@@ -1,0 +1,71 @@
+@startuml
+title F3 - Real-time Allocation, Shelf-life Pricing, Reservation and Quote
+skinparam defaultFontName Arial
+skinparam shadowing false
+skinparam ActivityBackgroundColor #F5F5F5
+skinparam ActivityBorderColor #333333
+skinparam RoundCorner 15
+skinparam wrapWidth 220
+
+|System|
+start
+:Allocation worker takes the next SO (ordered by AcceptedAt, tie-break SO code);
+:Create allocation attempt (AttemptNumber, start time);
+:Read one configuration snapshot (weights, service radius, transit/ETA, MLOR fallback, discount version);
+repeat
+  :Read stock with Version (no long database lock);
+  repeat
+    :Take next SO line (remaining shortfall R);
+    :Candidates: active warehouses in Region / radius, batches of the SKU still in date;
+    :Remove quantity under active Inventory Lock
+(Available = Physical - Reserved - active locks);
+    :Compute ETA to the Retailer;
+    :Apply MLOR (SKU > Category > default) - drop batches below threshold at ETA;
+    :Score = weighted FEFO shelf-life + distance + coverage fQ, rank (fixed tie-break);
+    :Take min(batch available, R) from the best batch, repeat until R = 0;
+  repeat while (More lines?) is (yes)
+  if (Every line fully covered?) then (yes)
+    :Base price = list price after the selected quantity promotion;
+    :Look up shelf-life discount % per batch at ETA, final price = base x (1 - HSD %);
+    :Store B1-B4 trace and price components;
+    :BEGIN transaction - conditional UPDATE per balance row
+(Version = expected AND Available >= qty, Reserved += qty, Version += 1);
+    if (Every row updated?) then (yes)
+      :Create Reservation / Allocation / OrderReserve transaction, COMMIT;
+      :Issue final quote with ExpiresAt, SO = Quoted;
+      :Notify Retailer / Sales (MLOR and scores are not exposed);
+      break
+    else (version changed or stock gone)
+      :ROLLBACK the whole SO;
+    endif
+  else (no - short)
+    :Discard tentative allocations;
+    :SO = OutOfStock, report short SKUs (no reservation held);
+    stop
+  endif
+repeat while (Retry < 3?) is (reload stock, recompute)
+if (Reserved and quoted?) then (no)
+  :Attempt = Conflict, SO = AllocationConflict, no partial reservation;
+  :Queue technical retry for Admin/Operator;
+  stop
+else (yes)
+endif
+
+|Retailer|
+if (Reject quote or quote expires?) then (yes)
+  |System|
+  :Close quote, release all reservations once (OrderRelease);
+  :SO = QuoteRejected / QuoteExpired;
+  stop
+else (no - go to F4)
+endif
+
+|Admin/Operator|
+:Browse allocation attempts and trace (read-only);
+:Retry only technical failures / AllocationConflict (new attempt);
+note right: No batch-run button, no plan approval, no manual batch edit
+
+|System|
+:Hand over Quoted SO + final quote + active reservation to F4;
+stop
+@enduml
