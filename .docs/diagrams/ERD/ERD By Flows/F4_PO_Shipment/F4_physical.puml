@@ -1,0 +1,334 @@
+@startchen F4_physical
+
+title F4 – Physical ERD (Chen) – Quote Acceptance, Purchase Order, Picking, Issue and Delivery
+
+entity PURCHASE_ORDER {
+  "Id : uuid PK" as Id <<key>>
+  "PurchaseOrderCode : varchar(40) UQ NN" as PurchaseOrderCode
+  "SalesOrderId : uuid FK→SALES_ORDER UQ NN" as SalesOrderId
+  "SalesOrderQuoteId : uuid FK→SALES_ORDER_QUOTE UQ NN" as SalesOrderQuoteId
+  "PaymentMethod : varchar(30) NN" as PaymentMethod
+  "CreditTermDaysSnapshot : integer NULL" as CreditTermDaysSnapshot
+  "CreditLimitSnapshot : numeric(18,2) NULL" as CreditLimitSnapshot
+  "Status : varchar(30) NN" as Status
+  "IssuedAt : timestamptz NN" as IssuedAt
+  "Version : integer NN" as Version
+}
+entity PAYMENT {
+  "Id : uuid PK" as Id <<key>>
+  "PaymentCode : varchar(40) UQ NN" as PaymentCode
+  "SalesOrderId : uuid FK→SALES_ORDER UQ NN" as SalesOrderId
+  "SalesOrderQuoteId : uuid FK→SALES_ORDER_QUOTE NN" as SalesOrderQuoteId
+  "Method : smallint NN" as Method
+  "Status : smallint NN" as Status
+  "Amount : numeric(18,2) NN" as Amount
+  "AdjustedAmount : numeric(18,2) NN" as AdjustedAmount
+  "ConfirmedAmount : numeric(18,2) NN" as ConfirmedAmount
+  "RefundedAmount : numeric(18,2) NN" as RefundedAmount
+  "OutstandingAmount : numeric(18,2) NN" as OutstandingAmount
+  "PaymentDeadlineAt : timestamptz NULL" as PaymentDeadlineAt
+  "CreditTermDays : integer NULL" as CreditTermDays
+  "DeliveredDate : date NULL" as DeliveredDate
+  "DueDate : date NULL" as DueDate
+  "PaidAt : timestamptz NULL" as PaidAt
+  "PayOsOrderCode : bigint UQ NULL" as PayOsOrderCode
+  "PayOsPaymentLinkId : varchar(100) UQ NULL" as PayOsPaymentLinkId
+  "PayOsCheckoutUrl : text NULL" as PayOsCheckoutUrl
+  "PayOsReference : varchar(100) UQ NULL" as PayOsReference
+  "PayOsWebhookHash : varchar(64) UQ NULL" as PayOsWebhookHash
+  "OperationKey : varchar(80) UQ NULL" as OperationKey
+  "Version : integer NN" as Version
+  "CreatedAt : timestamptz NN" as CreatedAt
+}
+entity PICKING_LIST {
+  "Id : uuid PK" as Id <<key>>
+  "PickingCode : varchar(40) UQ NN" as PickingCode
+  "PurchaseOrderId : uuid FK→PURCHASE_ORDER NN" as PurchaseOrderId
+  "WarehouseId : uuid FK→WAREHOUSE NN" as WarehouseId
+  "AssignedToUserId : uuid FK→USER_ACCOUNT NULL" as AssignedToUserId
+  "Status : smallint NN" as Status
+  "StartedAt : timestamptz NULL" as StartedAt
+  "CompletedAt : timestamptz NULL" as CompletedAt
+  "CompletedByUserId : uuid FK→USER_ACCOUNT NULL" as CompletedByUserId
+  "Version : integer NN" as Version
+  "CreatedAt : timestamptz NN" as CreatedAt
+}
+entity PICKING_ITEM {
+  "Id : uuid PK" as Id <<key>>
+  "PickingListId : uuid FK→PICKING_LIST NN" as PickingListId
+  "LineNumber : integer NN" as LineNumber
+  "AllocationId : uuid FK→ALLOCATION UQ NN" as AllocationId
+  "BatchId : uuid FK→BATCH NN" as BatchId
+  "RequiredQuantity : numeric(18,3) NN" as RequiredQuantity
+  "PickedQuantity : numeric(18,3) NN" as PickedQuantity
+  "Status : varchar(30) NN" as Status
+  "CompletedAt : timestamptz NULL" as CompletedAt
+}
+entity PICKING_SCAN {
+  "Id : uuid PK" as Id <<key>>
+  "PickingListId : uuid FK→PICKING_LIST NN" as PickingListId
+  "PickingItemId : uuid FK→PICKING_ITEM NULL" as PickingItemId
+  "BatchQrLabelId : uuid FK→BATCH_QR_LABEL NULL" as BatchQrLabelId
+  "ScannedBatchId : uuid FK→BATCH NULL" as ScannedBatchId
+  "ScannedQuantity : numeric(18,3) NN" as ScannedQuantity
+  "Result : varchar(30) NN" as Result
+  "RejectReason : varchar(200) NULL" as RejectReason
+  "ScannedByUserId : uuid FK→USER_ACCOUNT NN" as ScannedByUserId
+  "ScannedAt : timestamptz NN" as ScannedAt
+  "ClientScanId : varchar(100) UQ NN" as ClientScanId
+}
+entity SHIPMENT {
+  "Id : uuid PK" as Id <<key>>
+  "ShipmentCode : varchar(60) UQ NN" as ShipmentCode
+  "SalesOrderId : uuid FK→SALES_ORDER NN" as SalesOrderId
+  "PickingListId : uuid FK→PICKING_LIST UQ NN" as PickingListId
+  "DriverId : uuid FK→DRIVER NULL" as DriverId
+  "VehicleId : uuid FK→VEHICLE NULL" as VehicleId
+  "DriverNameSnapshot : varchar(150) NULL" as DriverNameSnapshot
+  "PlateNumberSnapshot : varchar(30) NULL" as PlateNumberSnapshot
+  "Status : varchar(30) NN" as Status
+  "TotalQuantity : numeric(18,3) NN" as TotalQuantity
+  "ReceivedQuantity : numeric(18,3) NN" as ReceivedQuantity
+  "ReadyAt : timestamptz NULL" as ReadyAt
+  "IssuedAt : timestamptz NULL" as IssuedAt
+  "DispatchedAt : timestamptz NULL" as DispatchedAt
+  "ReceivedAt : timestamptz NULL" as ReceivedAt
+  "ExceptionReason : text NULL" as ExceptionReason
+  "Version : integer NN" as Version
+}
+entity RECEIPT_CONFIRMATION {
+  "Id : uuid PK" as Id <<key>>
+  "ShipmentId : uuid FK→SHIPMENT UQ NN" as ShipmentId
+  "ConfirmedByUserId : uuid FK→USER_ACCOUNT NN" as ConfirmedByUserId
+  "Status : varchar(30) NN" as Status
+  "ConfirmedAt : timestamptz NN" as ConfirmedAt
+  "Note : text NULL" as Note
+  "OperationKey : varchar(80) UQ NN" as OperationKey
+}
+entity RECEIPT_CONFIRMATION_ITEM {
+  "Id : uuid PK" as Id <<key>>
+  "ReceiptConfirmationId : uuid FK→RECEIPT_CONFIRMATION NN" as ReceiptConfirmationId
+  "LineNumber : integer NN" as LineNumber
+  "PickingItemId : uuid FK→PICKING_ITEM NN" as PickingItemId
+  "BatchQrLabelId : uuid FK→BATCH_QR_LABEL NULL" as BatchQrLabelId
+  "ExpectedQuantity : numeric(18,3) NN" as ExpectedQuantity
+  "ReceivedQuantity : numeric(18,3) NN" as ReceivedQuantity
+  "DamagedQuantity : numeric(18,3) NN" as DamagedQuantity
+  "MissingQuantity : numeric(18,3) NN" as MissingQuantity
+  "ScannedAt : timestamptz NULL" as ScannedAt
+}
+entity PICKING_EXCEPTION {
+  "Id : uuid PK" as Id <<key>>
+  "ExceptionCode : varchar(40) UQ NN" as ExceptionCode
+  "PickingListId : uuid FK→PICKING_LIST NN" as PickingListId
+  "PickingItemId : uuid FK→PICKING_ITEM NULL" as PickingItemId
+  "Status : varchar(30) NN" as Status
+  "RaisedByUserId : uuid FK→USER_ACCOUNT NN" as RaisedByUserId
+  "ResolvedByUserId : uuid FK→USER_ACCOUNT NULL" as ResolvedByUserId
+}
+entity DRIVER {
+  "Id : uuid PK" as Id <<key>>
+  "Code : varchar(20) UQ NN" as Code
+  "WarehouseId : uuid FK→WAREHOUSE NN" as WarehouseId
+}
+entity VEHICLE {
+  "Id : uuid PK" as Id <<key>>
+  "PlateNumber : varchar(30) UQ NN" as PlateNumber
+  "WarehouseId : uuid FK→WAREHOUSE NN" as WarehouseId
+}
+entity SALES_ORDER {
+  "Id : uuid PK" as Id <<key>>
+  "OrderCode : varchar(40) UQ NN" as OrderCode
+  "Status : smallint NN" as Status
+  "PaymentMethod : smallint NULL" as PaymentMethod
+}
+entity SALES_ORDER_QUOTE {
+  "Id : uuid PK" as Id <<key>>
+  "SalesOrderId : uuid FK→SALES_ORDER NN" as SalesOrderId
+  "RevisionNumber : integer NN" as RevisionNumber
+  "TotalAmount : numeric(18,2) NN" as TotalAmount
+  "ExpiresAt : timestamptz NN" as ExpiresAt
+  "Status : smallint NN" as Status
+}
+entity ALLOCATION {
+  "Id : uuid PK" as Id <<key>>
+  "AllocationSequence : integer NN" as AllocationSequence
+  "BatchId : uuid FK→BATCH NN" as BatchId
+  "AllocatedQuantity : numeric(18,3) NN" as AllocatedQuantity
+  "FinalUnitPrice : numeric(18,2) NN" as FinalUnitPrice
+  "Status : varchar(30) NN" as Status
+}
+entity RESERVATION {
+  "Id : uuid PK" as Id <<key>>
+  "AllocationId : uuid FK→ALLOCATION UQ NN" as AllocationId
+  "Quantity : numeric(18,3) NN" as Quantity
+  "Status : smallint NN" as Status
+}
+entity WAREHOUSE {
+  "Id : uuid PK" as Id <<key>>
+  "Code : varchar(30) UQ NN" as Code
+}
+entity BATCH {
+  "Id : uuid PK" as Id <<key>>
+  "BatchCode : varchar(80) UQ NN" as BatchCode
+  "WarehouseId : uuid FK→WAREHOUSE NN" as WarehouseId
+  "ExpirationDate : date NN" as ExpirationDate
+}
+entity BATCH_QR_LABEL {
+  "Id : uuid PK" as Id <<key>>
+  "QrCode : varchar(120) UQ NN" as QrCode
+  "BatchId : uuid FK→BATCH NN" as BatchId
+  "Status : varchar(30) NN" as Status
+}
+entity USER_ACCOUNT {
+  "Id : uuid PK" as Id <<key>>
+  "Email : varchar(150) UQ NN" as Email
+}
+
+relationship "is converted to PO\n(SalesOrderId)" as R_PURCHASE_ORDER_SalesOrderId {
+}
+relationship "is accepted as\n(SalesOrderQuoteId)" as R_PURCHASE_ORDER_SalesOrderQuoteId {
+}
+relationship "generates receivable\n(SalesOrderId)" as R_PAYMENT_SalesOrderId {
+}
+relationship "is basis for collection\n(SalesOrderQuoteId)" as R_PAYMENT_SalesOrderQuoteId {
+}
+relationship "issues picking list\n(PurchaseOrderId)" as R_PICKING_LIST_PurchaseOrderId {
+}
+relationship "picks at warehouse\n(WarehouseId)" as R_PICKING_LIST_WarehouseId {
+}
+relationship "is assigned picking\n(AssignedToUserId)" as R_PICKING_LIST_AssignedToUserId {
+}
+relationship "completes picking\n(CompletedByUserId)" as R_PICKING_LIST_CompletedByUserId {
+}
+relationship "has picking item\n(PickingListId)" as R_PICKING_ITEM_PickingListId {
+}
+relationship "is picked by\n(AllocationId)" as R_PICKING_ITEM_AllocationId {
+}
+relationship "requires batch\n(BatchId)" as R_PICKING_ITEM_BatchId {
+}
+relationship "records scan\n(PickingListId)" as R_PICKING_SCAN_PickingListId {
+}
+relationship "matches picking item\n(PickingItemId)" as R_PICKING_SCAN_PickingItemId {
+}
+relationship "is scanned during picking\n(BatchQrLabelId)" as R_PICKING_SCAN_BatchQrLabelId {
+}
+relationship "is scanned batch\n(ScannedBatchId)" as R_PICKING_SCAN_ScannedBatchId {
+}
+relationship "scans label\n(ScannedByUserId)" as R_PICKING_SCAN_ScannedByUserId {
+}
+relationship "is delivered via\n(SalesOrderId)" as R_SHIPMENT_SalesOrderId {
+}
+relationship "creates shipment\n(PickingListId)" as R_SHIPMENT_PickingListId {
+}
+relationship "delivers shipment\n(DriverId)" as R_SHIPMENT_DriverId {
+}
+relationship "carries shipment\n(VehicleId)" as R_SHIPMENT_VehicleId {
+}
+relationship "is confirmed received\n(ShipmentId)" as R_RECEIPT_CONFIRMATION_ShipmentId {
+}
+relationship "confirms receipt\n(ConfirmedByUserId)" as R_RECEIPT_CONFIRMATION_ConfirmedByUserId {
+}
+relationship "has receipt item\n(ReceiptConfirmationId)" as R_RECEIPT_CONFIRMATION_ITEM_ReceiptConfirmationId {
+}
+relationship "is reconciled\n(PickingItemId)" as R_RECEIPT_CONFIRMATION_ITEM_PickingItemId {
+}
+relationship "is scanned at receipt\n(BatchQrLabelId)" as R_RECEIPT_CONFIRMATION_ITEM_BatchQrLabelId {
+}
+relationship "raises exception\n(PickingListId)" as R_PICKING_EXCEPTION_PickingListId {
+}
+relationship "affects item\n(PickingItemId)" as R_PICKING_EXCEPTION_PickingItemId {
+}
+relationship "reports exception\n(RaisedByUserId)" as R_PICKING_EXCEPTION_RaisedByUserId {
+}
+relationship "resolves exception\n(ResolvedByUserId)" as R_PICKING_EXCEPTION_ResolvedByUserId {
+}
+relationship "manages driver\n(WarehouseId)" as R_DRIVER_WarehouseId {
+}
+relationship "manages vehicle\n(WarehouseId)" as R_VEHICLE_WarehouseId {
+}
+relationship "receives quote\n(SalesOrderId)" as R_SALES_ORDER_QUOTE_SalesOrderId {
+}
+relationship "allocated from batch\n(BatchId)" as R_ALLOCATION_BatchId {
+}
+relationship "is reserved by\n(AllocationId)" as R_RESERVATION_AllocationId {
+}
+relationship "stores batch\n(WarehouseId)" as R_BATCH_WarehouseId {
+}
+relationship "is labelled\n(BatchId)" as R_BATCH_QR_LABEL_BatchId {
+}
+
+R_PURCHASE_ORDER_SalesOrderId -1- SALES_ORDER
+R_PURCHASE_ORDER_SalesOrderId =1= PURCHASE_ORDER
+R_PURCHASE_ORDER_SalesOrderQuoteId -1- SALES_ORDER_QUOTE
+R_PURCHASE_ORDER_SalesOrderQuoteId =1= PURCHASE_ORDER
+R_PAYMENT_SalesOrderId -1- SALES_ORDER
+R_PAYMENT_SalesOrderId =1= PAYMENT
+R_PAYMENT_SalesOrderQuoteId -1- SALES_ORDER_QUOTE
+R_PAYMENT_SalesOrderQuoteId =N= PAYMENT
+R_PICKING_LIST_PurchaseOrderId =1= PURCHASE_ORDER
+R_PICKING_LIST_PurchaseOrderId =N= PICKING_LIST
+R_PICKING_LIST_WarehouseId -1- WAREHOUSE
+R_PICKING_LIST_WarehouseId =N= PICKING_LIST
+R_PICKING_LIST_AssignedToUserId -1- USER_ACCOUNT
+R_PICKING_LIST_AssignedToUserId -N- PICKING_LIST
+R_PICKING_LIST_CompletedByUserId -1- USER_ACCOUNT
+R_PICKING_LIST_CompletedByUserId -N- PICKING_LIST
+R_PICKING_ITEM_PickingListId =1= PICKING_LIST
+R_PICKING_ITEM_PickingListId =N= PICKING_ITEM
+R_PICKING_ITEM_AllocationId -1- ALLOCATION
+R_PICKING_ITEM_AllocationId =1= PICKING_ITEM
+R_PICKING_ITEM_BatchId -1- BATCH
+R_PICKING_ITEM_BatchId =N= PICKING_ITEM
+R_PICKING_SCAN_PickingListId -1- PICKING_LIST
+R_PICKING_SCAN_PickingListId =N= PICKING_SCAN
+R_PICKING_SCAN_PickingItemId -1- PICKING_ITEM
+R_PICKING_SCAN_PickingItemId -N- PICKING_SCAN
+R_PICKING_SCAN_BatchQrLabelId -1- BATCH_QR_LABEL
+R_PICKING_SCAN_BatchQrLabelId -N- PICKING_SCAN
+R_PICKING_SCAN_ScannedBatchId -1- BATCH
+R_PICKING_SCAN_ScannedBatchId -N- PICKING_SCAN
+R_PICKING_SCAN_ScannedByUserId -1- USER_ACCOUNT
+R_PICKING_SCAN_ScannedByUserId =N= PICKING_SCAN
+R_SHIPMENT_SalesOrderId -1- SALES_ORDER
+R_SHIPMENT_SalesOrderId =N= SHIPMENT
+R_SHIPMENT_PickingListId -1- PICKING_LIST
+R_SHIPMENT_PickingListId =1= SHIPMENT
+R_SHIPMENT_DriverId -1- DRIVER
+R_SHIPMENT_DriverId -N- SHIPMENT
+R_SHIPMENT_VehicleId -1- VEHICLE
+R_SHIPMENT_VehicleId -N- SHIPMENT
+R_RECEIPT_CONFIRMATION_ShipmentId -1- SHIPMENT
+R_RECEIPT_CONFIRMATION_ShipmentId =1= RECEIPT_CONFIRMATION
+R_RECEIPT_CONFIRMATION_ConfirmedByUserId -1- USER_ACCOUNT
+R_RECEIPT_CONFIRMATION_ConfirmedByUserId =N= RECEIPT_CONFIRMATION
+R_RECEIPT_CONFIRMATION_ITEM_ReceiptConfirmationId =1= RECEIPT_CONFIRMATION
+R_RECEIPT_CONFIRMATION_ITEM_ReceiptConfirmationId =N= RECEIPT_CONFIRMATION_ITEM
+R_RECEIPT_CONFIRMATION_ITEM_PickingItemId -1- PICKING_ITEM
+R_RECEIPT_CONFIRMATION_ITEM_PickingItemId =N= RECEIPT_CONFIRMATION_ITEM
+R_RECEIPT_CONFIRMATION_ITEM_BatchQrLabelId -1- BATCH_QR_LABEL
+R_RECEIPT_CONFIRMATION_ITEM_BatchQrLabelId -N- RECEIPT_CONFIRMATION_ITEM
+R_PICKING_EXCEPTION_PickingListId -1- PICKING_LIST
+R_PICKING_EXCEPTION_PickingListId =N= PICKING_EXCEPTION
+R_PICKING_EXCEPTION_PickingItemId -1- PICKING_ITEM
+R_PICKING_EXCEPTION_PickingItemId -N- PICKING_EXCEPTION
+R_PICKING_EXCEPTION_RaisedByUserId -1- USER_ACCOUNT
+R_PICKING_EXCEPTION_RaisedByUserId =N= PICKING_EXCEPTION
+R_PICKING_EXCEPTION_ResolvedByUserId -1- USER_ACCOUNT
+R_PICKING_EXCEPTION_ResolvedByUserId -N- PICKING_EXCEPTION
+R_DRIVER_WarehouseId -1- WAREHOUSE
+R_DRIVER_WarehouseId =N= DRIVER
+R_VEHICLE_WarehouseId -1- WAREHOUSE
+R_VEHICLE_WarehouseId =N= VEHICLE
+R_SALES_ORDER_QUOTE_SalesOrderId -1- SALES_ORDER
+R_SALES_ORDER_QUOTE_SalesOrderId =N= SALES_ORDER_QUOTE
+R_ALLOCATION_BatchId -1- BATCH
+R_ALLOCATION_BatchId =N= ALLOCATION
+R_RESERVATION_AllocationId -1- ALLOCATION
+R_RESERVATION_AllocationId =1= RESERVATION
+R_BATCH_WarehouseId -1- WAREHOUSE
+R_BATCH_WarehouseId =N= BATCH
+R_BATCH_QR_LABEL_BatchId -1- BATCH
+R_BATCH_QR_LABEL_BatchId =N= BATCH_QR_LABEL
+
+@endchen

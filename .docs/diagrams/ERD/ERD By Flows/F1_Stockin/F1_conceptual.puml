@@ -1,0 +1,222 @@
+@startchen F1_conceptual
+
+title F1 – Conceptual ERD (Chen) – Sourcing, Retailer and Master Data
+
+entity "Region\nBusiness region" as Region {
+}
+entity "Warehouse\nWarehouse" as Warehouse {
+}
+entity "UserAccount\nUser account" as UserAccount {
+}
+entity "ProductCategory\nProduct category" as ProductCategory {
+}
+entity "Product\nProduct (SKU)" as Product {
+}
+entity "ProductPrice\nProduct price by effective period" as ProductPrice {
+}
+entity "Retailer\nRetailer" as Retailer {
+}
+entity "RetailerCreditProfile\nRetailer credit profile" as RetailerCreditProfile {
+}
+entity "Promotion\nQuantity promotion" as Promotion {
+}
+entity "ShelfLifeDiscountTable\nShelf-life discount table" as ShelfLifeDiscountTable {
+}
+entity "ShelfLifeDiscountTier\nDiscount tier by remaining shelf-life %" as ShelfLifeDiscountTier <<weak>> {
+}
+entity "GoodsReceipt\nGoods receipt" as GoodsReceipt {
+}
+entity "GoodsReceiptLine\nGoods receipt line" as GoodsReceiptLine <<weak>> {
+}
+entity "Batch\nBatch" as Batch {
+}
+entity "InventoryBalance\nInventory balance by batch" as InventoryBalance {
+}
+entity "InventoryLock\nInventory lock (damaged/expired/recall)" as InventoryLock {
+}
+entity "InventoryTransaction\nInventory ledger (stock transactions)" as InventoryTransaction {
+}
+entity "WriteOff\nWrite-off document" as WriteOff {
+}
+entity "WriteOffItem\nWrite-off item" as WriteOffItem <<weak>> {
+}
+entity "SalesGroup\nSales group" as SalesGroup {
+}
+entity "TransitTable\nTransit time table" as TransitTable {
+}
+entity "TransitTableBand\nTransit distance band" as TransitTableBand <<weak>> {
+}
+entity "BatchQrLabel\nBatch QR label" as BatchQrLabel {
+}
+entity "InventoryCountSession\nInventory count session" as InventoryCountSession {
+}
+entity "InventoryCountLine\nInventory count line" as InventoryCountLine <<weak>> {
+}
+
+relationship "contains warehouse" as R_WAREHOUSE_RegionId {
+}
+relationship "is parent of" as R_PRODUCT_CATEGORY_ParentCategoryId {
+}
+relationship "classifies" as R_PRODUCT_ProductCategoryId {
+}
+relationship "has price" as R_PRODUCT_PRICE_ProductId {
+}
+relationship "serves retailer" as R_RETAILER_RegionId {
+}
+relationship "is account of" as R_RETAILER_UserAccountId {
+}
+relationship "declares retailer" as R_RETAILER_DeclaredByUserId {
+}
+relationship "has credit profile" as R_RETAILER_CREDIT_PROFILE_RetailerId {
+}
+relationship "has discount tier" as R_SHELF_LIFE_DISCOUNT_TIER_ShelfLifeDiscountTableId <<identifying>> {
+}
+relationship "applies tier to category" as R_SHELF_LIFE_DISCOUNT_TIER_ProductCategoryId {
+}
+relationship "applies tier to SKU" as R_SHELF_LIFE_DISCOUNT_TIER_ProductId {
+}
+relationship "receives goods receipt" as R_GOODS_RECEIPT_WarehouseId {
+}
+relationship "creates goods receipt" as R_GOODS_RECEIPT_CreatedByUserId {
+}
+relationship "has receipt line" as R_GOODS_RECEIPT_LINE_GoodsReceiptId <<identifying>> {
+}
+relationship "is received" as R_GOODS_RECEIPT_LINE_ProductId {
+}
+relationship "has batch" as R_BATCH_ProductId {
+}
+relationship "stores batch" as R_BATCH_WarehouseId {
+}
+relationship "creates batch" as R_BATCH_GoodsReceiptLineId {
+}
+relationship "has inventory balance" as R_INVENTORY_BALANCE_BatchId {
+}
+relationship "is locked" as R_INVENTORY_LOCK_BatchId {
+}
+relationship "records ledger entry" as R_INVENTORY_TRANSACTION_BatchId {
+}
+relationship "writes off at warehouse" as R_WRITE_OFF_WarehouseId {
+}
+relationship "has write-off item" as R_WRITE_OFF_ITEM_WriteOffId <<identifying>> {
+}
+relationship "is written off" as R_WRITE_OFF_ITEM_BatchId {
+}
+relationship "is handled by" as R_WRITE_OFF_ITEM_InventoryLockId {
+}
+relationship "has sales group" as R_SALES_GROUP_RegionId {
+}
+relationship "has band" as R_TRANSIT_TABLE_BAND_TransitTableId <<identifying>> {
+}
+relationship "is labelled" as R_BATCH_QR_LABEL_BatchId {
+}
+relationship "counts at" as R_INVENTORY_COUNT_SESSION_WarehouseId {
+}
+relationship "has count line" as R_INVENTORY_COUNT_LINE_InventoryCountSessionId <<identifying>> {
+}
+relationship "is counted" as R_INVENTORY_COUNT_LINE_BatchId {
+}
+relationship "generates adjustment entry" as R_INVENTORY_COUNT_LINE_AdjustmentTransactionId {
+}
+relationship "requires MLOR by category" as M_RetailerCategoryMlor {
+}
+relationship "requires MLOR by SKU" as M_RetailerProductMlor {
+}
+relationship "handles region" as M_UserRegionAssignment {
+}
+relationship "works at warehouse" as M_UserWarehouseAssignment {
+}
+relationship "belongs to group" as M_SalesGroupMember {
+}
+relationship "is handled by" as M_RetailerSalesAssignment {
+}
+relationship "applies to SKU" as M_PromotionProduct {
+}
+relationship "applies to category" as M_PromotionCategory {
+}
+relationship "is for retailer" as M_PromotionRetailer {
+}
+
+R_WAREHOUSE_RegionId -1- Region
+R_WAREHOUSE_RegionId =N= Warehouse
+R_PRODUCT_CATEGORY_ParentCategoryId -1- ProductCategory
+R_PRODUCT_CATEGORY_ParentCategoryId -N- ProductCategory
+R_PRODUCT_ProductCategoryId -1- ProductCategory
+R_PRODUCT_ProductCategoryId =N= Product
+R_PRODUCT_PRICE_ProductId -1- Product
+R_PRODUCT_PRICE_ProductId =N= ProductPrice
+R_RETAILER_RegionId -1- Region
+R_RETAILER_RegionId =N= Retailer
+R_RETAILER_UserAccountId -1- UserAccount
+R_RETAILER_UserAccountId -1- Retailer
+R_RETAILER_DeclaredByUserId -1- UserAccount
+R_RETAILER_DeclaredByUserId =N= Retailer
+R_RETAILER_CREDIT_PROFILE_RetailerId -1- Retailer
+R_RETAILER_CREDIT_PROFILE_RetailerId =1= RetailerCreditProfile
+R_SHELF_LIFE_DISCOUNT_TIER_ShelfLifeDiscountTableId =1= ShelfLifeDiscountTable
+R_SHELF_LIFE_DISCOUNT_TIER_ShelfLifeDiscountTableId =N= ShelfLifeDiscountTier
+R_SHELF_LIFE_DISCOUNT_TIER_ProductCategoryId -1- ProductCategory
+R_SHELF_LIFE_DISCOUNT_TIER_ProductCategoryId -N- ShelfLifeDiscountTier
+R_SHELF_LIFE_DISCOUNT_TIER_ProductId -1- Product
+R_SHELF_LIFE_DISCOUNT_TIER_ProductId -N- ShelfLifeDiscountTier
+R_GOODS_RECEIPT_WarehouseId -1- Warehouse
+R_GOODS_RECEIPT_WarehouseId =N= GoodsReceipt
+R_GOODS_RECEIPT_CreatedByUserId -1- UserAccount
+R_GOODS_RECEIPT_CreatedByUserId =N= GoodsReceipt
+R_GOODS_RECEIPT_LINE_GoodsReceiptId =1= GoodsReceipt
+R_GOODS_RECEIPT_LINE_GoodsReceiptId =N= GoodsReceiptLine
+R_GOODS_RECEIPT_LINE_ProductId -1- Product
+R_GOODS_RECEIPT_LINE_ProductId =N= GoodsReceiptLine
+R_BATCH_ProductId -1- Product
+R_BATCH_ProductId =N= Batch
+R_BATCH_WarehouseId -1- Warehouse
+R_BATCH_WarehouseId =N= Batch
+R_BATCH_GoodsReceiptLineId -1- GoodsReceiptLine
+R_BATCH_GoodsReceiptLineId -N- Batch
+R_INVENTORY_BALANCE_BatchId =1= Batch
+R_INVENTORY_BALANCE_BatchId =1= InventoryBalance
+R_INVENTORY_LOCK_BatchId -1- Batch
+R_INVENTORY_LOCK_BatchId =N= InventoryLock
+R_INVENTORY_TRANSACTION_BatchId -1- Batch
+R_INVENTORY_TRANSACTION_BatchId =N= InventoryTransaction
+R_WRITE_OFF_WarehouseId -1- Warehouse
+R_WRITE_OFF_WarehouseId =N= WriteOff
+R_WRITE_OFF_ITEM_WriteOffId =1= WriteOff
+R_WRITE_OFF_ITEM_WriteOffId =N= WriteOffItem
+R_WRITE_OFF_ITEM_BatchId -1- Batch
+R_WRITE_OFF_ITEM_BatchId =N= WriteOffItem
+R_WRITE_OFF_ITEM_InventoryLockId -1- InventoryLock
+R_WRITE_OFF_ITEM_InventoryLockId -1- WriteOffItem
+R_SALES_GROUP_RegionId -1- Region
+R_SALES_GROUP_RegionId =N= SalesGroup
+R_TRANSIT_TABLE_BAND_TransitTableId =1= TransitTable
+R_TRANSIT_TABLE_BAND_TransitTableId =N= TransitTableBand
+R_BATCH_QR_LABEL_BatchId -1- Batch
+R_BATCH_QR_LABEL_BatchId =N= BatchQrLabel
+R_INVENTORY_COUNT_SESSION_WarehouseId -1- Warehouse
+R_INVENTORY_COUNT_SESSION_WarehouseId =N= InventoryCountSession
+R_INVENTORY_COUNT_LINE_InventoryCountSessionId =1= InventoryCountSession
+R_INVENTORY_COUNT_LINE_InventoryCountSessionId =N= InventoryCountLine
+R_INVENTORY_COUNT_LINE_BatchId -1- Batch
+R_INVENTORY_COUNT_LINE_BatchId =N= InventoryCountLine
+R_INVENTORY_COUNT_LINE_AdjustmentTransactionId -1- InventoryTransaction
+R_INVENTORY_COUNT_LINE_AdjustmentTransactionId -1- InventoryCountLine
+M_RetailerCategoryMlor -M- Retailer
+M_RetailerCategoryMlor -N- ProductCategory
+M_RetailerProductMlor -M- Retailer
+M_RetailerProductMlor -N- Product
+M_UserRegionAssignment -M- UserAccount
+M_UserRegionAssignment -N- Region
+M_UserWarehouseAssignment -M- UserAccount
+M_UserWarehouseAssignment -N- Warehouse
+M_SalesGroupMember -N- UserAccount
+M_SalesGroupMember -1- SalesGroup
+M_RetailerSalesAssignment -N- Retailer
+M_RetailerSalesAssignment -1- SalesGroup
+M_PromotionProduct -M- Promotion
+M_PromotionProduct -N- Product
+M_PromotionCategory -M- Promotion
+M_PromotionCategory -N- ProductCategory
+M_PromotionRetailer -M- Promotion
+M_PromotionRetailer -N- Retailer
+
+@endchen

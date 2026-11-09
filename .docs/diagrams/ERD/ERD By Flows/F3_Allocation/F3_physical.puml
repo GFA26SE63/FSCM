@@ -1,0 +1,311 @@
+@startchen F3_physical
+
+title F3 – Physical ERD (Chen) – Real-time Allocation, Shelf-life Pricing, Reservation and Quotation
+
+entity ALLOCATION_RUN {
+  "Id : uuid PK" as Id <<key>>
+  "RunCode : varchar(40) UQ NN" as RunCode
+  "SalesOrderId : uuid FK→SALES_ORDER NN" as SalesOrderId
+  "AttemptNumber : integer NN" as AttemptNumber
+  "RetryOfAllocationRunId : uuid FK→ALLOCATION_RUN NULL" as RetryOfAllocationRunId
+  "TriggerType : varchar(30) NN" as TriggerType
+  "TriggeredByUserId : uuid FK→USER_ACCOUNT NULL" as TriggeredByUserId
+  "TransitTableId : uuid FK→TRANSIT_TABLE NN" as TransitTableId
+  "ShelfLifeDiscountTableId : uuid FK→SHELF_LIFE_DISCOUNT_TABLE NN" as ShelfLifeDiscountTableId
+  "AlgorithmSettings : jsonb NN" as AlgorithmSettings
+  "Status : smallint NN" as Status
+  "ConcurrencyRetryCount : integer NN" as ConcurrencyRetryCount
+  "StartedAt : timestamptz NN" as StartedAt
+  "SnapshotCompletedAt : timestamptz NULL" as SnapshotCompletedAt
+  "CompletedAt : timestamptz NULL" as CompletedAt
+  "FailureReason : varchar(1000) NULL" as FailureReason
+  "TechnicalErrorCode : varchar(100) NULL" as TechnicalErrorCode
+  "Version : integer NN" as Version
+}
+entity ALLOCATION_RUN_LINE {
+  "Id : uuid PK" as Id <<key>>
+  "AllocationRunId : uuid FK→ALLOCATION_RUN NN" as AllocationRunId
+  "LineNumber : integer NN" as LineNumber
+  "SalesOrderLineId : uuid FK→SALES_ORDER_LINE NN" as SalesOrderLineId
+  "OrderedQuantity : numeric(18,3) NN" as OrderedQuantity
+  "AllocatedQuantity : numeric(18,3) NN" as AllocatedQuantity
+  "ShortageQuantity : numeric(18,3) NN" as ShortageQuantity
+  "EffectiveMlorRatio : numeric(5,4) NN" as EffectiveMlorRatio
+  "MlorSource : varchar(30) NN" as MlorSource
+  "RequiredShelfLifeHours : numeric(18,3) NN" as RequiredShelfLifeHours
+  "MaxServingDistanceMeters : integer NN" as MaxServingDistanceMeters
+  "Outcome : varchar(30) NN" as Outcome
+  "Note : varchar(500) NULL" as Note
+}
+entity ALLOCATION_TRACE_CANDIDATE {
+  "Id : uuid PK" as Id <<key>>
+  "AllocationRunLineId : uuid FK→ALLOCATION_RUN_LINE NN" as AllocationRunLineId
+  "BatchId : uuid FK→BATCH NN" as BatchId
+  "Stage : varchar(30) NN" as Stage
+  "Passed : boolean NN" as Passed
+  "Reason : varchar(30) NN" as Reason
+  "DistanceMeters : numeric(18,3) NULL" as DistanceMeters
+  "EstimatedArrivalAt : timestamptz NULL" as EstimatedArrivalAt
+  "AvailableQuantity : numeric(18,3) NULL" as AvailableQuantity
+  "RemainingShelfLifeHours : numeric(18,3) NULL" as RemainingShelfLifeHours
+  "RequiredShelfLifeHours : numeric(18,3) NULL" as RequiredShelfLifeHours
+}
+entity ALLOCATION_TRACE_SCORE {
+  "Id : uuid PK" as Id <<key>>
+  "AllocationRunLineId : uuid FK→ALLOCATION_RUN_LINE NN" as AllocationRunLineId
+  "BatchId : uuid FK→BATCH NN" as BatchId
+  "Iteration : integer NN" as Iteration
+  "Rank : integer NN" as Rank
+  "ShelfLifeScore : numeric(9,6) NN" as ShelfLifeScore
+  "DistanceScore : numeric(9,6) NN" as DistanceScore
+  "CoverageScore : numeric(9,6) NN" as CoverageScore
+  "WeightedScore : numeric(9,6) NN" as WeightedScore
+  "RemainingDemand : numeric(18,3) NN" as RemainingDemand
+  "Selected : boolean NN" as Selected
+  "SelectedQuantity : numeric(18,3) NN" as SelectedQuantity
+}
+entity ALLOCATION {
+  "Id : uuid PK" as Id <<key>>
+  "AllocationRunLineId : uuid FK→ALLOCATION_RUN_LINE NN" as AllocationRunLineId
+  "AllocationSequence : integer NN" as AllocationSequence
+  "BatchId : uuid FK→BATCH NN" as BatchId
+  "ShelfLifeDiscountTierId : uuid FK→SHELF_LIFE_DISCOUNT_TIER NULL" as ShelfLifeDiscountTierId
+  "AllocatedQuantity : numeric(18,3) NN" as AllocatedQuantity
+  "EstimatedArrivalAt : timestamptz NN" as EstimatedArrivalAt
+  "DistanceMeters : numeric(18,3) NN" as DistanceMeters
+  "RemainingShelfLifePercent : numeric(5,2) NN" as RemainingShelfLifePercent
+  "WeightedScore : numeric(9,6) NN" as WeightedScore
+  "ListUnitPrice : numeric(18,2) NN" as ListUnitPrice
+  "PromotionDiscountPercent : numeric(5,2) NN" as PromotionDiscountPercent
+  "BaseNetUnitPrice : numeric(18,2) NN" as BaseNetUnitPrice
+  "ShelfLifeDiscountPercent : numeric(5,2) NN" as ShelfLifeDiscountPercent
+  "FinalUnitPrice : numeric(18,2) NN" as FinalUnitPrice
+  "GrossAmount : numeric(18,2) NN" as GrossAmount
+  "NetAmount : numeric(18,2) NN" as NetAmount
+  "PriceExplanation : varchar(500) NN" as PriceExplanation
+  "Status : varchar(30) NN" as Status
+}
+entity RESERVATION {
+  "Id : uuid PK" as Id <<key>>
+  "AllocationId : uuid FK→ALLOCATION UQ NN" as AllocationId
+  "Quantity : numeric(18,3) NN" as Quantity
+  "Status : smallint NN" as Status
+  "ReservedAt : timestamptz NN" as ReservedAt
+  "ExpiresAt : timestamptz NN" as ExpiresAt
+  "ReleasedAt : timestamptz NULL" as ReleasedAt
+  "ReleaseReason : varchar(30) NULL" as ReleaseReason
+  "ConsumedAt : timestamptz NULL" as ConsumedAt
+}
+entity SALES_ORDER_QUOTE {
+  "Id : uuid PK" as Id <<key>>
+  "SalesOrderId : uuid FK→SALES_ORDER NN" as SalesOrderId
+  "RevisionNumber : integer NN" as RevisionNumber
+  "AllocationRunId : uuid FK→ALLOCATION_RUN UQ NN" as AllocationRunId
+  "ListAmount : numeric(18,2) NN" as ListAmount
+  "PromotionDiscountAmount : numeric(18,2) NN" as PromotionDiscountAmount
+  "ShelfLifeDiscountAmount : numeric(18,2) NN" as ShelfLifeDiscountAmount
+  "TotalAmount : numeric(18,2) NN" as TotalAmount
+  "IssuedAt : timestamptz NN" as IssuedAt
+  "ExpiresAt : timestamptz NN" as ExpiresAt
+  "Status : smallint NN" as Status
+  "DecidedAt : timestamptz NULL" as DecidedAt
+  "DecidedByUserId : uuid FK→USER_ACCOUNT NULL" as DecidedByUserId
+  "RejectionReason : text NULL" as RejectionReason
+  "Version : integer NN" as Version
+}
+entity NOTIFICATION {
+  "Id : uuid PK" as Id <<key>>
+  "UserAccountId : uuid FK→USER_ACCOUNT NN" as UserAccountId
+  "SalesOrderId : uuid FK→SALES_ORDER NULL" as SalesOrderId
+  "OutboxMessageId : uuid FK→OUTBOX_MESSAGE NULL" as OutboxMessageId
+}
+entity SALES_ORDER {
+  "Id : uuid PK" as Id <<key>>
+  "OrderCode : varchar(40) UQ NN" as OrderCode
+  "Status : smallint NN" as Status
+  "AcceptedAt : timestamptz NN" as AcceptedAt
+}
+entity SALES_ORDER_LINE {
+  "Id : uuid PK" as Id <<key>>
+  "SalesOrderId : uuid FK→SALES_ORDER NN" as SalesOrderId
+  "LineNumber : integer NN" as LineNumber
+  "ProductId : uuid FK→PRODUCT NN" as ProductId
+  "OrderedQuantity : numeric(18,3) NN" as OrderedQuantity
+  "BaseNetUnitPrice : numeric(18,2) NN" as BaseNetUnitPrice
+  "MlorMinimumLifeRatio : numeric(5,4) NN" as MlorMinimumLifeRatio
+}
+entity PRODUCT {
+  "Id : uuid PK" as Id <<key>>
+  "Sku : varchar(50) UQ NN" as Sku
+}
+entity WAREHOUSE {
+  "Id : uuid PK" as Id <<key>>
+  "Code : varchar(30) UQ NN" as Code
+  "Latitude : numeric(10,7) NN" as Latitude
+  "Longitude : numeric(10,7) NN" as Longitude
+  "ServiceRadiusMeters : integer NN" as ServiceRadiusMeters
+}
+entity BATCH {
+  "Id : uuid PK" as Id <<key>>
+  "BatchCode : varchar(80) UQ NN" as BatchCode
+  "ProductId : uuid FK→PRODUCT NN" as ProductId
+  "WarehouseId : uuid FK→WAREHOUSE NN" as WarehouseId
+  "ExpirationDate : date NN" as ExpirationDate
+  "Version : integer NN" as Version
+}
+entity INVENTORY_BALANCE {
+  "Id : uuid PK" as Id <<key>>
+  "BatchId : uuid FK→BATCH UQ NN" as BatchId
+  "PhysicalQuantity : numeric(18,3) NN" as PhysicalQuantity
+  "ReservedQuantity : numeric(18,3) NN" as ReservedQuantity
+  "LockedQuantity : numeric(18,3) NN" as LockedQuantity
+  "LockedReservedQuantity : numeric(18,3) NN" as LockedReservedQuantity
+  "AvailableQuantity : numeric(18,3) NN" as AvailableQuantity
+  "Version : integer NN" as Version
+}
+entity INVENTORY_LOCK {
+  "Id : uuid PK" as Id <<key>>
+  "LockCode : varchar(40) UQ NN" as LockCode
+  "BatchId : uuid FK→BATCH NN" as BatchId
+  "LockedQuantity : numeric(18,3) NN" as LockedQuantity
+  "Status : varchar(30) NN" as Status
+}
+entity TRANSIT_TABLE {
+  "Id : uuid PK" as Id <<key>>
+  "VersionNumber : integer UQ NN" as VersionNumber
+}
+entity SHELF_LIFE_DISCOUNT_TABLE {
+  "Id : uuid PK" as Id <<key>>
+  "VersionNumber : integer UQ NN" as VersionNumber
+}
+entity SHELF_LIFE_DISCOUNT_TIER {
+  "Id : uuid PK" as Id <<key>>
+  "ShelfLifeDiscountTableId : uuid FK→SHELF_LIFE_DISCOUNT_TABLE NN" as ShelfLifeDiscountTableId
+  "TierNo : integer NN" as TierNo
+  "MinRemainingPercent : numeric(5,2) NN" as MinRemainingPercent
+  "MaxRemainingPercent : numeric(5,2) NN" as MaxRemainingPercent
+  "DiscountPercent : numeric(5,2) NN" as DiscountPercent
+}
+entity USER_ACCOUNT {
+  "Id : uuid PK" as Id <<key>>
+  "Email : varchar(150) UQ NN" as Email
+}
+entity OUTBOX_MESSAGE {
+  "Id : uuid PK" as Id <<key>>
+}
+
+relationship "is allocated via\n(SalesOrderId)" as R_ALLOCATION_RUN_SalesOrderId {
+}
+relationship "is retry of\n(RetryOfAllocationRunId)" as R_ALLOCATION_RUN_RetryOfAllocationRunId {
+}
+relationship "requests retry\n(TriggeredByUserId)" as R_ALLOCATION_RUN_TriggeredByUserId {
+}
+relationship "provides ETA\n(TransitTableId)" as R_ALLOCATION_RUN_TransitTableId {
+}
+relationship "provides discount tier\n(ShelfLifeDiscountTableId)" as R_ALLOCATION_RUN_ShelfLifeDiscountTableId {
+}
+relationship "evaluates order line\n(AllocationRunId)" as R_ALLOCATION_RUN_LINE_AllocationRunId {
+}
+relationship "is snapshotted into\n(SalesOrderLineId)" as R_ALLOCATION_RUN_LINE_SalesOrderLineId {
+}
+relationship "evaluates candidate\n(AllocationRunLineId)" as R_ALLOCATION_TRACE_CANDIDATE_AllocationRunLineId {
+}
+relationship "is candidate\n(BatchId)" as R_ALLOCATION_TRACE_CANDIDATE_BatchId {
+}
+relationship "scores candidate\n(AllocationRunLineId)" as R_ALLOCATION_TRACE_SCORE_AllocationRunLineId {
+}
+relationship "is scored\n(BatchId)" as R_ALLOCATION_TRACE_SCORE_BatchId {
+}
+relationship "is allocated\n(AllocationRunLineId)" as R_ALLOCATION_AllocationRunLineId {
+}
+relationship "allocated from batch\n(BatchId)" as R_ALLOCATION_BatchId {
+}
+relationship "applies shelf-life discount\n(ShelfLifeDiscountTierId)" as R_ALLOCATION_ShelfLifeDiscountTierId {
+}
+relationship "is reserved by\n(AllocationId)" as R_RESERVATION_AllocationId {
+}
+relationship "receives quote\n(SalesOrderId)" as R_SALES_ORDER_QUOTE_SalesOrderId {
+}
+relationship "issues quote\n(AllocationRunId)" as R_SALES_ORDER_QUOTE_AllocationRunId {
+}
+relationship "decides quote\n(DecidedByUserId)" as R_SALES_ORDER_QUOTE_DecidedByUserId {
+}
+relationship "receives notification\n(UserAccountId)" as R_NOTIFICATION_UserAccountId {
+}
+relationship "relates to order\n(SalesOrderId)" as R_NOTIFICATION_SalesOrderId {
+}
+relationship "emitted from event\n(OutboxMessageId)" as R_NOTIFICATION_OutboxMessageId {
+}
+relationship "has order line\n(SalesOrderId)" as R_SALES_ORDER_LINE_SalesOrderId {
+}
+relationship "is ordered\n(ProductId)" as R_SALES_ORDER_LINE_ProductId {
+}
+relationship "has batch\n(ProductId)" as R_BATCH_ProductId {
+}
+relationship "stores batch\n(WarehouseId)" as R_BATCH_WarehouseId {
+}
+relationship "has inventory balance\n(BatchId)" as R_INVENTORY_BALANCE_BatchId {
+}
+relationship "is locked\n(BatchId)" as R_INVENTORY_LOCK_BatchId {
+}
+relationship "has discount tier\n(ShelfLifeDiscountTableId)" as R_SHELF_LIFE_DISCOUNT_TIER_ShelfLifeDiscountTableId {
+}
+
+R_ALLOCATION_RUN_SalesOrderId -1- SALES_ORDER
+R_ALLOCATION_RUN_SalesOrderId =N= ALLOCATION_RUN
+R_ALLOCATION_RUN_RetryOfAllocationRunId -1- ALLOCATION_RUN
+R_ALLOCATION_RUN_RetryOfAllocationRunId -N- ALLOCATION_RUN
+R_ALLOCATION_RUN_TriggeredByUserId -1- USER_ACCOUNT
+R_ALLOCATION_RUN_TriggeredByUserId -N- ALLOCATION_RUN
+R_ALLOCATION_RUN_TransitTableId -1- TRANSIT_TABLE
+R_ALLOCATION_RUN_TransitTableId =N= ALLOCATION_RUN
+R_ALLOCATION_RUN_ShelfLifeDiscountTableId -1- SHELF_LIFE_DISCOUNT_TABLE
+R_ALLOCATION_RUN_ShelfLifeDiscountTableId =N= ALLOCATION_RUN
+R_ALLOCATION_RUN_LINE_AllocationRunId =1= ALLOCATION_RUN
+R_ALLOCATION_RUN_LINE_AllocationRunId =N= ALLOCATION_RUN_LINE
+R_ALLOCATION_RUN_LINE_SalesOrderLineId -1- SALES_ORDER_LINE
+R_ALLOCATION_RUN_LINE_SalesOrderLineId =N= ALLOCATION_RUN_LINE
+R_ALLOCATION_TRACE_CANDIDATE_AllocationRunLineId -1- ALLOCATION_RUN_LINE
+R_ALLOCATION_TRACE_CANDIDATE_AllocationRunLineId =N= ALLOCATION_TRACE_CANDIDATE
+R_ALLOCATION_TRACE_CANDIDATE_BatchId -1- BATCH
+R_ALLOCATION_TRACE_CANDIDATE_BatchId =N= ALLOCATION_TRACE_CANDIDATE
+R_ALLOCATION_TRACE_SCORE_AllocationRunLineId -1- ALLOCATION_RUN_LINE
+R_ALLOCATION_TRACE_SCORE_AllocationRunLineId =N= ALLOCATION_TRACE_SCORE
+R_ALLOCATION_TRACE_SCORE_BatchId -1- BATCH
+R_ALLOCATION_TRACE_SCORE_BatchId =N= ALLOCATION_TRACE_SCORE
+R_ALLOCATION_AllocationRunLineId -1- ALLOCATION_RUN_LINE
+R_ALLOCATION_AllocationRunLineId =N= ALLOCATION
+R_ALLOCATION_BatchId -1- BATCH
+R_ALLOCATION_BatchId =N= ALLOCATION
+R_ALLOCATION_ShelfLifeDiscountTierId -1- SHELF_LIFE_DISCOUNT_TIER
+R_ALLOCATION_ShelfLifeDiscountTierId -N- ALLOCATION
+R_RESERVATION_AllocationId -1- ALLOCATION
+R_RESERVATION_AllocationId =1= RESERVATION
+R_SALES_ORDER_QUOTE_SalesOrderId -1- SALES_ORDER
+R_SALES_ORDER_QUOTE_SalesOrderId =N= SALES_ORDER_QUOTE
+R_SALES_ORDER_QUOTE_AllocationRunId -1- ALLOCATION_RUN
+R_SALES_ORDER_QUOTE_AllocationRunId =1= SALES_ORDER_QUOTE
+R_SALES_ORDER_QUOTE_DecidedByUserId -1- USER_ACCOUNT
+R_SALES_ORDER_QUOTE_DecidedByUserId -N- SALES_ORDER_QUOTE
+R_NOTIFICATION_UserAccountId -1- USER_ACCOUNT
+R_NOTIFICATION_UserAccountId =N= NOTIFICATION
+R_NOTIFICATION_SalesOrderId -1- SALES_ORDER
+R_NOTIFICATION_SalesOrderId -N- NOTIFICATION
+R_NOTIFICATION_OutboxMessageId -1- OUTBOX_MESSAGE
+R_NOTIFICATION_OutboxMessageId -N- NOTIFICATION
+R_SALES_ORDER_LINE_SalesOrderId =1= SALES_ORDER
+R_SALES_ORDER_LINE_SalesOrderId =N= SALES_ORDER_LINE
+R_SALES_ORDER_LINE_ProductId -1- PRODUCT
+R_SALES_ORDER_LINE_ProductId =N= SALES_ORDER_LINE
+R_BATCH_ProductId -1- PRODUCT
+R_BATCH_ProductId =N= BATCH
+R_BATCH_WarehouseId -1- WAREHOUSE
+R_BATCH_WarehouseId =N= BATCH
+R_INVENTORY_BALANCE_BatchId =1= BATCH
+R_INVENTORY_BALANCE_BatchId =1= INVENTORY_BALANCE
+R_INVENTORY_LOCK_BatchId -1- BATCH
+R_INVENTORY_LOCK_BatchId =N= INVENTORY_LOCK
+R_SHELF_LIFE_DISCOUNT_TIER_ShelfLifeDiscountTableId =1= SHELF_LIFE_DISCOUNT_TABLE
+R_SHELF_LIFE_DISCOUNT_TIER_ShelfLifeDiscountTableId =N= SHELF_LIFE_DISCOUNT_TIER
+
+@endchen
